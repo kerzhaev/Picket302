@@ -1,0 +1,415 @@
+KONVERTPRONET.DLL — DECOMPILED FUNCTIONS (REA / Ghidra 12.1.4)
+====================================================================================================
+
+====================================================================================================
+FUNCTION Antidebugging
+====================================================================================================
+  {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-function-body-address-set", "ranges": [{"start": "0x492e8c", "end": "0x492e94"}, {"start": "0x492e9b", "end": "0x492eaa"}, {"start": "0x492eaf", "end": "0x492eb9"}, {"start": "0x492eb
+  PSEUDOCODE:
+    void Antidebugging(void)
+    {
+      undefined4 uVar1;
+      bool bVar2;
+      undefined4 *in_FS_OFFSET;
+      undefined2 uStack_22;
+      undefined2 uStack_20;
+      undefined2 uStack_1e;
+      undefined2 uStack_1c;
+      undefined2 uStack_1a;
+      undefined2 uStack_18;
+      undefined2 uStack_16;
+                        /* 0x92e8c  25  Antidebugging */
+      uStack_18 = 0x2ea0;
+      uStack_16 = 0x49;
+      bVar2 = FUN_00492b50();
+      if (bVar2) {
+        uStack_18 = 0x2ea9;
+        uStack_16 = 0x49;
+        FUN_00492d60();
+      }
+      uStack_18 = 0x2eb4;
+      uStack_16 = 0x49;
+      bVar2 = FUN_00492b50();
+      if (!bVar2) {
+        out(100,0xad);
+        out(100,0xae);
+      }
+      uStack_18 = 0x2ed8;
+      uStack_16 = 0x49;
+      FUN_00492dc0(MessageBoxA);
+      uStack_18 = 0x2ee8;
+      uStack_16 = 0x49;
+      FUN_00492dc0(GetWindowTextA);
+      uStack_18 = 0x2ef8;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_0040805c);
+      uStack_18 = 0x2f0a;
+      uStack_16 = 0x49;
+      FUN_00492dc0(CreateFileA);
+      uStack_18 = 0x2f1a;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_0040781c);
+      uStack_18 = 0x2f2a;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_00407e1c);
+      uStack_18 = 0x2f3c;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_00407e24);
+      uStack_18 = 0x2f4c;
+      uStack_16 = 0x49;
+      FUN_00492dc0(GetModuleHandleA);
+      uStack_18 = 0x2f5c;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_00407974);
+      uStack_18 = 0x2f6e;
+      uStack_16 = 0x49;
+      FUN_00492dc0(GetWindow);
+      uStack_18 = 0x2f7e;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_00407f34);
+      uStack_18 = 0x2f8e;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_00407f2c);
+      uStack_18 = 0x2fa0;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_004077f4);
+      uStack_18 = 0x2fb0;
+      uStack_16 = 0x49;
+      FUN_00492dc0(GetLocalTime);
+      uStack_18 = 0x2fc0;
+      uStack_16 = 0x49;
+      FUN_00492dc0(&DAT_0040799c);
+      uStack_18 = 0x2fd2;
+      uStack_16 = 0x49;
+      FUN_00492dc0(GetTimeZoneInformation);
+      uStack_18 = SUB42(&stack0xfffffffc,0);
+      uStack_16 = (undefined2)((uint)&stack0xfffffffc >> 0x10);
+      uStack_1c = 0x3011;
+      uStack_20 = (undefined2)*in_FS_OFFSET;
+      uStack_1e = (undefined2)((uint)*in_FS_OFFSET >> 0x10);
+      *in_FS_OFFSET = &uStack_20;
+      if (in_FS_OFFSET[8] != 0) {
+        uStack_22 = 0;
+      }
+      uVar1 = CONCAT22(uStack_18,0x49);
+      *in_FS_OFFSET = CONCAT22(uStack_20,uStack_22);
+      uStack_1a = 0x30e9;
+      uStack_18 = 0x49;
+      FUN_00492e28(MessageBoxA,CONCAT22(uStack_20,uStack_22),uVar1);
+      uStack_1a = 0x30fb;
+      uStack_18 = 0x49;
+      FUN_00492e28(MessageBoxA);
+      uStack_1a = 0x310b;
+      uStack_18 = 0x49;
+      FUN_00492e28(GetWindowTextA);
+      uStack_1a = 0x311b;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_0040805c);
+      uStack_1a = 0x312d;
+      uStack_18 = 0x49;
+      FUN_00492e28(CreateFileA);
+      uStack_1a = 0x313d;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_0040781c);
+      uStack_1a = 0x314d;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_00407e1c);
+      uStack_1a = 0x315f;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_00407e24);
+      uStack_1a = 0x316f;
+      uStack_18 = 0x49;
+      FUN_00492e28(GetModuleHandleA);
+      uStack_1a = 0x317f;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_00407974);
+      uStack_1a = 0x3191;
+      uStack_18 = 0x49;
+      FUN_00492e28(GetWindow);
+      uStack_1a = 0x31a1;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_00407f34);
+      uStack_1a = 0x31b1;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_00407f2c);
+      uStack_1a = 0x31c3;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_004077f4);
+      uStack_1a = 0x31d3;
+      uStack_18 = 0x49;
+      FUN_00492e28(GetLocalTime);
+      uStack_1a = 0x31e3;
+      uStack_18 = 0x49;
+      FUN_00492e28(&DAT_0040799c);
+      uStack_1a = 0x31f5;
+      uStack_18 = 0x49;
+      FUN_00492e28(GetTimeZoneInformation);
+      return;
+    }
+  REFERENCED_NAMES:
+    {"address": "0x4077f4", "value": "DAT_004077f4", "source_address": "0x492f96"}
+    {"address": "0x4077f4", "value": "DAT_004077f4", "source_address": "0x4931b9"}
+    {"address": "0x407814", "value": "KERNEL32.DLL::CreateFileA", "source_address": "0x492f00"}
+    {"address": "0x407814", "value": "KERNEL32.DLL::CreateFileA", "source_address": "0x493123"}
+    {"address": "0x40781c", "value": "DAT_0040781c", "source_address": "0x492f10"}
+    {"address": "0x40781c", "value": "DAT_0040781c", "source_address": "0x493133"}
+    {"address": "0x40794c", "value": "KERNEL32.DLL::GetLocalTime", "source_address": "0x492fa6"}
+    {"address": "0x40794c", "value": "KERNEL32.DLL::GetLocalTime", "source_address": "0x4931c9"}
+    {"address": "0x40796c", "value": "KERNEL32.DLL::GetModuleHandleA", "source_address": "0x492f42"}
+    {"address": "0x40796c", "value": "KERNEL32.DLL::GetModuleHandleA", "source_address": "0x493165"}
+    {"address": "0x407974", "value": "DAT_00407974", "source_address": "0x492f52"}
+    {"address": "0x407974", "value": "DAT_00407974", "source_address": "0x493175"}
+    {"address": "0x40799c", "value": "DAT_0040799c", "source_address": "0x492fb6"}
+    {"address": "0x40799c", "value": "DAT_0040799c", "source_address": "0x4931d9"}
+    {"address": "0x4079c4", "value": "KERNEL32.DLL::GetTimeZoneInformation", "source_address": "0x492fc8"}
+    {"address": "0x4079c4", "value": "KERNEL32.DLL::GetTimeZoneInformation", "source_address": "0x4931eb"}
+    {"address": "0x407e1c", "value": "DAT_00407e1c", "source_address": "0x492f20"}
+    {"address": "0x407e1c", "value": "DAT_00407e1c", "source_address": "0x493143"}
+    {"address": "0x407e24", "value": "DAT_00407e24", "source_address": "0x492f32"}
+    {"address": "0x407e24", "value": "DAT_00407e24", "source_address": "0x493155"}
+    {"address": "0x407f2c", "value": "DAT_00407f2c", "source_address": "0x492f84"}
+    {"address": "0x407f2c", "value": "DAT_00407f2c", "source_address": "0x4931a7"}
+    {"address": "0x407f34", "value": "DAT_00407f34", "source_address": "0x492f74"}
+    {"address": "0x407f34", "value": "DAT_00407f34", "source_address": "0x493197"}
+    {"address": "0x408024", "value": "USER32.DLL::GetWindow", "source_address": "0x492f64"}
+    {"address": "0x408024", "value": "USER32.DLL::GetWindow", "source_address": "0x493187"}
+    {"address": "0x408054", "value": "USER32.DLL::GetWindowTextA", "source_address": "0x492ede"}
+    {"address": "0x408054", "value": "USER32.DLL::GetWindowTextA", "source_address": "0x493101"}
+    {"address": "0x40805c", "value": "DAT_0040805c", "source_address": "0x492eee"}
+    {"address": "0x40805c", "value": "DAT_0040805c", "source_address": "0x493111"}
+    {"address": "0x408134", "value": "USER32.DLL::MessageBoxA", "source_address": "0x492ece"}
+    {"address": "0x408134", "value": "USER32.DLL::MessageBoxA", "source_address": "0x4930df"}
+    {"address": "0x408134", "value": "USER32.DLL::MessageBoxA", "source_address": "0x4930f1"}
+    {"address": "0x492b50", "value": "FUN_00492b50", "source_address": "0x492e9b"}
+    {"address": "0x492b50", "value": "FUN_00492b50", "source_address": "0x492eaf"}
+    {"address": "0x492d60", "value": "FUN_00492d60", "source_address": "0x492ea4"}
+    {"address": "0x492dc0", "value": "FUN_00492dc0", "source_address": "0x492ed3"}
+    {"address": "0x492dc0", "value": "FUN_00492dc0", "source_address": "0x492ee3"}
+    {"address": "0x492dc0", "value": "FUN_00492dc0", "source_address": "0x492ef3"}
+    {"address": "0x492dc0", "value": "FUN_00492dc0", "source_address": "0x492f05"}
+  CALLEES:
+    {"address": "0x492b50", "name": "FUN_00492b50", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+    {"address": "0x492d60", "name": "FUN_00492d60", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+    {"address": "0x492dc0", "name": "FUN_00492dc0", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+    {"address": "0x492e28", "name": "FUN_00492e28", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+  NATIVE_API:
+    {"available": true, "provenance": "ghidra-high-function", "signature_source": "analysis", "calling_convention": "__register", "return_type": {"ordinal": null, "name": null, "data_type": "void", "size_bytes": 0, "storage"
+  INCOMING_REFERENCES:
+    {"source_address": "0x4ee088", "target_address": "0x492e8c", "source_procedure": null, "target_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_tar
+  OUTGOING_REFERENCES:
+    {"source_address": "0x492e93", "target_address": "0x492e9b", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492e9b", "target_address": "0x492b50", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ea2", "target_address": "0x492ea9", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ea4", "target_address": "0x492d60", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ea9", "target_address": "0x492eaf", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492eaf", "target_address": "0x492b50", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492eb6", "target_address": "0x492ec6", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492eb8", "target_address": "0x492ebe", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ec6", "target_address": "0x492ece", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ece", "target_address": "0x408134", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ed3", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ed8", "target_address": "0x492ede", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ede", "target_address": "0x408054", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ee3", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ee8", "target_address": "0x492eee", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492eee", "target_address": "0x40805c", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ef3", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492ef8", "target_address": "0x492f00", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f00", "target_address": "0x407814", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f05", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f0a", "target_address": "0x492f10", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f10", "target_address": "0x40781c", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f15", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f1a", "target_address": "0x492f20", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f20", "target_address": "0x407e1c", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f25", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f2a", "target_address": "0x492f32", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f32", "target_address": "0x407e24", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f37", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f3c", "target_address": "0x492f42", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f42", "target_address": "0x40796c", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f47", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f4c", "target_address": "0x492f52", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f52", "target_address": "0x407974", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f57", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f5c", "target_address": "0x492f64", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f64", "target_address": "0x408024", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f69", "target_address": "0x492dc0", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f6e", "target_address": "0x492f74", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x492f74", "target_address": "0x407f34", "source_procedure": {"address": "0x492e8c", "name": "Antidebugging", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+  BASIC_BLOCKS:
+    {"start": "0x492e8c", "end": "0x492e95", "successors": ["0x492e9b"]}
+    {"start": "0x492e9b", "end": "0x492ea4", "successors": ["0x492ea4", "0x492ea9"]}
+    {"start": "0x492ea4", "end": "0x492ea9", "successors": ["0x492ea9"]}
+    {"start": "0x492ea9", "end": "0x492eab", "successors": ["0x492eaf"]}
+    {"start": "0x492eaf", "end": "0x492eb8", "successors": ["0x492eb8", "0x492ec6"]}
+    {"start": "0x492eb8", "end": "0x492eba", "successors": ["0x492ebe"]}
+    {"start": "0x492ebe", "end": "0x492ec6", "successors": ["0x492ec6"]}
+    {"start": "0x492ec6", "end": "0x492ec8", "successors": ["0x492ece"]}
+    {"start": "0x492ece", "end": "0x492eda", "successors": ["0x492ede"]}
+    {"start": "0x492ede", "end": "0x492eea", "successors": ["0x492eee"]}
+    {"start": "0x492eee", "end": "0x492efa", "successors": ["0x492f00"]}
+    {"start": "0x492f00", "end": "0x492f0c", "successors": ["0x492f10"]}
+    {"start": "0x492f10", "end": "0x492f1c", "successors": ["0x492f20"]}
+    {"start": "0x492f20", "end": "0x492f2c", "successors": ["0x492f32"]}
+    {"start": "0x492f32", "end": "0x492f3e", "successors": ["0x492f42"]}
+    {"start": "0x492f42", "end": "0x492f4e", "successors": ["0x492f52"]}
+    {"start": "0x492f52", "end": "0x492f5e", "successors": ["0x492f64"]}
+    {"start": "0x492f64", "end": "0x492f70", "successors": ["0x492f74"]}
+    {"start": "0x492f74", "end": "0x492f80", "successors": ["0x492f84"]}
+    {"start": "0x492f84", "end": "0x492f90", "successors": ["0x492f96"]}
+    {"start": "0x492f96", "end": "0x492fa2", "successors": ["0x492fa6"]}
+    {"start": "0x492fa6", "end": "0x492fb2", "successors": ["0x492fb6"]}
+    {"start": "0x492fb6", "end": "0x492fc2", "successors": ["0x492fc8"]}
+    {"start": "0x492fc8", "end": "0x492fd4", "successors": ["0x492fd8"]}
+    {"start": "0x492fd8", "end": "0x492fe8", "successors": ["0x492fec"]}
+    {"start": "0x492fec", "end": "0x492ff5", "successors": ["0x492ff5", "0x493004"]}
+    {"start": "0x492ff5", "end": "0x493004", "successors": ["0x493004"]}
+    {"start": "0x493004", "end": "0x493011", "successors": ["0x4930d9"]}
+    {"start": "0x4930d9", "end": "0x4930db", "successors": ["0x4930df"]}
+    {"start": "0x4930df", "end": "0x4930eb", "successors": ["0x4930f1"]}
+    {"start": "0x4930f1", "end": "0x4930fd", "successors": ["0x493101"]}
+    {"start": "0x493101", "end": "0x49310d", "successors": ["0x493111"]}
+    {"start": "0x493111", "end": "0x49311d", "successors": ["0x493123"]}
+    {"start": "0x493123", "end": "0x49312f", "successors": ["0x493133"]}
+    {"start": "0x493133", "end": "0x49313f", "successors": ["0x493143"]}
+    {"start": "0x493143", "end": "0x49314f", "successors": ["0x493155"]}
+    {"start": "0x493155", "end": "0x493161", "successors": ["0x493165"]}
+    {"start": "0x493165", "end": "0x493171", "successors": ["0x493175"]}
+    {"start": "0x493175", "end": "0x493181", "successors": ["0x493187"]}
+    {"start": "0x493187", "end": "0x493193", "successors": ["0x493197"]}
+  COMMENTS:
+    {"address": "0x492e8c", "kind": "comment", "text": "0x92e8c  25  Antidebugging"}
+
+====================================================================================================
+FUNCTION GetMachineID
+====================================================================================================
+  {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-function-body-address-set", "ranges": [{"start": "0x4d666c", "end": "0x4d66c5"}], "total_bytes": 90, "span_bytes": 90, "non_contiguous": false, "contains_entry": true}, "signature": "u
+  PSEUDOCODE:
+    void GetMachineID(void)
+    {
+      LPCSTR pCVar1;
+      undefined4 *in_FS_OFFSET;
+      undefined4 uStack_1c;
+      undefined1 *puStack_18;
+      undefined1 *puStack_14;
+      int local_c;
+      LPCWSTR local_8;
+                        /* 0xd666c  22  GetMachineID */
+      puStack_14 = &stack0xfffffffc;
+      local_8 = (LPCWSTR)0x0;
+      local_c = 0;
+      puStack_18 = &LAB_004d66c6;
+      uStack_1c = *in_FS_OFFSET;
+      *in_FS_OFFSET = &uStack_1c;
+      pCVar1 = (LPCSTR)FUN_004d5dd8();
+      FUN_00405584((BSTR)&local_c,pCVar1);
+      FUN_004095f4(local_c,(BSTR)&local_8);
+      FUN_00404ee4((int *)PTR_DAT_004e4530,local_8);
+      *in_FS_OFFSET = uStack_1c;
+      puStack_14 = &LAB_004d66cd;
+      puStack_18 = (undefined1 *)0x4d66c5;
+      FUN_00405480(&local_c,2);
+      return;
+    }
+  REFERENCED_NAMES:
+    {"address": "0x404ee4", "value": "FUN_00404ee4", "source_address": "0x4d66a6"}
+    {"address": "0x405480", "value": "FUN_00405480", "source_address": "0x4d66c0"}
+    {"address": "0x405584", "value": "FUN_00405584", "source_address": "0x4d668e"}
+    {"address": "0x4095f4", "value": "FUN_004095f4", "source_address": "0x4d6699"}
+    {"address": "0x4d5dd8", "value": "FUN_004d5dd8", "source_address": "0x4d6682"}
+    {"address": "0x4d66c6", "value": "LAB_004d66c6", "source_address": "0x4d6677"}
+    {"address": "0x4d66cd", "value": "LAB_004d66cd", "source_address": "0x4d66b3"}
+    {"address": "0x4e4530", "value": "PTR_DAT_004e4530", "source_address": "0x4d66a1"}
+    {"address": "0x4e94f4", "value": "DAT_004e94f4", "source_address": "0x4d66a1"}
+  CALLEES:
+    {"address": "0x404ee4", "name": "FUN_00404ee4", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+    {"address": "0x405480", "name": "FUN_00405480", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+    {"address": "0x405584", "name": "FUN_00405584", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+    {"address": "0x4095f4", "name": "FUN_004095f4", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+    {"address": "0x4d5dd8", "name": "FUN_004d5dd8", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+  CALLERS:
+    {"address": "0x4d66d4", "name": "GetMachineIDv2", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-fu
+    {"address": "0x4d66e0", "name": "GetHardwardID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-fun
+  NATIVE_API:
+    {"available": true, "provenance": "ghidra-high-function", "signature_source": "analysis", "calling_convention": "__register", "return_type": {"ordinal": null, "name": null, "data_type": "void", "size_bytes": 0, "storage"
+  INCOMING_REFERENCES:
+    {"source_address": "0x4d66d7", "target_address": "0x4d666c", "source_procedure": {"address": "0x4d66d4", "name": "GetMachineIDv2", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance":
+    {"source_address": "0x4d66e3", "target_address": "0x4d666c", "source_procedure": {"address": "0x4d66e0", "name": "GetHardwardID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x4ee07c", "target_address": "0x4d666c", "source_procedure": null, "target_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_targ
+  OUTGOING_REFERENCES:
+    {"source_address": "0x4d6677", "target_address": "0x4d66c6", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d6682", "target_address": "0x4d5dd8", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d6689", "target_address": "stack:0xfffffffffffffff4", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null,
+    {"source_address": "0x4d668e", "target_address": "0x405584", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d6693", "target_address": "stack:0xfffffffffffffff4", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null,
+    {"source_address": "0x4d6696", "target_address": "stack:0xfffffffffffffff8", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null,
+    {"source_address": "0x4d6699", "target_address": "0x4095f4", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d669e", "target_address": "stack:0xfffffffffffffff8", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null,
+    {"source_address": "0x4d66a1", "target_address": "0x4e4530", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d66a1", "target_address": "0x4e94f4", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d66a6", "target_address": "0x404ee4", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d66b3", "target_address": "0x4d66cd", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+    {"source_address": "0x4d66b8", "target_address": "stack:0xfffffffffffffff4", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null,
+    {"source_address": "0x4d66c0", "target_address": "0x405480", "source_procedure": {"address": "0x4d666c", "name": "GetMachineID", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "
+  BASIC_BLOCKS:
+    {"start": "0x4d666c", "end": "0x4d66c6", "successors": []}
+  COMMENTS:
+    {"address": "0x4d666c", "kind": "comment", "text": "0xd666c  22  GetMachineID"}
+
+====================================================================================================
+FUNCTION IsVirtualMachine
+====================================================================================================
+  {"address": "0x4d6768", "name": "IsVirtualMachine", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-function-body-address-set", "ranges": [{"start": "0x4d6768", "end": "0x4d6771"}], "total_bytes": 10, "span_bytes": 10, "non_contiguous": false, "contains_entry": true}, "signature"
+  PSEUDOCODE:
+    void IsVirtualMachine(void)
+    {
+                        /* 0xd6768  19  IsVirtualMachine */
+      FUN_004d5e00();
+      return;
+    }
+  REFERENCED_NAMES:
+    {"address": "0x4d5e00", "value": "FUN_004d5e00", "source_address": "0x4d676b"}
+  CALLEES:
+    {"address": "0x4d5e00", "name": "FUN_004d5e00", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-func
+  NATIVE_API:
+    {"available": true, "provenance": "ghidra-high-function", "signature_source": "analysis", "calling_convention": "__register", "return_type": {"ordinal": null, "name": null, "data_type": "void", "size_bytes": 0, "storage"
+  INCOMING_REFERENCES:
+    {"source_address": "0x4ee070", "target_address": "0x4d6768", "source_procedure": null, "target_procedure": {"address": "0x4d6768", "name": "IsVirtualMachine", "classification": {"external": false, "thunk": false, "thunk_
+  OUTGOING_REFERENCES:
+    {"source_address": "0x4d676b", "target_address": "0x4d5e00", "source_procedure": {"address": "0x4d6768", "name": "IsVirtualMachine", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance
+  BASIC_BLOCKS:
+    {"start": "0x4d6768", "end": "0x4d6772", "successors": []}
+  COMMENTS:
+    {"address": "0x4d6768", "kind": "comment", "text": "0xd6768  19  IsVirtualMachine"}
+
+====================================================================================================
+FUNCTION SS_IsUnlocked
+====================================================================================================
+  {"address": "0x4d62f0", "name": "SS_IsUnlocked", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": "ghidra-function-manager"}, "body": {"available": true, "provenance": "ghidra-function-body-address-set", "ranges": [{"start": "0x4d62f0", "end": "0x4d62fe"}], "total_bytes": 15, "span_bytes": 15, "non_contiguous": false, "contains_entry": true}, "signature": "
+  PSEUDOCODE:
+    undefined4 SS_IsUnlocked(void)
+    {
+      undefined4 in_EAX;
+                        /* 0xd62f0  9  SS_IsUnlocked */
+      if (DAT_004e98d0 == '\x02') {
+        return CONCAT31((int3)((uint)in_EAX >> 8),1);
+      }
+      return 0;
+    }
+  REFERENCED_NAMES:
+    {"address": "0x4d62fc", "value": "LAB_004d62fc", "source_address": "0x4d62f7"}
+    {"address": "0x4e98d0", "value": "DAT_004e98d0", "source_address": "0x4d62f0"}
+  NATIVE_API:
+    {"available": true, "provenance": "ghidra-high-function", "signature_source": "analysis", "calling_convention": "__register", "return_type": {"ordinal": null, "name": null, "data_type": "undefined4", "size_bytes": 4, "st
+  INCOMING_REFERENCES:
+    {"source_address": "0x4ee048", "target_address": "0x4d62f0", "source_procedure": null, "target_procedure": {"address": "0x4d62f0", "name": "SS_IsUnlocked", "classification": {"external": false, "thunk": false, "thunk_tar
+  OUTGOING_REFERENCES:
+    {"source_address": "0x4d62f0", "target_address": "0x4e98d0", "source_procedure": {"address": "0x4d62f0", "name": "SS_IsUnlocked", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+    {"source_address": "0x4d62f7", "target_address": "0x4d62fc", "source_procedure": {"address": "0x4d62f0", "name": "SS_IsUnlocked", "classification": {"external": false, "thunk": false, "thunk_target": null, "provenance": 
+  BASIC_BLOCKS:
+    {"start": "0x4d62f0", "end": "0x4d62f9", "successors": ["0x4d62f9", "0x4d62fc"]}
+    {"start": "0x4d62f9", "end": "0x4d62fc", "successors": []}
+    {"start": "0x4d62fc", "end": "0x4d62ff", "successors": []}
+  COMMENTS:
+    {"address": "0x4d62f0", "kind": "comment", "text": "0xd62f0  9  SS_IsUnlocked"}

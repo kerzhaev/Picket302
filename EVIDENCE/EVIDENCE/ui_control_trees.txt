@@ -1,0 +1,949 @@
+AMS ENVELOPS — UI STRUCTURE (54 DFM forms, static parse of the PrintConvert payload)
+====================================================================================================
+
+====================================================================================================
+FORM AboutForm   (resource TABOUTFORM, class TAboutForm)
+   Caption: О программе...
+====================================================================================================
+TAboutForm               AboutForm                  О программе...
+  TImage                   Image1                     
+  TsLabel                  SiteLabel                  Сайт программы
+  TsLabel                  SupportLabel               Техническая поддержка
+  TsLabel                  InfoLabel                  "Почтовые Конверты" - инновационная программа печати конвертов и орган
+  TsLabel                  VersionLabel               Версия: 1.25
+  TsLabel                  AuthorLabel                Авторские права: © AMS Software, 2003-2013
+  TsLabel                  ProgrammLabel              ???
+  TImage                   IconImage                  
+  TsButton                 CloseButton                Закрыть
+
+====================================================================================================
+FORM ExceptionForm   (resource TEXCEPTIONFORM, class TExceptionForm)
+   Caption: Ошибка
+====================================================================================================
+TExceptionForm           ExceptionForm              Ошибка
+  TLabel                   Label1                     В процессе работы программы обнаружена ошибка. Просьба сообщить о ней 
+  TImage                   Image1                     
+  TLabel                   Label2                     Пожалуйста, скопируйте и отправьте сообщение:
+  TMemo                    MessageMemo                
+  TBitBtn                  CloseButton                Закрыть
+  TBitBtn                  BitBtn2                    Служба поддержки
+
+====================================================================================================
+FORM fiePrnForm1   (resource TFIEPRNFORM1, class TfiePrnForm1)
+   Caption: Print
+====================================================================================================
+TfiePrnForm1             fiePrnForm1                Print
+  TImageEnView             ImageEnView1               
+  TPanel                   Panel1                     
+    TSpeedButton             SpeedButton1               
+    TSpeedButton             SpeedButton2               
+    TSpeedButton             SpeedButton3               
+    TSpeedButton             SpeedButton4               
+    TSpeedButton             SpeedButton5               
+    TSpeedButton             SpeedButton6               
+    TSpeedButton             SpeedButton7               
+    TSpeedButton             SpeedButton8               
+    TSpeedButton             SpeedButton9               
+    TSpeedButton             SpeedButton10              
+    TSpeedButton             SpeedButton11              
+    TSpeedButton             SpeedButton12              &Close
+    TEdit                    Edit1                      1
+    TEdit                    Edit2                      1
+    TEdit                    Edit3                      1
+    TEdit                    Edit4                      1
+    TComboBox                ComboBox1                  
+    TEdit                    Edit5                      6
+    TEdit                    Edit6                      4
+    TEdit                    Edit7                      1
+    TUpDown                  UpDown1                    
+    TUpDown                  UpDown2                    
+    TUpDown                  UpDown3                    
+    TUpDown                  UpDown4                    
+    TUpDown                  UpDown5                    
+    TUpDown                  UpDown6                    
+    TUpDown                  UpDown7                    
+  TPrinterSetupDialog      PrinterSetupDialog1        
+  TMainMenu                MainMenu1                  
+    TMenuItem                File1                      &File
+      TMenuItem                Print1                     &Print...
+      TMenuItem                PrintSetup1                P&rint Setup...
+      TMenuItem                N1                         -
+      TMenuItem                Exit1                      &Close
+
+====================================================================================================
+FORM fiePrnForm2   (resource TFIEPRNFORM2, class TfiePrnForm2)
+   Caption: Print
+====================================================================================================
+TfiePrnForm2             fiePrnForm2                Print
+  TImage                   Image1                     
+  TGroupBox                GroupBox1                   Margins (inches) 
+    TLabel                   Label1                     Top
+    TLabel                   Label2                     Left
+    TLabel                   Label3                     Right
+    TLabel                   Label4                     Bottom
+    TEdit                    Edit1                      1
+    TEdit                    Edit2                      1
+    TEdit                    Edit3                      1
+    TEdit                    Edit4                      1
+    TUpDown                  UpDown1                    
+    TUpDown                  UpDown2                    
+    TUpDown                  UpDown3                    
+    TUpDown                  UpDown4                    
+  TGroupBox                GroupBox2                   Position 
+    TSpeedButton             SpeedButton2               
+    TSpeedButton             SpeedButton3               
+    TSpeedButton             SpeedButton4               
+    TSpeedButton             SpeedButton5               
+    TSpeedButton             SpeedButton6               
+    TSpeedButton             SpeedButton7               
+    TSpeedButton             SpeedButton8               
+    TSpeedButton             SpeedButton9               
+    TSpeedButton             SpeedButton1               
+  TGroupBox                GroupBox3                   Size 
+    TLabel                   Label5                     Width
+    TLabel                   Label6                     Height
+    TLabel                   Label7                     inches
+    TLabel                   Label8                     inches
+    TComboBox                ComboBox1                  
+    TEdit                    Edit5                      6
+    TEdit                    Edit6                      4
+    TUpDown                  UpDown5                    
+    TUpDown                  UpDown6                    
+  TGroupBox                GroupBox4                   Gamma correction 
+    TLabel                   Label9                     Value
+    TEdit                    Edit7                      1
+    TUpDown                  UpDown7                    
+  TButton                  Button1                    OK
+  TButton                  Button2                    Cancel
+  TGroupBox                GroupBox5                   Preview 
+    TImageEnView             ImageEnView1               
+  TButton                  Button4                    Printer Setup
+  TGroupBox                GroupBox6                   Measure units 
+    TLabel                   Label10                    Units
+    TComboBox                ComboBox2                  
+  TPrinterSetupDialog      PrinterSetupDialog1        
+
+====================================================================================================
+FORM fiePrnForm3   (resource TFIEPRNFORM3, class TfiePrnForm3)
+   Caption: fiePrnForm3
+====================================================================================================
+TfiePrnForm3             fiePrnForm3                fiePrnForm3
+  TSplitter                Splitter1                  
+  TImageEnView             ImageEnView1               
+  TPanel                   Panel3                     
+    TImageEnMView            ImageEnMView1              
+  TPanel                   Panel2                     
+    TSpeedButton             SpeedButton1               
+    TSpeedButton             SpeedButton2               
+    TSpeedButton             SpeedButton3               
+    TSpeedButton             SpeedButton4               
+    TSpeedButton             SpeedButton5               
+    TSpeedButton             SpeedButton6               
+    TSpeedButton             SpeedButton7               
+    TSpeedButton             SpeedButton8               
+    TSpeedButton             SpeedButton9               
+    TSpeedButton             SpeedButton10              
+    TSpeedButton             SpeedButton11              
+    TSpeedButton             SpeedButton12              &Close
+    TBevel                   Bevel1                     
+    TBevel                   Bevel3                     
+    TBevel                   Bevel2                     
+    TBevel                   Bevel4                     
+    TEdit                    Edit1                      1
+    TEdit                    Edit2                      1
+    TEdit                    Edit3                      1
+    TEdit                    Edit4                      1
+    TComboBox                ComboBox1                  
+    TEdit                    Edit5                      6
+    TEdit                    Edit6                      4
+    TEdit                    Edit7                      1
+    TUpDown                  UpDown1                    
+    TUpDown                  UpDown2                    
+    TUpDown                  UpDown3                    
+    TUpDown                  UpDown4                    
+    TUpDown                  UpDown5                    
+    TUpDown                  UpDown6                    
+    TUpDown                  UpDown7                    
+    TComboBox                ComboBox2                  
+  TPrinterSetupDialog      PrinterSetupDialog1        
+  TPopupMenu               PopupMenu1                 
+    TMenuItem                Add1                       Zoom In
+    TMenuItem                Delete1                    Zoom Out
+
+====================================================================================================
+FORM FinishDlg   (resource TFINISHDLG, class TFinishDlg)
+   Caption: Открытие файла...
+====================================================================================================
+TFinishDlg               FinishDlg                  Открытие файла...
+  TPanel                   Panel1                     
+    TBitBtn                  BitBtn1                    Отмена
+    TBitBtn                  BitBtn2                    Открыть папку
+    TBitBtn                  BitBtn3                    Открыть файл
+  TPanel                   Panel2                     
+    TLabel                   Label1                     Сохранение файлов завершено, что вы хотите сделать?
+
+====================================================================================================
+FORM fIOPreviews   (resource TFIOPREVIEWS, class TfIOPreviews)
+   Caption: Parameters preview
+====================================================================================================
+TfIOPreviews             fIOPreviews                Parameters preview
+  TImage                   Image1                     
+  TLabel                   Label1                     Source:
+  TLabel                   Label2                     Result:
+  TButton                  Button1                    OK
+  TButton                  Button2                    Cancel
+  TPageControl             PageControl1               
+    TTabSheet                TabSheetJPEG1              JPEG
+      TLabel                   Label23                    &Quality:
+      TLabel                   Label24                    Compressed size:
+      TLabel                   Label25                    ---
+      TLabel                   Label3                     Original size:
+      TLabel                   Label4                     ---
+      TEdit                    Edit22                     0
+      TTrackBar                TrackBar13                 
+      TGroupBox                GroupBox5                   Advanced 
+        TLabel                   Label26                    &DCT method:
+        TLabel                   Label27                    &Smoothing factor:
+        TLabel                   Label57                    P&hotometric:
+        TCheckBox                CheckBox2                  &Optimal Huffman
+        TComboBox                ComboBox1                  
+        TEdit                    Edit23                     0
+        TUpDown                  UpDown11                   
+        TCheckBox                CheckBox3                  P&rogressive
+        TComboBox                ComboBox13                 
+    TTabSheet                TabSheetJPEG2              JPEG
+      TLabel                   Label72                    &Quality:
+      TLabel                   Label73                    Original size:
+      TLabel                   Label74                    ---
+      TLabel                   Label75                    Compressed size:
+      TLabel                   Label76                    ---
+      TEdit                    Edit16                     0
+      TTrackBar                TrackBar2                  
+    TTabSheet                TabSheetTIFF1              TIFF
+      TLabel                   Label5                     &Compression:
+      TLabel                   Label6                     &Image index:
+      TLabel                   Label7                     P&hotometric:
+      TLabel                   Label19                    C&olors:
+      TLabel                   Label9                     Original size:
+      TLabel                   Label11                    ---
+      TLabel                   Label17                    Compressed size:
+      TLabel                   Label18                    ---
+      TComboBox                ComboBox2                  
+      TEdit                    Edit1                      0
+      TUpDown                  UpDown1                    
+      TComboBox                ComboBox3                  
+      TGroupBox                GroupBox1                   Scanned document info 
+        TLabel                   Label8                     H&oriz. Position (inch):
+        TLabel                   Label10                    &Vert. Position (inch):
+        TLabel                   Label12                    &Name:
+        TLabel                   Label13                    &Description:
+        TLabel                   Label14                    P&age name:
+        TLabel                   Label15                    Page N&umber:
+        TLabel                   Label16                    o&f
+        TEdit                    Edit2                      
+        TEdit                    Edit3                      
+        TEdit                    Edit4                      
+        TEdit                    Edit5                      
+        TEdit                    Edit6                      
+        TEdit                    Edit7                      
+        TEdit                    Edit8                      
+      TComboBox                ComboBox4                  
+    TTabSheet                TabSheetTIFF2              TIFF
+      TLabel                   Label77                    Original size:
+      TLabel                   Label78                    ---
+      TLabel                   Label79                    Compressed size:
+      TLabel                   Label80                    ---
+      TLabel                   Label81                    &Compression:
+      TLabel                   Label82                    C&olors:
+      TComboBox                ComboBox16                 
+      TComboBox                ComboBox17                 
+    TTabSheet                TabSheetGIF1               GIF
+      TLabel                   Label20                    &Image index:
+      TLabel                   Label21                    &Colors:
+      TLabel                   Label34                    T&ransparent color:
+      TLabel                   Label35                    &Background:
+      TLabel                   Label22                    Original size:
+      TLabel                   Label28                    ---
+      TLabel                   Label29                    Compressed size:
+      TLabel                   Label30                    ---
+      TEdit                    Edit9                      0
+      TUpDown                  UpDown2                    
+      TComboBox                ComboBox5                  
+      TPanel                   Panel3                     
+      TCheckBox                CheckBox4                  &Transparent:
+      TCheckBox                CheckBox5                  I&nterlaced:
+      TPanel                   Panel4                     
+      TGroupBox                GroupBox2                   Advanced 
+        TLabel                   Label33                    &Delay time:
+        TLabel                   Label31                    &Horiz. Position:
+        TLabel                   Label32                    &Vert. Position:
+        TLabel                   Label36                    1/100 s
+        TEdit                    Edit12                     
+        TEdit                    Edit10                     
+        TEdit                    Edit11                     
+    TTabSheet                TabSheetGIF2               GIF
+      TLabel                   Label83                    Original size:
+      TLabel                   Label84                    ---
+      TLabel                   Label85                    Compressed size:
+      TLabel                   Label86                    ---
+      TLabel                   Label87                    &Colors:
+      TComboBox                ComboBox18                 
+    TTabSheet                TabSheetBMP1               BMP
+      TLabel                   Label37                    &Compression:
+      TLabel                   Label38                    C&olors:
+      TLabel                   Label39                    Original size:
+      TLabel                   Label40                    ---
+      TLabel                   Label41                    Compressed size:
+      TLabel                   Label42                    ---
+      TComboBox                ComboBox6                  
+      TComboBox                ComboBox7                  
+    TTabSheet                TabSheetPCX1               PCX
+      TLabel                   Label43                    &Compression:
+      TLabel                   Label44                    C&olors:
+      TLabel                   Label45                    Original size:
+      TLabel                   Label46                    ---
+      TLabel                   Label47                    Compressed size:
+      TLabel                   Label48                    ---
+      TComboBox                ComboBox8                  
+      TComboBox                ComboBox9                  
+    TTabSheet                TabSheetPNG1               PNG
+      TLabel                   Label49                    C&olors:
+      TLabel                   Label54                    &Background:
+      TLabel                   Label50                    Original size:
+      TLabel                   Label51                    ---
+      TLabel                   Label52                    Compressed size:
+      TLabel                   Label53                    ---
+      TComboBox                ComboBox10                 
+      TPanel                   Panel1                     
+      TGroupBox                GroupBox3                   Advanced 
+        TLabel                   Label55                    &Filter
+        TLabel                   Label56                    Co&mpression
+        TComboBox                ComboBox11                 
+        TCheckBox                CheckBox6                  I&nterlaced:
+        TComboBox                ComboBox12                 
+    TTabSheet                TabSheetTGA1               TGA
+      TLabel                   Label62                    C&olors:
+      TLabel                   Label63                    &Background:
+      TLabel                   Label64                    &Name:
+      TLabel                   Label65                    &Description:
+      TLabel                   Label58                    Original size:
+      TLabel                   Label59                    ---
+      TLabel                   Label60                    Compressed size:
+      TLabel                   Label61                    ---
+      TComboBox                ComboBox14                 
+      TPanel                   Panel5                     
+      TCheckBox                CheckBox1                  Compression:
+      TEdit                    Edit13                     
+      TEdit                    Edit14                     
+    TTabSheet                TabSheetJ20001             JPEG2000
+      TLabel                   Label66                    &Rate:
+      TLabel                   Label67                    Original size:
+      TLabel                   Label68                    ---
+      TLabel                   Label69                    Compressed size:
+      TLabel                   Label70                    ---
+      TLabel                   Label71                    P&hotometric:
+      TEdit                    Edit15                     0
+      TTrackBar                TrackBar1                  
+      TComboBox                ComboBox15                 
+  TButton                  Button3                    &Preview
+  TButton                  Button4                    &Apply
+  TCheckBox                chkLockPreview             Lock Preview
+  TImageEnView             ImageEn1                   
+  TImageEnView             ImageEn2                   
+  TProgressBar             ProgressBar1               
+  TColorDialog             ColorDialog1               
+
+====================================================================================================
+FORM Form2   (resource TFORM2, class TForm2)
+   Caption: frmTemplateOptions
+====================================================================================================
+TForm2                   Form2                      frmTemplateOptions
+
+====================================================================================================
+FORM Frame1   (resource TFRAME1, class TFrame1)
+====================================================================================================
+TFrame1                  Frame1                     
+  TLabel                   Label5                     Индекс: 
+  TLabel                   Label6                     Регион
+  TLabel                   ÐÐ¾ÑÐ¾Ð´                 Населенный пункт: 
+  TLabel                   Label7                     Улица:
+  TEdit                    edtIndex                   
+  TEdit                    edtRegion                  
+  TEdit                    edtCity                    
+  TEdit                    edtAdres                   
+
+====================================================================================================
+FORM frmBackClipArt   (resource TFRMBACKCLIPART, class TfrmBackClipArt)
+   Caption: Выбор картинки
+====================================================================================================
+TfrmBackClipArt          frmBackClipArt             Выбор картинки
+  TPanel                   Panel1                     
+    TButton                  Button1                    Выбрать
+    TButton                  Button2                    Отмена
+  TImageEnMView            imview                     
+
+====================================================================================================
+FORM frmBackUp   (resource TFRMBACKUP, class TfrmBackUp)
+   Caption: Резервное копирование
+====================================================================================================
+TfrmBackUp               frmBackUp                  Резервное копирование
+  TsPanel                  sPanel1                    
+    TsCheckBox               cbAutoCopy                 Включить резервное копирование
+    TsGroupBox               gbPath                     Папка для хранения копий
+      TsBitBtn                 btnChooseDir               Выбрать
+      TsDirectoryEdit          dePath                     
+    TsGroupBox               gbCopyType                 Способ копирования
+      TsRadioButton            rbAll                      Хранить данные за каждый день (занимает больше места) 
+      TsRadioButton            rbLast                     Хранить только последнюю сохранённую базу
+  TsPanel                  sPanel2                    
+    TsBitBtn                 sBitBtn2                   Отмена
+    TsBitBtn                 sBitBtn3                   Применить
+
+====================================================================================================
+FORM frmBaseClear   (resource TFRMBASECLEAR, class TfrmBaseClear)
+   Caption: Очистка базы
+====================================================================================================
+TfrmBaseClear            frmBaseClear               Очистка базы
+  TPanel                   Panel1                     
+    TBitBtn                  BitBtn1                    Отмена
+    TBitBtn                  BitBtn2                    Очистить базу
+  TGroupBox                GroupBox1                  Выберете данные для очистки
+    TCheckBox                chkCategories              Категории контрагентов
+    TCheckBox                chkMailings                База рассылок
+    TCheckBox                chkAgents                  База контрагентов
+    TCheckBox                chkLetters                 База отправленных писем
+
+====================================================================================================
+FORM frmColor   (resource TFRMCOLOR, class TfrmColor)
+====================================================================================================
+TfrmColor                frmColor                   
+  TBitBtn                  BitBtn1                    Выбрать цвет
+
+====================================================================================================
+FORM frmContrFilter   (resource TFRMCONTRFILTER, class TfrmContrFilter)
+   Caption: frmContrFilter
+====================================================================================================
+TfrmContrFilter          frmContrFilter             frmContrFilter
+  TShape                   Shape1                     
+  TPanel                   Panel2                     
+    TGroupBox                GroupBox1                  Поля для поиска:
+      TCheckBox                chkInfo                    Примечание
+      TCheckBox                chkName                    Название
+      TCheckBox                chkAdres                   Адрес
+    TGroupBox                GroupBox2                  
+      TLabel                   Label3                     Искать:
+      TEdit                    edtText                    Введите параметры поиска...
+    TGroupBox                GroupBox3                  
+      TLabel                   Label1                     Тип адресата:
+      TLabel                   Label2                     Статус адресата:
+      TComboBox                cmbIsSender                Все
+      TComboBox                cmbType                    Все
+    TBitBtn                  BitBtn1                    Найти
+    TBitBtn                  BitBtn2                    Отмена
+
+====================================================================================================
+FORM frmEnvelopSettings   (resource TFRMENVELOPSETTINGS, class TfrmEnvelopSettings)
+   Caption: Новый конверт
+====================================================================================================
+TfrmEnvelopSettings      frmEnvelopSettings         Новый конверт
+  TGroupBox                GroupBox1                  Настройки конверта
+    TLabel                   Label1                     Формат:
+    TLabel                   Label2                     Ширина:
+    TLabel                   Label3                     мм
+    TLabel                   Label4                     мм
+    TLabel                   Label5                     Страна:
+    TLabel                   Label6                     Высота:
+    TCheckBox                chkStandart                Использовать стандартную разметку
+    TEdit                    edtWidth                   
+    TEdit                    edtHeight                  
+    TsListBox                lbFormats                  
+    TsRadioButton            rbRussia                   Россия
+    TsRadioButton            rbUA                       Украина
+  TPanel                   Panel1                     
+    TBitBtn                  BitBtn1                    Отмена
+    TBitBtn                  BitBtn2                    Создать
+
+====================================================================================================
+FORM frmExportLetters   (resource TFRMEXPORTLETTERS, class TfrmExportLetters)
+   Caption: Экспорт
+====================================================================================================
+TfrmExportLetters        frmExportLetters           Экспорт
+  TPanel                   Panel2                     
+    TBitBtn                  btnNext                    Экспортировать
+    TBitBtn                  btnCancel                  Отмена
+  TPageControl             PageControl1               
+    TTabSheet                TabSheet1                  TabSheet1
+      TPaintBox                PaintBox3                  
+      TLabel                   Label3                     Настройки даты
+      TPanel                   Panel6                     
+        TPaintBox                PaintBox1                  
+        TLabel                   Label1                     Формат файла:
+      TPanel                   Panel1                     
+        TLabel                   Label8                     Дата
+        TLabel                   Label9                     по
+        TDateTimePicker          DateTimePicker3            
+        TDateTimePicker          DateTimePicker4            
+      TRadioButton             RadioButton1               Excel 97-2003
+      TRadioButton             RadioButton2               Excel 2003-2010
+      TRadioButton             RadioButton3               CSV
+  TSaveDialog              dlgSave                    
+
+====================================================================================================
+FORM frmFont   (resource TFRMFONT, class TfrmFont)
+====================================================================================================
+TfrmFont                 frmFont                    
+  TLabel                   ÐÐ°Ð·Ð²Ð°Ð½Ð¸Ðµ           Название
+  TLabel                   Ð Ð°Ð·Ð¼ÐµÑ               Размер
+  TComboBox                ComboBox1                  ComboBox1
+  TComboBox                ComboBox2                  ComboBox2
+  TPanel                   Panel1                     
+    TSpeedButton             SpeedButton1               Ж
+    TSpeedButton             SpeedButton2               К
+    TSpeedButton             SpeedButton3               Ч
+    TSpeedButton             SpeedButton4               П
+
+====================================================================================================
+FORM frmImportExit   (resource TFRMIMPORTEXIT, class TfrmImportExit)
+   Caption: Импортировать данные? 
+====================================================================================================
+TfrmImportExit           frmImportExit              Импортировать данные? 
+  TPanel                   Panel1                     
+    TBitBtn                  BitBtn2                    Вернуться к редактированию
+    TBitBtn                  BitBtn3                    Добавить только проверенных
+    TBitBtn                  BitBtn4                    Добавить только записи без ошибок
+    TBitBtn                  BitBtn5                    Добавить все записи
+  TPanel                   Panel2                     
+    TLabel                   Label1                     8970 контрагентов не было вами проверено. 
+    TLabel                   Label4                     8971 записей содержат ошибки.
+    TLabel                   Label2                     Что вы желаете сделать?
+
+====================================================================================================
+FORM frmMailingFilter   (resource TFRMMAILINGFILTER, class TfrmMailingFilter)
+====================================================================================================
+TfrmMailingFilter        frmMailingFilter           
+  TPanel                   Panel1                     Panel1
+    TShape                   Shape1                     
+    TLabel                   Label1                     Статус
+    TLabel                   Label2                     Отправитель
+    TLabel                   Label3                     Созданы с
+    TLabel                   Label4                     по
+    TComboBox                cmbState                   Все
+    TBitBtn                  BitBtn1                    Отменить
+    TBitBtn                  BitBtn2                    Применить
+    TComboBox                cmbSenders                 
+    TDateTimePicker          DateTimePicker1            
+    TDateTimePicker          DateTimePicker2            
+
+====================================================================================================
+FORM frmMoveToCategory   (resource TFRMMOVETOCATEGORY, class TfrmMoveToCategory)
+   Caption: Перемещение в категорию
+====================================================================================================
+TfrmMoveToCategory       frmMoveToCategory          Перемещение в категорию
+  TPanel                   Panel2                     
+    TListBox                 lstCategories              
+    TPanel                   Panel1                     
+      TBitBtn                  BitBtn1                    Отмена
+      TBitBtn                  BitBtn2                    Переместить
+
+====================================================================================================
+FORM frmNewCategory   (resource TFRMNEWCATEGORY, class TfrmNewCategory)
+   Caption: Категории
+====================================================================================================
+TfrmNewCategory          frmNewCategory             Категории
+  TPanel                   Panel1                     
+    TListBox                 lstCategories              
+    TPanel                   Panel3                     
+      TLabel                   Label1                     Название:
+      TLabel                   Label2                     Примечание:
+      TEdit                    edtName                    
+      TMemo                    edtInfo                    
+  TPanel                   Panel2                     
+    TSpeedButton             btnAdd                     Создать
+    TButton                  btnSave                    Сохранить
+    TButton                  btnDelete                  Удалить
+    TButton                  Button1                    Отмена
+
+====================================================================================================
+FORM frmNewMailing   (resource TFRMNEWMAILING, class TfrmNewMailing)
+   Caption: Новая рассылка
+====================================================================================================
+TfrmNewMailing           frmNewMailing              Новая рассылка
+  TPanel                   Panel3                     
+    TLabel                   Ð½Ð°Ð·Ð²Ð°Ð½Ð¸Ðµ           Название:
+    TLabel                   Label1                     Отправитель:
+    TLabel                   Label2                     Примечание:
+    TEdit                    edtName                    
+    TMemo                    edtinfo                    
+    TBitBtn                  BitBtn1                    Создать отправителя
+    TComboBox                cmbSenders                 
+  TPanel                   Panel9                     
+    TSpeedButton             SpeedButton8               Печать рассылки
+    TBevel                   Bevel1                     
+    TBitBtn                  BitBtn2                    Отмена
+    TBitBtn                  BitBtn3                    Сохранить
+  TPageControl             PageControl1               
+    TTabSheet                TabSheet2                  Рассылка на категории
+      TStringGrid              stgContrAgents             
+      TStringGrid              stgSelected                
+    TTabSheet                TabSheet1                  Рассылка на категорию
+      TPanel                   Panel2                     
+        TLabel                   Label5                     Всего необходимо конвертов
+        TLabel                   lblActive                  0
+        TLabel                   Label3                     Выберите категории для рассылки:
+        TStringGrid              stgCategories              
+
+====================================================================================================
+FORM frmOneCategory   (resource TFRMONECATEGORY, class TfrmOneCategory)
+   Caption: Создание категории
+====================================================================================================
+TfrmOneCategory          frmOneCategory             Создание категории
+  TGroupBox                GroupBox1                  Введите название категории:
+    TEdit                    edtName                    
+  TBitBtn                  BitBtn2                    Сохранить
+  TBitBtn                  BitBtn1                    Отмена
+
+====================================================================================================
+FORM frmPrinting   (resource TFRMPRINTING, class TfrmPrinting)
+   Caption: Идет печать.
+====================================================================================================
+TfrmPrinting             frmPrinting                Идет печать.
+  TShape                   Shape1                     
+  TLabel                   Label1                     Идет подготовка к печати...
+  TProgressBar             ProgressBar1               
+  TBitBtn                  BitBtn1                    Прервать печать
+
+====================================================================================================
+FORM frmPrintingLabels   (resource TFRMPRINTINGLABELS, class TfrmPrintingLabels)
+   Caption: frmPrintingLabels
+====================================================================================================
+TfrmPrintingLabels       frmPrintingLabels          frmPrintingLabels
+  TShape                   Shape1                     
+  TLabel                   Label1                     Идет подготовка к печати...
+  TBitBtn                  BitBtn1                    Прервать печать
+  TProgressBar             ProgressBar1               
+
+====================================================================================================
+FORM frmSaving   (resource TFRMSAVING, class TfrmSaving)
+   Caption: frmSaving
+====================================================================================================
+TfrmSaving               frmSaving                  frmSaving
+  TsLabel                  sLabel1                    Идет сохранение...
+  TsProgressBar            sProgressBar1              
+
+====================================================================================================
+FORM frmSelectClipArt   (resource TFRMSELECTCLIPART, class TfrmSelectClipArt)
+   Caption: Выбор картинки
+====================================================================================================
+TfrmSelectClipArt        frmSelectClipArt           Выбор картинки
+  TPanel                   Panel1                     
+    TImage                   imgInfo                    
+    TButton                  Button1                    Выбрать
+    TButton                  Button2                    Отмена
+  TPanel                   Panel2                     Panel2
+    TListBox                 ListBox1                   
+    TImageEnMView            imview                     
+
+====================================================================================================
+FORM frmSelectSender   (resource TFRMSELECTSENDER, class TfrmSelectSender)
+   Caption: frmSelectSender
+====================================================================================================
+TfrmSelectSender         frmSelectSender            frmSelectSender
+  TButton                  btnCansel                  Отмена
+  TListBox                 lstSenders                 
+  TButton                  btnSelect                  Выбрать
+
+====================================================================================================
+FORM frmSendedFilter   (resource TFRMSENDEDFILTER, class TfrmSendedFilter)
+====================================================================================================
+TfrmSendedFilter         frmSendedFilter            
+  TPanel                   Panel1                     
+    TShape                   Shape1                     
+    TBitBtn                  BitBtn1                    Отменить
+    TBitBtn                  BitBtn2                    Применить
+
+====================================================================================================
+FORM frmShownFields   (resource TFRMSHOWNFIELDS, class TfrmShownFields)
+   Caption: Отображаемые поля
+====================================================================================================
+TfrmShownFields          frmShownFields             Отображаемые поля
+  TShape                   Shape1                     
+  TLabel                   Label1                     Выберите отображаемые поля:
+  TCheckListBox            lstFields                  
+  TButton                  btnCancel                  Отмена
+  TButton                  btnOk                      Применить
+
+====================================================================================================
+FORM frmUpgrade   (resource TFRMUPGRADE, class TfrmUpgrade)
+   Caption: Почтовые конверты
+====================================================================================================
+TfrmUpgrade              frmUpgrade                 Почтовые конверты
+  TsBitBtn                 WClose                     Закрыть
+  TsBitBtn                 WBuy                       Купить полную версию
+  TsGroupBox               WGroupPanel                
+    TsLabel                  WLabel1                    Данная функция доступна только в полной версии программы.
+    TsLabel                  WLabel2                    Покупая полную версию, Вы получаете следующие возможности:
+    TsLabel                  WVersionLabel1             - Использование программы без ограничений по времени 
+- Быстрая печат
+    TImage                   Image1                     
+
+====================================================================================================
+FORM frmWarning   (resource TFRMWARNING, class TfrmWarning)
+   Caption: Печать
+====================================================================================================
+TfrmWarning              frmWarning                 Печать
+  TGradient                Gradient1                  
+  TImage                   Image1                     
+  TLabel                   Label1                     Для корректной печати конверты следует
+загружать в принтер узкой стор
+  TGradient                Gradient2                  
+  TCheckBox                CheckBox1                  Больше не показывать это сообщение
+  TBitBtn                  BitBtn1                    Продолжить
+
+====================================================================================================
+FORM NagForm1   (resource TNAGFORM1, class TNagForm1)
+   Caption: Пробная версия
+====================================================================================================
+TNagForm1                NagForm1                   Пробная версия
+  TImage                   Image                      
+  TLabel                   HappyEndLabel              К сожалению, пробный период использования программы закончился.
+  TLabel                   SiteLabel1                 Сайт программы
+  TLabel                   CounterLabel               Осталось дней:
+  TLabel                   SiteLabel2                 Техническая поддержка
+  TLabel                   Label1                     
+Вы используете пробную версию программы "Почтовые Конверты". 
+Покуп
+  TProgressBar             ProgressBar                
+  TEdit                    CounterEdit                
+  TBitBtn                  CloseButton                Продолжить
+  TButton                  OrderButton                Купить сейчас
+  TButton                  WriteButton                Ввести ключ
+
+====================================================================================================
+FORM PathDialogForm   (resource TPATHDIALOGFORM, class TPathDialogForm)
+   Caption: Select directory
+====================================================================================================
+TPathDialogForm          PathDialogForm             Select directory
+  TsLabel                  sLabel1                    
+  TsBitBtn                 sBitBtn1                   OK
+  TsBitBtn                 sBitBtn2                   Cancel
+  TsBitBtn                 sBitBtn3                   Create
+  TsShellTreeView          sShellTreeView1            
+  TsScrollBox              sScrollBox1                
+  TsSkinProvider           sSkinProvider1             
+  TsAlphaImageList         ImageList1                 
+
+====================================================================================================
+FORM PremiumForm1   (resource TPREMIUMFORM1, class TPremiumForm1)
+   Caption: Почтовые конверты
+====================================================================================================
+TPremiumForm1            PremiumForm1               Почтовые конверты
+  TsBitBtn                 WClose                     Закрыть
+  TsBitBtn                 WBuy                       Купить версию Профи
+  TsGroupBox               WGroupPanel                
+    TsLabel                  WLabel1                    Данная функция доступна только в версии Профи.
+    TsLabel                  WLabel2                    Сделайте апгрейд до версии Профи и получите следующие возможности: 
+    TImage                   Image1                     
+    TsLabel                  WVersionLabel1             - Неограниченное число адресов в базе
+- Импорт данных из MS Excel, CS
+
+====================================================================================================
+FORM sCalcForm   (resource TSCALCFORM, class TsCalcForm)
+   Caption: Calculator
+====================================================================================================
+TsCalcForm               sCalcForm                  Calculator
+  TsPanel                  FMainPanel                 
+    TsPanel                  FCalculatorPanel            
+      TsSpeedButton            sSpeedButton1              <-
+      TsSpeedButton            sSpeedButton2              C
+      TsSpeedButton            sSpeedButton3              MC
+      TsSpeedButton            sSpeedButton4              7
+      TsSpeedButton            sSpeedButton5              8
+      TsSpeedButton            sSpeedButton6              9
+      TsSpeedButton            sSpeedButton7              /
+      TsSpeedButton            sSpeedButton8              sqrt
+      TsSpeedButton            sSpeedButton9              MR
+      TsSpeedButton            sSpeedButton10             4
+      TsSpeedButton            sSpeedButton11             5
+      TsSpeedButton            sSpeedButton12             6
+      TsSpeedButton            sSpeedButton13             *
+      TsSpeedButton            sSpeedButton14             %
+      TsSpeedButton            sSpeedButton15             MS
+      TsSpeedButton            sSpeedButton16             1
+      TsSpeedButton            sSpeedButton17             2
+      TsSpeedButton            sSpeedButton18             3
+      TsSpeedButton            sSpeedButton19             -
+      TsSpeedButton            sSpeedButton20             1/%
+      TsSpeedButton            sSpeedButton21             MP
+      TsSpeedButton            sSpeedButton22             0
+      TsSpeedButton            sSpeedButton23             ±
+      TsSpeedButton            sSpeedButton24             .
+      TsSpeedButton            sSpeedButton25             +
+      TsSpeedButton            sSpeedButton26             =
+      TsPanel                  FCalcPanel                  
+      TsPanel                  FDisplayPanel              0 
+    TsDragBar                sDragBar1                  Calculator
+      TsSpeedButton            sToolButton3               _
+      TsSpeedButton            sToolButton1               X
+  TPopupMenu               PopupMenu1                 
+    TMenuItem                N1                         &Copy
+    TMenuItem                N2                         &Paste
+    TMenuItem                OK1                        OK
+    TMenuItem                Cancel1                    Cancel
+
+====================================================================================================
+FORM sColorDialogForm   (resource TSCOLORDIALOGFORM, class TsColorDialogForm)
+   Caption: Color
+====================================================================================================
+TsColorDialogForm        sColorDialogForm           Color
+  TsLabel                  sLabel1                    Main palette :
+  TsLabel                  sLabel2                    Additional colors :
+  TsLabel                  sLabel4                    o
+  TsLabel                  sLabel5                    %
+  TsLabel                  sLabel6                    %
+  TsSpeedButton            sSpeedButton1              
+  TsBitBtn                 sBitBtn1                   OK
+  TsBitBtn                 sBitBtn2                   Cancel
+  TsPanel                  ColorPanel                  
+  TsPanel                  GradPanel                   
+  TShape                   SelectedPanel              
+  TsCurrencyEdit           sREdit                     
+  TsCurrencyEdit           sGEdit                     
+  TsCurrencyEdit           sBEdit                     
+  TsBitBtn                 sBitBtn3                   Add to custom colors set
+  TsBitBtn                 sBitBtn4                   Define colors
+  TsCurrencyEdit           sHEdit                     
+  TsCurrencyEdit           sSEdit                     
+  TsCurrencyEdit           sVEdit                     
+  TsColorsPanel            MainPal                     
+  TsColorsPanel            AddPal                      
+  TsCurrencyEdit           sEditDecimal               
+  TsMaskEdit               sEditHex                         
+  TsBitBtn                 sBitBtn5                   Help
+  TsSkinProvider           sSkinProvider1             
+
+====================================================================================================
+FORM ScreenForm   (resource TSCREENFORM, class TScreenForm)
+   Caption: Pick a color...
+====================================================================================================
+TScreenForm              ScreenForm                 Pick a color...
+
+====================================================================================================
+FORM sPopupCalendar   (resource TSPOPUPCALENDAR, class TsPopupCalendar)
+   Caption: Mgn
+====================================================================================================
+TsPopupCalendar          sPopupCalendar             Mgn
+  TsMonthCalendar          sMonthCalendar1             
+  TPopupMenu               PopupMenu1                 
+    TMenuItem                N1                         &Copy
+    TMenuItem                N2                         &Paste
+    TMenuItem                OK1                        OK
+    TMenuItem                Cancel1                    Cancel
+
+====================================================================================================
+FORM UpdateForm   (resource TUPDATEFORM, class TUpdateForm)
+   Caption: Обновление
+====================================================================================================
+TUpdateForm              UpdateForm                 Обновление
+  TPanel                   Panel1                     
+    TImage                   Image1                     
+    TLabel                   CaptionLabel1              Почтовые Конверты 
+    TLabel                   VersionLabel               2.0
+    TLabel                   CaptionLabel3              Доступна новая версия для скачивания...
+    TLabel                   Label1                                                     
+    TLabel                   Label2                                                     
+    TLabel                   Label3                                                     
+    TLabel                   Label4                                                     
+    TLabel                   Label5                                                     
+    TsPanel                  sPanel1                    
+      TsBitBtn                 btnOrder                   Купить апгрейд
+      TsBitBtn                 sBitBtn1                   Напомнить позже
+      TsBitBtn                 sBitBtn2                   Скачать обновление
+    TsPanel                  sPanel2                    
+  TPanel                   Panel2                     
+    TImage                   Image5                     
+    TLabel                   InfoLabel                  Проверка наличия обновлений...
+    TButton                  Button1                    Отмена
+
+====================================================================================================
+FORM WDialogColor   (resource TWDIALOGCOLOR, class TWDialogColor)
+   Caption: Выбрать цвет
+====================================================================================================
+TWDialogColor            WDialogColor               Выбрать цвет
+  TsPageControl            WPages                     
+    TsTabSheet               WSlhTab                    SLH
+      TSLHColorPicker          WSlhPicker                 
+    TsTabSheet               WHslTab                    HSL
+      THSLColorPicker          WHslPicker                 
+    TsTabSheet               WHsvTab                    HSV
+      THSVColorPicker          WHsvPicker1                
+      TVColorPicker            WHsvPicker2                
+    TsTabSheet               WHexTab                    Web
+      THexaColorPicker         WHexPicker                 
+  TmbColorPreview          WOldColor                  
+  TmbColorPreview          WNewColor                  
+  TsGroupBox               WPixelFormat               
+    TsLabel                  WRGB_R                     R
+    TsLabel                  WRGB_G                     G
+    TsLabel                  WRGB_B                     B
+    TsLabel                  WHSB_H                     H
+    TsLabel                  WHSB_S                     S
+    TsLabel                  WHSB_B                     B
+    TsLabel                  WCMYK_C                    C
+    TsLabel                  WCMYK_M                    M
+    TsLabel                  WCMYK_Y                    Y
+    TsLabel                  WCMYK_K                    K
+    TsLabel                  WHex                       #
+    TsLabel                  WLab_b                     b
+    TsLabel                  WLab_a                     a
+    TsLabel                  WLab_L                     L
+    TsLabel                  WHSB_H_Unit                °
+    TsLabel                  WHSB_S_Unit                %
+    TsLabel                  WHSB_B_Unit                %
+    TsLabel                  WCMYK_C_Unit               %
+    TsLabel                  WCMYK_M_Unit               %
+    TsLabel                  WCMYK_Y_Unit               %
+    TsLabel                  WCMYK_K_Unit               %
+    TsBevel                  WPixelFormat_Sep_01        
+    TsDecimalSpinEdit        WRGB_R_Edit                255
+    TsDecimalSpinEdit        WRGB_G_Edit                255
+    TsDecimalSpinEdit        WRGB_B_Edit                255
+    TsDecimalSpinEdit        WHSB_B_Edit                0
+    TsDecimalSpinEdit        WHSB_S_Edit                0
+    TsDecimalSpinEdit        WHSB_H_Edit                0
+    TsDecimalSpinEdit        WCMYK_C_Edit               255
+    TsDecimalSpinEdit        WCMYK_Y_Edit               255
+    TsDecimalSpinEdit        WCMYK_M_Edit               255
+    TsDecimalSpinEdit        WCMYK_K_Edit               255
+    TsEdit                   WHex_Edit                  000000
+    TsDecimalSpinEdit        WLab_b_Edit                0
+    TsDecimalSpinEdit        WLab_a_Edit                0
+    TsDecimalSpinEdit        WLab_L_Edit                0
+  TsBitBtn                 WOk                        ОК
+  TsBitBtn                 WCancel                    Отмена
+  TsSkinProvider           WSkinProvider              
+
+====================================================================================================
+FORM WPopupColor   (resource TWPOPUPCOLOR, class TWPopupColor)
+====================================================================================================
+TWPopupColor             WPopupColor                
+  TsBevel                  WBevel                     
+  TShape                   WShape                     
+  TsPanel                  WCustomPanel               
+    TsBitBtn                 WSelect                    Другой цвет
+    TsBitBtn                 WPick                      
+    TmbColorPreview          WPickColor                 
+  TmbColorPalette          WGradColors                
+  TmbColorPalette          WLastColors                
+  TsSkinProvider           WSkinProvider              
+
+====================================================================================================
+FORM WriteKeyForm   (resource TWRITEKEYFORM, class TWriteKeyForm)
+   Caption: Регистрация программы
+====================================================================================================
+TWriteKeyForm            WriteKeyForm               Регистрация программы
+  TGroupBox                GroupBox                   
+    TLabel                   KeyLabel                   Ключ:
+    TEdit                    KeyEdit                    
+  TBitBtn                  CloseButton                Отмена
+  TBitBtn                  CheckButton                Проверить
+  TsBitBtn                 OrderButton                Купить

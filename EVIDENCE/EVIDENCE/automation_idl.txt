@@ -1,0 +1,104 @@
+Описание на языке idl
+
+// Generated .IDL file (by the OLE/COM Object Viewer)
+//
+// typelib filename: PrintEnvelopePro.tlb
+
+[
+ uuid(22BC298D-DF0E-3C29-B589-7A50D3A8B871),
+ version(2.2),
+ helpstring("\xFFFFFFCF\xFFFFFFE5ча\xFFFFFFF2ь \xFFFFFFEA\xFFFFFFEE\xFFFFFFED\xFFFFFFE2\xFFFFFFE5р\xFFFFFFF2\xFFFFFFEE\xFFFFFFE2!"),
+ custom(90883F05-3D28-11D2-8F17-00A0C9A6186D, PrintEnvelopePro, Version=2.2.0.0, Culture=neutral, PublicKeyToken=null)
+
+]
+library PrintEnvelopePro
+{
+ // TLib : // TLib : Common Language Runtime Library : {BED7F4EA-1A96-11D2-8F08-00A0C9A6186D}
+ importlib("mscorlib.tlb");
+ // TLib : OLE Automation : {00020430-0000-0000-C000-000000000046}
+ importlib("stdole2.tlb");
+
+ // Forward declare all types defined in this typelib
+ interface IPEProApplication;
+
+ [
+ odl,
+ uuid(3A98FA89-27EE-4DDF-8F5D-ABC47EA942E6),
+ version(1.0),
+ dual,
+ oleautomation,
+ custom(0F21F359-AB84-41E8-9A78-36D110E6D2F9, PEP.COM.IPEProApplication)
+
+ ]
+ interface IPEProApplication : IDispatch {
+ [id(0x60020000)]
+ HRESULT PrintFromFileEnvelopes([in] BSTR filename);
+ [id(0x60020001)]
+ HRESULT PrintFromFileNotifications([in] BSTR filename);
+ [id(0x60020002)]
+ HRESULT PrintFromFileInventories([in] BSTR filename);
+ [id(0x60020003)]
+ HRESULT PrintFromFileRegisters([in] BSTR filename);
+ [id(0x60020004)]
+ HRESULT PrintFromXmlEnvelopes([in] BSTR xml_text);
+ [id(0x60020005)]
+ HRESULT PrintFromXmlNotifications([in] BSTR xml_text);
+ [id(0x60020006)]
+ HRESULT PrintFromXmlInventories([in] BSTR xml_text);
+ [id(0x60020007)]
+ HRESULT PrintFromXmlRegisters([in] BSTR xml_text);
+ [id(0x60020008)]
+ HRESULT PrintEnvelope(
+ [in] BSTR from,
+ [in] BSTR fromAddress,
+ [in] BSTR fromZipCode,
+ [in] BSTR to,
+ [in] BSTR toAddress,
+ [in] BSTR toZipCode);
+ [id(0x60020009)]
+ HRESULT OpenDummyFormToSetAsForeground([out, retval] BSTR* pRetVal);
+ [id(0x6002000a)]
+ HRESULT CloseDummyFormAndSetAsForeground([in] BSTR process);
+ [id(0x6002000b)]
+ HRESULT DatabaseIsLoaded([out, retval] VARIANT_BOOL* pRetVal);
+ [id(0x6002000c)]
+ HRESULT SafeLoadDatabase([out, retval] VARIANT_BOOL* pRetVal);
+ [id(0x6002000d)]
+ HRESULT GetFlagParseZipIndexFromAddress([out, retval] VARIANT_BOOL* pRetVal);
+ [id(0x6002000e)]
+ HRESULT SetFlagParseZipIndexFromAddress(
+ [in] VARIANT_BOOL f,
+ [out, retval] VARIANT_BOOL* pRetVal);
+ [id(0x6002000f)]
+ HRESULT GetFlagShowFormsAsModal([out, retval] VARIANT_BOOL* pRetVal);
+ [id(0x60020010)]
+ HRESULT SetFlagShowFormsAsModal(
+ [in] VARIANT_BOOL f,
+ [out, retval] VARIANT_BOOL* pRetVal);
+ [id(0x60020011)]
+ HRESULT GetProductVersion([out, retval] BSTR* pRetVal);
+ [id(0x60020012)]
+ HRESULT GetAPIVersion([out, retval] long* pRetVal);
+ [id(0x60020013)]
+ HRESULT GetRegisterTemplateNames([out, retval] SAFEARRAY(BSTR)* pRetVal);
+ [id(0x60020014)]
+ HRESULT PrintFromXmlRegistersWithoutForm(
+ [in] BSTR xml_text,
+ [in] BSTR nametemplate,
+ [in] BSTR resultFullPath);
+ [id(0x60020015)]
+ HRESULT GetWarningType([out, retval] long* pRetVal);
+ [id(0x60020016)]
+ HRESULT GetStdRegisterTemplateNames([out, retval] SAFEARRAY(BSTR)* pRetVal);
+ };
+
+ [
+ uuid(5715286E-F98F-4C1C-AC86-AB943AFAE004),
+ version(1.0),
+ custom(0F21F359-AB84-41E8-9A78-36D110E6D2F9, PEP.COM.PEProApplication)
+ ]
+ coclass PEProApplication {
+ interface _Object;
+ [default] interface IPEProApplication;
+ };
+};

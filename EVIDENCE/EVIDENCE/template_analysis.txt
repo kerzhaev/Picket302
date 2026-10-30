@@ -1,0 +1,402 @@
+﻿################ PART 1: std/env XML - blank definitions ################
+
+==========================================================================================
+FILE: std/env/0000Почтовый перевод (электронный) ф.112э.xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Verdana']
+  Backgrounds: ['112e.png']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}, {}]
+
+==========================================================================================
+FILE: std/env/0000Почтовый перевод (электронный) ф.112эф.xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Verdana']
+  Backgrounds: ['112ef_1.png', '112ef_2.png']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}, {}, {}, {}]
+
+==========================================================================================
+FILE: std/env/0000Почтовый перевод (электронный) ф.112эю.xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Verdana']
+  Backgrounds: ['112eth_1.png', '112eth_2.png']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}, {}, {}, {}]
+
+==========================================================================================
+FILE: std/env/0000Почтовый перевод наложенного платежа ф.117, ф.113.xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Verdana']
+  Backgrounds: ['117_113_1.png', '117_113_2.png']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}, {}, {}, {}]
+
+==========================================================================================
+FILE: std/env/0000Почтовый перевод ф.112эп.xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Verdana']
+  Backgrounds: ['f112ep.jpg']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}, {}]
+
+==========================================================================================
+FILE: std/env/0000Сопроводительный адрес к посылке ф.116.xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Verdana']
+  Backgrounds: ['116_1.png', '116_2.png']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}, {}, {}, {}]
+
+==========================================================================================
+FILE: std/env/0000конверт C5 (2012).xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Tw Cen MT Condensed', 'Verdana']
+  Backgrounds: ['C5.jpg']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}]
+
+==========================================================================================
+FILE: std/env/0000уведомление ф.119 (2011).xml
+  PageSpecification attrs: {}
+  FieldSpecification attrs: {}
+  FontNames: ['Times New Roman', 'Verdana']
+  Backgrounds: ['f119_2011.1.png', 'f119_2011.2.png']
+  Field count: 0
+  Field names (unique): []
+  PostIndexSpecification: [{}, {}]
+
+################ PART 2: tpl/ XSLT export templates ################
+
+==========================================================================================
+FILE: tpl\MSWordStyles.xslt (5026 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'indent': 'no'}]
+  templates(1): ['msword_styles']
+  imports: []
+  includes: []
+  variables(0): []
+  select paths (11 unique): ['page_top', 'page_right', 'page_bottom', 'page_left', 'style/page/margins/left', 'style/page/margins/top', 'style/page/margins/right', 'style/page/margins/bottom', 'style/font/family', 'style/font/size', 'style/paragraph_margin']
+  -> produces WordprocessingML (w: namespace)
+
+==========================================================================================
+FILE: tpl\empty.xslt (726 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'indent': 'no'}]
+  templates(1): ['blank']
+  imports: []
+  includes: []
+  variables(0): []
+  select paths (0 unique): []
+
+==========================================================================================
+FILE: tpl\form.xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f1"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form.xslt (2576 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (9 unique): ['postregister_f1/numberregister', 'postregister_f1/stdatedispatched', 'postregister_f1/fromaddress', 'postregister_f1/letter', 'postregister_f1/fromname', 'number', 'nameto', 'tozipcode', 'toaddress']
+
+==========================================================================================
+FILE: tpl\form103(old).xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f9"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form103(old).xslt (4631 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (10 unique): ['postregister_f1/numberregister', 'postregister_f1/stdatedispatched', 'postregister_f1/fromname', 'postregister_f1/fromaddress', 'postregister_f1/letter', 'postregister_f1/lettercount', 'nameto', 'tozipcode', 'toaddress', 'number']
+
+==========================================================================================
+FILE: tpl\form103.xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f3"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form103.xslt (4815 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (15 unique): ['postregister_f1/numberregister', 'postregister_f1/stdatedispatched', 'postregister_f1/fromname', 'postregister_f1/fromaddress', 'postregister_f1/letter', 'postregister_f1/lettercount', 'nameto', 'tozipcode', 'toaddress', 'postalnumber', 'weight', 'amountofinsuredvalue', 'codamount', 'feeforshipping', 'number']
+
+==========================================================================================
+FILE: tpl\form103_excel.xml (251 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f103_excel"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form103_excel.xslt (11614 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (17 unique): ['postregister_f1/numberregister', 'postregister_f1/stdatedispatched', 'postregister_f1/fromname', 'postregister_f1/zipcode', 'postregister_f1/letter', 'postregister_f1/lettercount', 'postregister_f1/sumamountofinsuredvalue', 'postregister_f1/sumamountofinsuredvalueinwords', 'postregister_f1/sumfeeforshipping', 'postregister_f1/sumfeeforshippinginwords', 'nameto', 'toaddress', 'postalnumber', 'weight', 'amountofinsuredvalue', 'codamount', 'feeforshipping']
+
+==========================================================================================
+FILE: tpl\form2.xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f2"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form2.xslt (2901 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (9 unique): ['postregister_f1/numberregister', 'postregister_f1/stdatedispatched', 'postregister_f1/fromaddress', 'postregister_f1/letter', 'postregister_f1/fromname', 'tozipcode', 'toaddress', 'nameto', 'number']
+
+==========================================================================================
+FILE: tpl\form4.xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f4"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form4.xslt (5227 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (12 unique): ['postregister_f1/fromname', 'postregister_f1/fromaddress', 'postregister_f1/stdatedispatched', 'postregister_f1/numberregister', 'postregister_f1/zipcode', 'postregister_f1/letter', 'postregister_f1/lettercount', 'postregister_f1/lettercountstring', 'nameto', 'tozipcode', 'toaddress', 'number']
+
+==========================================================================================
+FILE: tpl\form5.xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f4"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form5.xslt (9160 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (12 unique): ['postregister_f1/numberregister', 'postregister_f1/fromname', 'postregister_f1/fromaddress', 'postregister_f1/stdatedispatchedlong', 'postregister_f1/letter', 'postregister_f1/lettercount', 'postregister_f1/lettercountstring', 'postregister_f1/sendingsstring', 'tozipcode', 'toaddress', 'nameto', 'number']
+
+==========================================================================================
+FILE: tpl\form6.xml (241 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="inventorylist"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form6.xslt (5568 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(5): [None, 'content', None, None, None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (13 unique): ['inventorylist', 'inventory/sender', '../namecontainer', '../toname', '../toaddress', '../enclosure', '../itemcount', '../itemdeclvalue', 'sendername', 'number', 'subject', 'count', 'declaredvalue']
+
+==========================================================================================
+FILE: tpl\form7.xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f6"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form7.xslt (3006 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (11 unique): ['postregister_f1/numberregister', 'postregister_f1/stdatedispatched', 'postregister_f1/fromname', 'postregister_f1/zipcode', 'postregister_f1/fromaddress', 'postregister_f1/letter', 'postregister_f1/lettercount', 'tozipcode', 'toaddress', 'nameto', 'number']
+
+==========================================================================================
+FILE: tpl\form8.xml (243 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="postregister_f7"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\form8.xslt (2510 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(3): [None, 'content', None]
+  imports: []
+  includes: ['./MSWordStyles.xslt', './empty.xslt']
+  variables(0): []
+  select paths (9 unique): ['postregister_f1/numberregister', 'postregister_f1/stdatedispatched', 'postregister_f1/fromaddress', 'postregister_f1/letter', 'postregister_f1/fromname', 'number', 'tozipcode', 'nameto', 'toaddress']
+
+==========================================================================================
+FILE: tpl\meta-inf.xml (2962 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE document_list [
+  <!ELEMENT document_list ANY> 
+  <!ELEMENT document ANY> 
+  <!ATTLIST document id ID #REQUIRED>]>
+
+<document_list>
+    <document id="PostRegister_f1" name="Почтовый реестр формы 1">
+        <form>form.xslt</form> 
+        <blank>empty.xslt</blank>
+        <engine>WORD_XSLT</engine>
+        <type>Document</type>
+        <desc>Список писем почтового реестра</desc>
+    </document>
+    <document id="PostRegister_f2" name="Почтовый реестр формы 2">
+        <form>form2.xslt</form> 
+        <blank>empty.xslt</blank>
+        <engine>WORD_XSLT</engine>
+        <type>Document</type>
+        <desc>Список писем почтового реестра</desc>
+    </document>
+    <document id="PostRegister_f3" name="Почтовый реестр ф
+
+==========================================================================================
+FILE: tpl\blanks\empty_excel.xslt (712 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'indent': 'no', 'encoding': 'windows-1251'}]
+  templates(1): ['blank']
+  imports: []
+  includes: []
+  variables(0): []
+  select paths (0 unique): []
+
+==========================================================================================
+FILE: tpl\blanks\grid_report.xslt (800 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'indent': 'no', 'encoding': 'windows-1251'}]
+  templates(1): ['blank']
+  imports: []
+  includes: []
+  variables(0): []
+  select paths (0 unique): []
+
+==========================================================================================
+FILE: tpl\forms\grid_report.xml (232 bytes)
+  content: <?xml version="1.0" encoding="windows-1251"?>
+<!DOCTYPE element_list [
+  <!ELEMENT element_list ANY>
+  <!ELEMENT element ANY> 
+  <!ATTLIST element id ID #REQUIRED>]>
+
+<element_list>
+    <element id="grid"/>
+</element_list>
+
+==========================================================================================
+FILE: tpl\forms\grid_report.xslt (2056 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'encoding': 'windows-1251'}]
+  templates(2): [None, 'content']
+  imports: []
+  includes: ['../styles/MSExcelStyles.xslt', '../blanks/grid_report.xslt']
+  variables(0): []
+  select paths (11 unique): ['grid/column', "concat('text-align:',align,';','width:',width,'pt; white-space:normal;')", 'title', 'grid/row', 'count(/elements/grid/column)', 'group_header', './type', 'position()', '/elements/grid/column[$pos]', "concat('text-align:',$meta-col/align,';','mso-number-format:',type)", 'data']
+
+==========================================================================================
+FILE: tpl\styles\MSExcelStyles.xslt (11716 bytes)
+  xsl:output method(s): ['html']
+  xsl:output attrs: [{'method': 'html', 'indent': 'no'}]
+  templates(1): ['msexcel_styles']
+  imports: []
+  includes: []
+  variables(0): []
+  select paths (0 unique): []
+  -> produces SpreadsheetML (x: namespace)

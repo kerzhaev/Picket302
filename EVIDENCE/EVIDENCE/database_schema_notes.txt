@@ -1,0 +1,285 @@
+﻿DATABASE: database.mdb.orig  (copy: db_copy.mdb)
+PROVIDER: Microsoft.Jet.OLEDB.4.0
+TABLE_COUNT: 14
+
+=== TABLE: Address ===
+PRIMARY KEY: AddressId
+COLUMN: AddressId | Type72() | Ord=1 | Nullable=False | Default=
+COLUMN: AddressLine | Text(250) | Ord=2 | Nullable=True | Default=
+COLUMN: City | Text(60) | Ord=3 | Nullable=True | Default=
+COLUMN: Province | Text(250) | Ord=4 | Nullable=True | Default=
+COLUMN: ZipCode | Text(6) | Ord=5 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: Blank ===
+PRIMARY KEY: Id
+COLUMN: Description | Text | Ord=1 | Nullable=True | Default=
+COLUMN: EnvSize | Text(100) | Ord=2 | Nullable=True | Default=
+COLUMN: Id | Type72() | Ord=3 | Nullable=False | Default=
+COLUMN: Name | Text(250) | Ord=4 | Nullable=True | Default=
+COLUMN: Source | Text | Ord=5 | Nullable=True | Default=
+COLUMN: Type | Numeric() | Ord=6 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: CustomFields ===
+PRIMARY KEY: Name, EconomicMemberId
+COLUMN: EconomicMemberId | Type72() | Ord=1 | Nullable=False | Default=
+COLUMN: Name | Text(255) | Ord=2 | Nullable=False | Default=
+COLUMN: Meaning | Text(255) | Ord=3 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: DB_scheme ===
+COLUMN: LastChangeDate | Text(80) | Ord=1 | Nullable=True | Default=
+COLUMN: LastChangedRevision | Text(80) | Ord=2 | Nullable=True | Default=
+COLUMN: Version | Integer() | Ord=3 | Nullable=True | Default=
+ROWCOUNT: 1
+
+=== TABLE: Distribution ===
+PRIMARY KEY: DistributionId
+COLUMN: AddressFrom | Type72() | Ord=1 | Nullable=True | Default=
+COLUMN: AmountOfCOD | Double() | Ord=2 | Nullable=True | Default=
+COLUMN: Content | Text | Ord=3 | Nullable=True | Default=
+COLUMN: DateLastEdit | Date() | Ord=4 | Nullable=True | Default=
+COLUMN: DatePublication | Date() | Ord=5 | Nullable=True | Default=
+COLUMN: DistributionId | Type72() | Ord=6 | Nullable=False | Default=
+COLUMN: DistributionName | Text(250) | Ord=7 | Nullable=True | Default=
+COLUMN: FeeForShipping | Double() | Ord=8 | Nullable=True | Default=
+COLUMN: dFrmEconomicMember | Type72() | Ord=9 | Nullable=True | Default=
+COLUMN: InventoryXML | Text | Ord=10 | Nullable=True | Default=
+COLUMN: isEmail | Memo(2) | Ord=11 | Nullable=False | Default=
+COLUMN: isHtml | Memo(2) | Ord=12 | Nullable=False | Default=
+COLUMN: isMultiple | Memo(2) | Ord=13 | Nullable=False | Default=
+COLUMN: NameFrm | Text(250) | Ord=14 | Nullable=True | Default=
+COLUMN: Price | Double() | Ord=15 | Nullable=True | Default=
+COLUMN: RNote | Text | Ord=16 | Nullable=True | Default=
+COLUMN: SenderEmail | Text(255) | Ord=17 | Nullable=True | Default=
+COLUMN: SpecialNote | Text | Ord=18 | Nullable=True | Default=
+COLUMN: Subject | Text(255) | Ord=19 | Nullable=True | Default=
+COLUMN: Weight | Double() | Ord=20 | Nullable=True | Default=
+COLUMN: Configuration | Integer() | Ord=21 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: Document ===
+PRIMARY KEY: DocumentId
+COLUMN: DocumentId | Type72() | Ord=1 | Nullable=True | Default=
+COLUMN: DocumentNumber | Text(27) | Ord=2 | Nullable=True | Default=
+COLUMN: DocumentType | Text(250) | Ord=3 | Nullable=True | Default=
+COLUMN: DocumentDate | Date() | Ord=4 | Nullable=True | Default=
+COLUMN: DocumentPages | Integer() | Ord=5 | Nullable=True | Default=
+COLUMN: DocumentCopies | Integer() | Ord=6 | Nullable=True | Default=
+COLUMN: IncomingId | Type72() | Ord=7 | Nullable=True | Default=
+COLUMN: OutcomingId | Type72() | Ord=8 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: DocumentMovement ===
+PRIMARY KEY: DocumentMovementId
+COLUMN: DocumentId | Type72() | Ord=1 | Nullable=True | Default=
+COLUMN: MovementId | Type72() | Ord=2 | Nullable=True | Default=
+COLUMN: DocumentMovementId | Type72() | Ord=3 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: DocumentType ===
+PRIMARY KEY: DocumentTypeId
+COLUMN: DocumentTypeId | Type72() | Ord=1 | Nullable=True | Default=
+COLUMN: Name | Text(250) | Ord=2 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: EconomicMember ===
+PRIMARY KEY: EconomicMemberId
+COLUMN: AddressFact | Type72() | Ord=1 | Nullable=True | Default=
+COLUMN: AddressLegal | Type72() | Ord=2 | Nullable=True | Default=
+COLUMN: AddressNotify | Numeric() | Ord=3 | Nullable=True | Default=
+COLUMN: AddressPost | Type72() | Ord=4 | Nullable=True | Default=
+COLUMN: AddressText | Text | Ord=5 | Nullable=True | Default=
+COLUMN: BIK | Text(9) | Ord=6 | Nullable=True | Default=
+COLUMN: BirthPlace | Text(250) | Ord=7 | Nullable=True | Default=
+COLUMN: BirthDate | Date() | Ord=8 | Nullable=True | Default=
+COLUMN: Blocker | Text(255) | Ord=9 | Nullable=True | Default=
+COLUMN: ChiefFirstName | Text(25) | Ord=10 | Nullable=True | Default=
+COLUMN: ChiefLastName | Text(25) | Ord=11 | Nullable=True | Default=
+COLUMN: ChiefMiddleName | Text(25) | Ord=12 | Nullable=True | Default=
+COLUMN: Code | Text(255) | Ord=13 | Nullable=True | Default=
+COLUMN: DateLastEdit | Date() | Ord=14 | Nullable=True | Default=
+COLUMN: EconomicMemberEmail | Text(100) | Ord=15 | Nullable=True | Default=
+COLUMN: EconomicMemberId | Type72() | Ord=16 | Nullable=False | Default=
+COLUMN: EconomicMemberNote | Text | Ord=17 | Nullable=True | Default=
+COLUMN: em_type | Long() | Ord=18 | Nullable=False | Default=
+COLUMN: FirstName | Text(25) | Ord=19 | Nullable=True | Default=
+COLUMN: FullName | Text | Ord=20 | Nullable=True | Default=
+COLUMN: INN | Text(12) | Ord=21 | Nullable=True | Default=
+COLUMN: KPP | Text(9) | Ord=22 | Nullable=True | Default=
+COLUMN: KS | Text(20) | Ord=23 | Nullable=True | Default=
+COLUMN: LastName | Text(25) | Ord=24 | Nullable=True | Default=
+COLUMN: LegalName | Text(250) | Ord=25 | Nullable=True | Default=
+COLUMN: MainAddressType | Numeric() | Ord=26 | Nullable=True | Default=
+COLUMN: MiddleName | Text(25) | Ord=27 | Nullable=True | Default=
+COLUMN: NameBank | Text(250) | Ord=28 | Nullable=True | Default=
+COLUMN: NameTo | Text(250) | Ord=29 | Nullable=True | Default=
+COLUMN: Phone | Text(100) | Ord=30 | Nullable=True | Default=
+COLUMN: Sender | Memo(2) | Ord=31 | Nullable=False | Default=
+COLUMN: ShortName | Text(200) | Ord=32 | Nullable=True | Default=
+COLUMN: TemplateIncoming | Text(100) | Ord=33 | Nullable=True | Default=
+COLUMN: TemplateOriginal | Text(100) | Ord=34 | Nullable=True | Default=
+COLUMN: LastNumberIncoming | Integer() | Ord=35 | Nullable=True | Default=
+COLUMN: LastNumberOriginal | Integer() | Ord=36 | Nullable=True | Default=
+COLUMN: LastGenerationTimeIncoming | Date() | Ord=37 | Nullable=True | Default=
+COLUMN: LastGenerationTimeOriginal | Date() | Ord=38 | Nullable=True | Default=
+COLUMN: OGRN | Text(15) | Ord=39 | Nullable=True | Default=
+COLUMN: OKFS | Text(2) | Ord=40 | Nullable=True | Default=
+COLUMN: OKOPF | Text(2) | Ord=41 | Nullable=True | Default=
+COLUMN: OKPO | Text(10) | Ord=42 | Nullable=True | Default=
+COLUMN: OKVED | Text | Ord=43 | Nullable=True | Default=
+COLUMN: Organization | Text(250) | Ord=44 | Nullable=True | Default=
+COLUMN: PassportSeries | Text(4) | Ord=45 | Nullable=True | Default=
+COLUMN: PassportNumber | Text(9) | Ord=46 | Nullable=True | Default=
+COLUMN: PassportGiven | Text(250) | Ord=47 | Nullable=True | Default=
+COLUMN: PassportDate | Date() | Ord=48 | Nullable=True | Default=
+COLUMN: NPPosition | Text(250) | Ord=49 | Nullable=True | Default=
+COLUMN: RS | Text(20) | Ord=50 | Nullable=True | Default=
+COLUMN: RKC | Text(250) | Ord=51 | Nullable=True | Default=
+COLUMN: Under | Text(250) | Ord=52 | Nullable=True | Default=
+COLUMN: Performer | Memo(2) | Ord=53 | Nullable=False | Default=
+ROWCOUNT: 0
+
+=== TABLE: Incoming ===
+PRIMARY KEY: IncomingId
+COLUMN: Channel | Numeric() | Ord=1 | Nullable=True | Default=
+COLUMN: DateLastEdit | Date() | Ord=2 | Nullable=True | Default=
+COLUMN: FrmEconomicMember | Type72() | Ord=3 | Nullable=True | Default=
+COLUMN: IncomingDate | Date() | Ord=4 | Nullable=True | Default=
+COLUMN: IncomingDocument | Text(250) | Ord=5 | Nullable=True | Default=
+COLUMN: IncomingId | Type72() | Ord=6 | Nullable=False | Default=
+COLUMN: IncomingNotes | Text | Ord=7 | Nullable=True | Default=
+COLUMN: IncomingNumber | Text(100) | Ord=8 | Nullable=True | Default=
+COLUMN: IncomingSubject | Text | Ord=9 | Nullable=True | Default=
+COLUMN: NameFrom | Text(250) | Ord=10 | Nullable=True | Default=
+COLUMN: NameTo | Text(250) | Ord=11 | Nullable=True | Default=
+COLUMN: NeedScan | Memo(2) | Ord=12 | Nullable=False | Default=
+COLUMN: OriginalDate | Date() | Ord=13 | Nullable=True | Default=
+COLUMN: OriginalNumber | Text(100) | Ord=14 | Nullable=True | Default=
+COLUMN: Resolution | Text(255) | Ord=15 | Nullable=True | Default=
+COLUMN: DateIncludeInRegister | Date() | Ord=16 | Nullable=True | Default=
+COLUMN: ToEconomicMember | Type72() | Ord=17 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: Letter ===
+PRIMARY KEY: LetterId
+COLUMN: AddressFrom | Type72() | Ord=1 | Nullable=True | Default=
+COLUMN: AddressNotify | Type72() | Ord=2 | Nullable=True | Default=
+COLUMN: AddressTo | Type72() | Ord=3 | Nullable=True | Default=
+COLUMN: AmountOfCOD | Double() | Ord=4 | Nullable=True | Default=
+COLUMN: Content | Text | Ord=5 | Nullable=True | Default=
+COLUMN: DateCanceled | Date() | Ord=6 | Nullable=True | Default=
+COLUMN: DateConfirmation | Date() | Ord=7 | Nullable=True | Default=
+COLUMN: DateCreated | Date() | Ord=8 | Nullable=True | Default=
+COLUMN: DateDispatched | Date() | Ord=9 | Nullable=True | Default=
+COLUMN: DateLastEdit | Date() | Ord=10 | Nullable=True | Default=
+COLUMN: DatePrinted | Date() | Ord=11 | Nullable=True | Default=
+COLUMN: DatePublication | Date() | Ord=12 | Nullable=True | Default=
+COLUMN: DistributionId | Type72() | Ord=13 | Nullable=True | Default=
+COLUMN: FeeForShipping | Double() | Ord=14 | Nullable=True | Default=
+COLUMN: FrmEconomicMember | Type72() | Ord=15 | Nullable=True | Default=
+COLUMN: InventoryXML | Text | Ord=16 | Nullable=True | Default=
+COLUMN: isEmail | Memo(2) | Ord=17 | Nullable=False | Default=
+COLUMN: isHtml | Memo(2) | Ord=18 | Nullable=False | Default=
+COLUMN: LetterEmail | Text(100) | Ord=19 | Nullable=True | Default=
+COLUMN: LetterId | Type72() | Ord=20 | Nullable=False | Default=
+COLUMN: LetterNumber | Text(100) | Ord=21 | Nullable=True | Default=
+COLUMN: NameFrm | Text(250) | Ord=22 | Nullable=True | Default=
+COLUMN: NameTo | Text(250) | Ord=23 | Nullable=True | Default=
+COLUMN: NeedNotification | Memo(2) | Ord=24 | Nullable=False | Default=
+COLUMN: PostalNumber | Text(20) | Ord=25 | Nullable=True | Default=
+COLUMN: PostRegisterId | Type72() | Ord=26 | Nullable=True | Default=
+COLUMN: PostRegisterNumber | Integer() | Ord=27 | Nullable=True | Default=
+COLUMN: Price | Double() | Ord=28 | Nullable=True | Default=
+COLUMN: ReplyToEmail | Text(100) | Ord=29 | Nullable=True | Default=
+COLUMN: RNote | Text | Ord=30 | Nullable=True | Default=
+COLUMN: SenderEmail | Text(255) | Ord=31 | Nullable=True | Default=
+COLUMN: SpecialNote | Text | Ord=32 | Nullable=True | Default=
+COLUMN: Subject | Text(255) | Ord=33 | Nullable=True | Default=
+COLUMN: ToEconomicMember | Type72() | Ord=34 | Nullable=True | Default=
+COLUMN: Weight | Double() | Ord=35 | Nullable=True | Default=
+COLUMN: Configuration | Integer() | Ord=36 | Nullable=True | Default=
+COLUMN: RussianPostId | Text(20) | Ord=37 | Nullable=True | Default=
+COLUMN: TypeEnvelope | Text(5) | Ord=38 | Nullable=True | Default=
+COLUMN: DateAddedInPostRegister | Date() | Ord=39 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: Movement ===
+PRIMARY KEY: MovementId
+COLUMN: MovementId | Type72() | Ord=1 | Nullable=True | Default=
+COLUMN: IncomingId | Type72() | Ord=2 | Nullable=True | Default=
+COLUMN: PerformerId | Type72() | Ord=3 | Nullable=True | Default=
+COLUMN: MovementDate | Date() | Ord=4 | Nullable=True | Default=
+COLUMN: MovementType | Integer() | Ord=5 | Nullable=True | Default=
+COLUMN: MovementTitle | Text(255) | Ord=6 | Nullable=True | Default=
+COLUMN: ManualMovementDate | Date() | Ord=7 | Nullable=True | Default=
+COLUMN: PutInCase | Text(255) | Ord=8 | Nullable=True | Default=
+COLUMN: NumberExecuted | Text(255) | Ord=9 | Nullable=True | Default=
+COLUMN: ToDate | Date() | Ord=10 | Nullable=True | Default=
+COLUMN: RegisterExecuted | Date() | Ord=11 | Nullable=True | Default=
+COLUMN: About | Text(255) | Ord=12 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: PostRegister ===
+PRIMARY KEY: PostRegisterId
+COLUMN: Address | Text(250) | Ord=1 | Nullable=True | Default=
+COLUMN: DateCreated | Date() | Ord=2 | Nullable=True | Default=
+COLUMN: DateDispatched | Date() | Ord=3 | Nullable=True | Default=
+COLUMN: DateLastEdit | Date() | Ord=4 | Nullable=True | Default=
+COLUMN: DatePrinted | Date() | Ord=5 | Nullable=True | Default=
+COLUMN: Name | Text(250) | Ord=6 | Nullable=True | Default=
+COLUMN: NumberRegister | Text(10) | Ord=7 | Nullable=True | Default=
+COLUMN: PostRegisterId | Type72() | Ord=8 | Nullable=False | Default=
+COLUMN: Title | Text(250) | Ord=9 | Nullable=True | Default=
+COLUMN: SenderInfo | Text(250) | Ord=10 | Nullable=True | Default=
+COLUMN: SenderNaturalPersonName | Text(250) | Ord=11 | Nullable=True | Default=
+COLUMN: Zipcode | Text(250) | Ord=12 | Nullable=True | Default=
+COLUMN: RussianPostId | Text(20) | Ord=13 | Nullable=True | Default=
+COLUMN: RussianPostBatchName | Text(100) | Ord=14 | Nullable=True | Default=
+COLUMN: RussianPostSendingDate | Date() | Ord=15 | Nullable=True | Default=
+COLUMN: RussianPostShippingPoint | Text(250) | Ord=16 | Nullable=True | Default=
+ROWCOUNT: 0
+
+=== TABLE: Settings ===
+PRIMARY KEY: SettId
+COLUMN: AddressWrapType | Numeric() | Ord=1 | Nullable=True | Default=
+COLUMN: CountLetterReg | Integer() | Ord=2 | Nullable=True | Default=
+COLUMN: DefaultInventory | Text(250) | Ord=3 | Nullable=True | Default=
+COLUMN: DefaultEnvelope | Text(250) | Ord=4 | Nullable=True | Default=
+COLUMN: DefaultNotify | Text(250) | Ord=5 | Nullable=True | Default=
+COLUMN: DefaultPostRegister | Text(250) | Ord=6 | Nullable=True | Default=
+COLUMN: DefaultSystemEnvelope | Integer() | Ord=7 | Nullable=True | Default=
+COLUMN: DefaultSystemNotify | Integer() | Ord=8 | Nullable=True | Default=
+COLUMN: Filters | Type128 | Ord=9 | Nullable=True | Default=
+COLUMN: FormRegister | Integer() | Ord=10 | Nullable=True | Default=
+COLUMN: IsProxyAuthorization | Memo(2) | Ord=11 | Nullable=False | Default=
+COLUMN: IsProxyUse | Memo(2) | Ord=12 | Nullable=False | Default=
+COLUMN: LastIncomingNumber | Integer() | Ord=13 | Nullable=True | Default=
+COLUMN: LastOutcomingNumber | Integer() | Ord=14 | Nullable=True | Default=
+COLUMN: NeedAuthorization | Memo(2) | Ord=15 | Nullable=False | Default=
+COLUMN: NeedName | Memo(2) | Ord=16 | Nullable=False | Default=
+COLUMN: NeedSSL | Memo(2) | Ord=17 | Nullable=False | Default=
+COLUMN: ProxyLogin | Text(250) | Ord=18 | Nullable=True | Default=
+COLUMN: ProxyPassword | Text(250) | Ord=19 | Nullable=True | Default=
+COLUMN: ProxyPort | Text(250) | Ord=20 | Nullable=True | Default=
+COLUMN: ProxyServer | Text(250) | Ord=21 | Nullable=True | Default=
+COLUMN: RevertAddressLineOrder | Memo(2) | Ord=22 | Nullable=False | Default=
+COLUMN: SaveXML | Memo(2) | Ord=23 | Nullable=False | Default=
+COLUMN: SettId | Type72() | Ord=24 | Nullable=False | Default=
+COLUMN: SmtpPassword | Text(250) | Ord=25 | Nullable=True | Default=
+COLUMN: SmtpServer | Text(250) | Ord=26 | Nullable=True | Default=
+COLUMN: SortLetterRegAlphabet | Integer() | Ord=27 | Nullable=False | Default=
+COLUMN: SortOrder | Text | Ord=28 | Nullable=True | Default=
+COLUMN: UserName | Text(250) | Ord=29 | Nullable=True | Default=
+COLUMN: UseShortname | Memo(2) | Ord=30 | Nullable=False | Default=
+COLUMN: UseWordWrap | Memo(2) | Ord=31 | Nullable=False | Default=
+COLUMN: LastUsingExternalSearch | Text(30) | Ord=32 | Nullable=False | Default=
+COLUMN: ContractNumber | Text | Ord=33 | Nullable=True | Default=
+COLUMN: ServiceMessage | Text(250) | Ord=34 | Nullable=True | Default=
+COLUMN: ServiceMessageType | Text(250) | Ord=35 | Nullable=True | Default=
+COLUMN: ServiceLogin | Text | Ord=36 | Nullable=True | Default=
+COLUMN: RussianPostLogin | Text(50) | Ord=37 | Nullable=True | Default=
+COLUMN: RussianPostPassword | Text | Ord=38 | Nullable=True | Default=
+COLUMN: RussianPostToken | Text | Ord=39 | Nullable=True | Default=
+ROWCOUNT: 0

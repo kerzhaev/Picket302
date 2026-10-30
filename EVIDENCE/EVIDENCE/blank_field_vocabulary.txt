@@ -1,0 +1,644 @@
+﻿СЛОВАРЬ ПОЛЕЙ БЛАНКОВ И ГЕОМЕТРИЯ ВСТРОЕННЫХ ФОРМ
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+СВОДКА ПО ФОРМАМ (env_fields_summary.txt)
+----------------------------------------------------------------------------------------------------
+BLANK 0000Почтовый перевод (электронный) ф.112э.xml  paper=148x104 pages=1 fields=41
+BLANK 0000Почтовый перевод (электронный) ф.112эф.xml paper=195x185 pages=2 fields=85
+BLANK 0000Почтовый перевод (электронный) ф.112эю.xml paper=195x185 pages=2 fields=85
+BLANK 0000Почтовый перевод наложенного платежа ф.117 paper=297x210 pages=2 fields=99
+BLANK 0000Почтовый перевод ф.112эп.xml               paper=210x297 pages=1 fields=41
+BLANK 0000Сопроводительный адрес к посылке ф.116.xml paper=210x297 pages=2 fields=87
+BLANK 0000конверт C5 (2012).xml                      paper=229x162 pages=1 fields=47
+BLANK 0000уведомление ф.119 (2011).xml               paper=148x105 pages=2 fields=13
+
+=== ALL DISTINCT FIELD NAMES ACROSS std/env (72) ===
+  [POSTINDEX] Индекс для машинной обработки
+  [POSTINDEX] Индекс назначения для машинной обработки
+  [POSTINDEX] Индекс отправителя для машинной обработки
+  БИК отправителя
+  БИК получателя
+  Вес
+  Вес 1
+  Где выдан паспорт отправителя
+  Где выдан паспорт получателя
+  Дата выдачи паспорта отправителя
+  Дата выдачи паспорта получателя
+  Дом места назначения
+  ИНН отправителя
+  ИНН получателя
+  ИНН получателя 1
+  Индекс места назначения
+  Индекс места назначения 1
+  Индекс места назначения 2
+  Индекс места назначения 3
+  Индекс места отправления
+  Исходящий номер
+  К/с отправителя
+  К/с получателя
+  Квартира места назначения
+  Корпус места назначения
+  Название РКЦ отправителя
+  Название РКЦ получателя
+  Название банка отправителя
+  Название банка получателя
+  Населенный пункт места назначения
+  Номер идентификатора
+  Номер паспорта отправителя
+  Номер паспорта получателя
+  Номера документов
+  ОГРН отправителя
+  ОГРН получателя
+  Особые отметки
+  Отметки отправителя
+  Плата за пересылку
+  Почтампт
+  Расчетный счет отправителя
+  Расчетный счет получателя
+  Республика/край/область места назначения
+  Серия паспорта отправителя
+  Серия паспорта получателя
+  Строение места назначения
+  Строки «Кому»
+  Строки «Кому» 1
+  Строки «Кому» 2
+  Строки «Кому» 3
+  Строки «Кому» 4
+  Строки «Кому» 5
+  Строки «Куда»
+  Строки «Куда» 1
+  Строки «Куда» 2
+  Строки «Куда» 3
+  Строки «Куда» 4
+  Строки «От кого»
+  Строки «Откуда»
+  Сумма наложенного платежа
+  Сумма наложенного платежа 1
+  Сумма наложенного платежа 2
+  Сумма наложенного платежа 3
+  Сумма объявленной ценности
+  Сумма объявленной ценности 1
+  Телефон отправителя
+  Телефон получателя
+  Улица места назначения
+  строки «Кому»
+  строки «Куда»
+  строки «От кого»
+  строки «Откуда»
+
+----------------------------------------------------------------------------------------------------
+ПОЛНЫЙ ПЕРЕЧЕНЬ ПОЛЕЙ ПО КАЖДОЙ ФОРМЕ (env_fields.txt)
+----------------------------------------------------------------------------------------------------
+############ ENVELOPE/NOTIFICATION BLANK DEFINITIONS (std/env) ############
+
+FILE: std/env/0000Почтовый перевод (электронный) ф.112э.xml
+  Blank Name: Почтовый перевод (электронный) ф.112э
+  Paper: 148 x 104 mm
+  Pages: 1
+   page 1 background: 112e.png
+   FIELD: Строки «Кому»                              font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3,5  max=3,5  enabled=False align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=3,5  max=3,5  enabled=False align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+
+FILE: std/env/0000Почтовый перевод (электронный) ф.112эф.xml
+  Blank Name: ф. 112эф
+  Paper: 195 x 185 mm
+  Pages: 2
+   page 1 background: 112ef_1.png
+   page 2 background: 112ef_2.png
+   FIELD: Строки «Кому»                              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=3    max=3    enabled=True  align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=2,5  max=3,5  enabled=True  align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа 1                font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Строки «Кому»                              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=4    max=4    enabled=False align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: ИНН получателя 1                           font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: Строки «Кому» 1                            font=Verdana                min=3    max=3    enabled=True  align=?   lines=5
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+
+FILE: std/env/0000Почтовый перевод (электронный) ф.112эю.xml
+  Blank Name: ф. 112эю
+  Paper: 195 x 185 mm
+  Pages: 2
+   page 1 background: 112eth_1.png
+   page 2 background: 112eth_2.png
+   FIELD: Строки «Кому»                              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=4    max=4    enabled=False align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=2,5  max=3    enabled=True  align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа 1                font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: Строки «Кому»                              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=4    max=4    enabled=False align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3    max=4    enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3    max=4    enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=3,5  enabled=False align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Строки «Кому» 1                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: ИНН получателя 1                           font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+
+FILE: std/env/0000Почтовый перевод наложенного платежа ф.117, ф.113.xml
+  Blank Name: Комбинированый. ф. 117, ф. 113
+  Paper: 297 x 210 mm
+  Pages: 2
+   page 1 background: 117_113_1.png
+   page 2 background: 117_113_2.png
+   FIELD: Строки «Кому»                              font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=5,5  max=5,5  enabled=True  align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3,5  max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=5,5  max=5,5  enabled=True  align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Строки «Кому» 1                            font=Verdana                min=3    max=4    enabled=True  align=?   lines=5
+   FIELD: Индекс места назначения 1                  font=Verdana                min=5    max=5    enabled=True  align=?   lines=1
+   FIELD: Строки «Куда» 1                            font=Verdana                min=3    max=4    enabled=True  align=?   lines=5
+   FIELD: Строки «Кому» 2                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда» 2                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Индекс места назначения 2                  font=Verdana                min=5    max=5    enabled=True  align=?   lines=1
+   FIELD: Строки «Кому» 3                            font=Verdana                min=3    max=3    enabled=False align=?   lines=5
+   FIELD: Строки «Куда» 3                            font=Verdana                min=3,5  max=4    enabled=True  align=?   lines=5
+   FIELD: Строки «Кому» 4                            font=Verdana                min=3    max=3    enabled=True  align=?   lines=5
+   FIELD: Строки «Кому» 5                            font=Verdana                min=3    max=3    enabled=True  align=?   lines=5
+   FIELD: Индекс места назначения 3                  font=Verdana                min=4,5  max=4,5  enabled=True  align=?   lines=1
+   FIELD: Строки «Куда» 4                            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Сумма объявленной ценности 1               font=Verdana                min=3    max=5,5  enabled=True  align=?   lines=1
+   FIELD: Сумма наложенного платежа 1                font=Verdana                min=3    max=5,5  enabled=True  align=?   lines=1
+   FIELD: Вес 1                                      font=Verdana                min=3    max=4    enabled=True  align=?   lines=1
+   FIELD: Сумма наложенного платежа 2                font=Verdana                min=3    max=5,5  enabled=True  align=?   lines=1
+   FIELD: Сумма наложенного платежа 3                font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Строки «Кому»                              font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=4    max=4    enabled=False align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3    max=3    enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3    max=3    enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=3,5  enabled=True  align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+
+FILE: std/env/0000Почтовый перевод ф.112эп.xml
+  Blank Name: Почтовый перевод ф.112эп
+  Paper: 210 x 297 mm
+  Pages: 1
+   page 1 background: f112ep.jpg
+   FIELD: Строки «Кому»                              font=Verdana                min=3    max=5    enabled=True  align=0   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3    max=5    enabled=True  align=0   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=4    max=4    enabled=False align=0   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=0   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3    max=5    enabled=True  align=0   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3    max=5    enabled=True  align=0   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=0   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=3   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=3   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=3   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=True  align=3   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=True  align=0   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=True  align=3   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=True  align=3   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=3   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=True  align=3   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+
+FILE: std/env/0000Сопроводительный адрес к посылке ф.116.xml
+  Blank Name: ф. 116
+  Paper: 210 x 297 mm
+  Pages: 2
+   page 1 background: 116_1.png
+   page 2 background: 116_2.png
+   FIELD: Строки «Кому»                              font=Verdana                min=4    max=4    enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=4    max=4    enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=6    max=6    enabled=True  align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=4    max=4    enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=4    max=4    enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=6    max=6    enabled=True  align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Строки «Кому» 1                            font=Verdana                min=4    max=5    enabled=True  align=?   lines=5
+   FIELD: Строки «Куда» 1                            font=Verdana                min=4    max=5    enabled=True  align=?   lines=5
+   FIELD: Индекс места назначения 1                  font=Verdana                min=5    max=6    enabled=True  align=?   lines=1
+   FIELD: Вес 1                                      font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Сумма наложенного платежа 1                font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Строки «Кому»                              font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Строки «Куда»                              font=Verdana                min=3    max=5    enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=4    max=4    enabled=False align=?   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Номера документов                          font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Строки «От кого»                           font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Verdana                min=3    max=5    enabled=False align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   FIELD: Номер идентификатора                       font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=?   lines=1
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=True  align=?   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс назначения для машинной обработки font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс отправителя для машинной обработки font=Verdana              min=11   max=11   enabled=False
+
+FILE: std/env/0000конверт C5 (2012).xml
+  Blank Name: конверт C5 (2012)
+  Paper: 229 x 162 mm
+  Pages: 1
+   page 1 background: C5.jpg
+   FIELD: строки «Кому»                              font=Verdana                min=3    max=5    enabled=True  align=0   lines=5
+   FIELD: строки «Куда»                              font=Verdana                min=3    max=5    enabled=False align=0   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Индекс места назначения                    font=Verdana                min=5    max=7    enabled=True  align=0   lines=1
+   FIELD: строки «От кого»                           font=Verdana                min=3    max=5    enabled=True  align=0   lines=5
+   FIELD: строки «Откуда»                            font=Verdana                min=3    max=5    enabled=True  align=0   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Индекс места отправления                   font=Verdana                min=5    max=7    enabled=True  align=0   lines=1
+   FIELD: Исходящий номер                            font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Отметки отправителя                        font=Verdana                min=3    max=5    enabled=False align=0   lines=5
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=0   lines=2
+   FIELD: Вес                                        font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Плата за пересылку                         font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Особые отметки                             font=Verdana                min=3    max=5    enabled=False align=0   lines=2
+   FIELD: Сумма объявленной ценности                 font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Сумма наложенного платежа                  font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Номера документов                          font=Tw Cen MT Condensed    min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Расчетный счет отправителя                 font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Название банка отправителя                 font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: БИК отправителя                            font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: К/с отправителя                            font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Название РКЦ отправителя                   font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Расчетный счет получателя                  font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Название банка получателя                  font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: БИК получателя                             font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: К/с получателя                             font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Название РКЦ получателя                    font=Verdana                min=6    max=6    enabled=False align=0   lines=1
+   FIELD: Дата выдачи паспорта отправителя           font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Номер паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Серия паспорта отправителя                 font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Где выдан паспорт отправителя              font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Дата выдачи паспорта получателя            font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Номер паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Серия паспорта получателя                  font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Где выдан паспорт получателя               font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: ИНН отправителя                            font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: ИНН получателя                             font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: ОГРН отправителя                           font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: ОГРН получателя                            font=Verdana                min=3    max=5    enabled=False align=0   lines=1
+   FIELD: Улица места назначения                     font=Verdana                min=3    max=5    enabled=True  align=0   lines=1
+   FIELD: Корпус места назначения                    font=Verdana                min=3    max=5    enabled=True  align=0   lines=1
+   FIELD: Строение места назначения                  font=Verdana                min=3    max=5    enabled=True  align=0   lines=1
+   FIELD: Квартира места назначения                  font=Verdana                min=3    max=5    enabled=True  align=0   lines=1
+   FIELD: Населенный пункт места назначения          font=Verdana                min=3    max=5    enabled=True  align=0   lines=1
+   FIELD: Дом места назначения                       font=Verdana                min=3    max=5    enabled=True  align=0   lines=1
+   FIELD: Республика/край/область места назначения   font=Verdana                min=3    max=5    enabled=True  align=0   lines=1
+   POSTINDEX: Индекс для машинной обработки          font=Verdana              min=11   max=11   enabled=True
+
+FILE: std/env/0000уведомление ф.119 (2011).xml
+  Blank Name: уведомление ф.119 (2011)
+  Paper: 148 x 105 mm
+  Pages: 2
+   page 1 background: f119_2011.1.png
+   page 2 background: f119_2011.2.png
+   FIELD: Строки «Кому»                              font=Times New Roman        min=2,5  max=4,5  enabled=True  align=?   lines=5
+   FIELD: Строки «Куда»                              font=Times New Roman        min=2,5  max=4,5  enabled=True  align=?   lines=5
+   FIELD: Телефон получателя                         font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места назначения                    font=Times New Roman        min=4    max=4    enabled=True  align=?   lines=1
+   FIELD: Исходящий номер                            font=Times New Roman        min=2    max=3,25 enabled=False align=?   lines=1
+   FIELD: Отметки отправителя                        font=Times New Roman        min=2    max=3,25 enabled=True  align=?   lines=5
+   FIELD: Строки «От кого»                           font=Times New Roman        min=2,5  max=5    enabled=True  align=?   lines=5
+   FIELD: Строки «Откуда»                            font=Times New Roman        min=2,5  max=4,5  enabled=True  align=?   lines=5
+   FIELD: Телефон отправителя                        font=Verdana                min=3    max=5    enabled=False align=?   lines=1
+   FIELD: Индекс места отправления                   font=Times New Roman        min=4,5  max=4,5  enabled=True  align=?   lines=1
+   FIELD: Почтампт                                   font=Verdana                min=3    max=5    enabled=False align=?   lines=2
+   POSTINDEX: Индекс для машинной обработки          font=Verdana              min=11   max=11   enabled=False
+   POSTINDEX: Индекс для машинной обработки          font=Verdana              min=11   max=11   enabled=False

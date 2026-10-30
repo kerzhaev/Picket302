@@ -1,0 +1,961 @@
+MNOGOPISEM — API CONTRACT (REA managed static analysis, PrintEnvelopeApi.dll + PrintEnvelopePro.exe)
+====================================================================================================
+
+====================================================================================================
+ASSEMBLY PrintEnvelopeApi.dll
+====================================================================================================
+
+TYPE PEP.API.Contact   (fields=0, methods=2)
+    ReadXmlData(string, string) -> class:25
+    .ctor() -> void
+
+TYPE PEP.API.PrintableEnvelope   (fields=10, methods=10)
+    XmlElement_forPrintEnvelope(class:29, bool&, class:12&, valuetype:16&) -> void
+    XmlText_forPrintEnvelope(class:29, bool, class:12&, valuetype:16) -> void
+    XmlEndElement_forPrintEnvelope(class:29, class:25&, class:12&) -> void
+    ExtractZips_forPrintEnvelope(class:25&) -> void
+    ReadListFromXml(class:33, bool) -> class:25
+    WriteListToXml(class:37, class:41) -> void
+    WriteToXml(class:45, string, string, string, string) -> void
+    WriteToXml(class:45) -> void
+    .ctor() -> void
+    .cctor() -> void
+
+TYPE PEP.API.XmlStringType   (fields=15, methods=0)
+
+TYPE PEP.API.InventoryData   (fields=4, methods=1)
+    .ctor() -> void
+
+TYPE PEP.API.PrintableInventory   (fields=15, methods=20)
+    get_m_FromName() -> string
+    .ctor(class:20) -> void
+    get_ToAddress() -> string
+    set_ToAddress(string) -> void
+    get_NameContainer() -> string
+    set_NameContainer(string) -> void
+    get_ToName() -> string
+    set_ToName(string) -> void
+    get_NamePostOffice() -> string
+    set_NamePostOffice(string) -> void
+    get_SenderList() -> class:37
+    get_Items() -> class:37
+    CleanXmlString(string) -> string
+    XmlElement_forPrintInventories(class:29, bool&, class:20&, valuetype:16&) -> void
+    XmlEndElement_forPrintInventories(class:29, class:25&, class:20&) -> void
+    XmlText_forPrintInventories(class:29, bool&, class:20&, valuetype:16) -> void
+    ReadListFromXml(class:33) -> class:25
+    WriteListToXml(class:37, class:41) -> void
+    WriteToXml(class:45) -> void
+    .cctor() -> void
+
+TYPE PEP.API.PostRegister   (fields=16, methods=12)
+    ReadFromFromXml(class:29) -> void
+    ReadToFromXml(class:29, class:49) -> void
+    ReadPakageFromXml(class:29) -> class:49
+    ReadPakagesFromXml(class:29) -> void
+    ReadFromXml(class:29) -> void
+    WriteToXml(class:45) -> void
+    WriteListToXml(class:37, class:41) -> void
+    ReadListFromXml(class:29, class:25) -> void
+    ReadListFromXml(class:33, bool) -> class:25
+    ReadListFromXmlAndFixForPrint(class:33, bool) -> class:25
+    ExtractZips_forPrintPrintRegisters(class:25) -> void
+    .ctor() -> void
+
+TYPE PEP.API.XmlUtil   (fields=1, methods=4)
+    CleanXmlString(string) -> string
+    ExtractZip(string&, string&) -> void
+    .ctor() -> void
+    .cctor() -> void
+
+TYPE <PrivateImplementationDetails>{983FA0F5-415E-4D84-ACB3-8ACEBBE95CF0}   (fields=1, methods=0)
+
+====================================================================================================
+ASSEMBLY PrintEnvelopePro.exe
+====================================================================================================
+
+TYPE PEP.COM.ReferenceCountedObjectBase   (fields=1, methods=2)
+    .ctor() -> void
+    Finalize() -> void
+
+TYPE PEP.COM.IPEProApplication   (fields=0, methods=46)
+    PrintFromFileEnvelopes(string) -> void
+    PrintFromFileNotifications(string) -> void
+    PrintFromFileInventories(string) -> void
+    PrintFromFileRegisters(string) -> void
+    PrintFromXmlEnvelopes(string) -> void
+    PrintFromXmlNotifications(string) -> void
+    PrintFromXmlInventories(string) -> void
+    PrintFromXmlRegisters(string) -> void
+    PrintEnvelope(string, string, string, string, string, string) -> void
+    OpenDummyFormToSetAsForeground() -> string
+    CloseDummyFormAndSetAsForeground(string) -> void
+    DatabaseIsLoaded() -> bool
+    SafeLoadDatabase() -> bool
+    GetFlagParseZipIndexFromAddress() -> bool
+    SetFlagParseZipIndexFromAddress(bool) -> bool
+    GetFlagShowFormsAsModal() -> bool
+    SetFlagShowFormsAsModal(bool) -> bool
+    GetProductVersion() -> string
+    GetAPIVersion() -> i4
+    GetRegisterTemplateNames() -> string[]
+    PrintFromXmlRegistersWithoutForm(string, string, string) -> void
+    GetWarningType() -> i4
+    GetStdRegisterTemplateNames() -> string[]
+    ImportContragents(string) -> void
+    GetUpdateContragents() -> bool
+    SetUpdateContragents(bool) -> bool
+    CreateFromFileLetters(string) -> void
+    CreateFromXmlLetters(string) -> void
+    CreateFromFileIncoming(string) -> void
+    CreateFromXmlIncoming(string) -> void
+    GetFlagSenderFromFile() -> bool
+    SetFlagSenderFromFile(bool) -> bool
+    StartBlockerContact(string) -> void
+    StopBlockerContact() -> void
+    UpdateContacts(string) -> void
+    NavigateToLetters(string) -> void
+    NavigateToIncomings(string) -> void
+    ImportContragentsFromXml(string) -> void
+    SafeRunApp() -> void
+    GetShowProgressBarOnImport() -> bool
+    SetShowProgressBarOnImport(bool) -> bool
+    GetWriteToNoteOnImport() -> bool
+    SetWriteToNoteOnImport(bool) -> bool
+    GetMainWindowTitle() -> string
+    PrintEnvelopeAndCreateOutcoming(string) -> void
+    PrintNotificationAndCreateOutcoming(string) -> void
+
+TYPE PEP.COM.PEProApplication   (fields=10, methods=64)
+    .ctor() -> void
+    Finalize() -> void
+    PrintFromFileEnvelopes(string) -> void
+    PrintEnvelope(string, string, string, string, string, string) -> void
+    PrintEnvelopeAndCreateOutcoming(string) -> void
+    PrintNotificationAndCreateOutcoming(string) -> void
+    PrintFromFileNotifications(string) -> void
+    PrepareCommandForPrintInventories() -> class:33
+    PrintFromFileInventories(string) -> void
+    PrepareCommandForPrintRegisters() -> class:33
+    PrintFromFileRegisters(string) -> void
+    PrintFromXmlEnvelopes(string) -> void
+    PrintFromXmlNotifications(string) -> void
+    PrintFromXmlInventories(string) -> void
+    PrintFromXmlRegisters(string) -> void
+    PrintFromXmlRegistersWithoutForm(string, string, string) -> void
+    CheckInitDB() -> void
+    PrepareAPICommandForPrintEnvelopes(bool) -> class:33
+    PrintFromFileEnvInv(string, bool) -> void
+    PrintFromXmlEnvInv(string, bool) -> void
+    GetProductVersion() -> string
+    GetAPIVersion() -> i4
+    CheckContinuePrint(valuetype:37) -> bool
+    GetMainWindowTitle() -> string
+    OpenDummyFormToSetAsForeground() -> string
+    CloseDummyFormAndSetAsForeground(string) -> void
+    DatabaseIsLoaded() -> bool
+    SafeLoadDatabase() -> bool
+    GetFlagParseZipIndexFromAddress() -> bool
+    SetFlagParseZipIndexFromAddress(bool) -> bool
+    GetRegisterTemplateNames() -> string[]
+    GetStdRegisterTemplateNames() -> string[]
+    GetFlagShowFormsAsModal() -> bool
+    SetFlagShowFormsAsModal(bool) -> bool
+    ExecuteFormCmd(class:56) -> void
+    GetWarningType() -> i4
+    ImportContragents(string) -> void
+    ImportContragentsFromXml(string) -> void
+    PrepareShowImportDialog() -> class:33
+    GetUpdateContragents() -> bool
+    SetUpdateContragents(bool) -> bool
+    CreateFromFileLetters(string) -> void
+    CreateFromXmlLetters(string) -> void
+    CreateFromFileIncoming(string) -> void
+    CreateFromXmlIncoming(string) -> void
+    GetFlagSenderFromFile() -> bool
+    SetFlagSenderFromFile(bool) -> bool
+    GetShowProgressBarOnImport() -> bool
+    SetShowProgressBarOnImport(bool) -> bool
+    GetWriteToNoteOnImport() -> bool
+    SetWriteToNoteOnImport(bool) -> bool
+    PrepareCreateLetters() -> class:33
+    PreparePrintEnvelopeWithCreateOutcoming() -> class:33
+    PreparePrintNotificationWithCreateOutcoming() -> class:33
+    PrepareCreateIncoming() -> class:33
+    StartBlockerContact(string) -> void
+    StopBlockerContact() -> void
+    UpdateContacts(string) -> void
+    PrepareUpdateContacts() -> class:33
+    NavigateToLetters(string) -> void
+    NavigateToIncomings(string) -> void
+    PrepareNavigate() -> class:33
+    WaitTillOpenmainFormOrSplash() -> void
+    SafeRunApp() -> void
+
+TYPE PEP.COM.IClassFactory   (fields=0, methods=2)
+    CreateInstance(native-int, valuetype:45&, native-int&) -> void
+    LockServer(bool) -> void
+
+TYPE PEP.COM.ClassFactoryBase   (fields=5, methods=17)
+    CoRegisterClassObject(valuetype:45&, object, u4, u4, u4&) -> i4
+    CoResumeClassObjects() -> i4
+    CoRevokeClassObject(u4) -> i4
+    .ctor() -> void
+    virtual_CreateInstance(native-int, valuetype:45&, native-int&) -> void
+    get_ClassContext() -> u4
+    set_ClassContext(u4) -> void
+    get_ClassId() -> valuetype:45
+    set_ClassId(valuetype:45) -> void
+    get_Flags() -> u4
+    set_Flags(u4) -> void
+    RegisterClassObject() -> bool
+    RevokeClassObject() -> bool
+    ResumeClassObjects() -> bool
+    CreateInstance(native-int, valuetype:45&, native-int&) -> void
+    LockServer(bool) -> void
+    LockObject(bool) -> void
+
+TYPE PEP.COM.COMObjectClassFactory   (fields=1, methods=3)
+    virtual_CreateInstance(native-int, valuetype:45&, native-int&) -> void
+    get_LockedObjectCount() -> i4
+    .ctor() -> void
+
+TYPE PEP.COM.COMServer   (fields=8, methods=24)
+    PostThreadMessage(u4, u4, native-uint, native-int) -> bool
+    GetCurrentThreadId() -> u4
+    CreateToolhelp32Snapshot(valuetype:44, u4) -> native-int
+    Process32First(native-int, valuetype:48&) -> bool
+    Process32Next(native-int, valuetype:48&) -> bool
+    Thread32First(native-int, valuetype:52&) -> bool
+    Thread32Next(native-int, valuetype:52&) -> bool
+    PostMessageToActiveProcess(u4, string, class:49<valuetype:48, bool>) -> void
+    PostMessageToActiveProcess(u4) -> void
+    PostMessageToSelfProcess(u4) -> void
+    get_ObjectsCount() -> i4
+    get_ServerLockCount() -> i4
+    get_MainThreadId() -> u4
+    get_COMFactory() -> class:28
+    set_COMFactory(class:28) -> void
+    Init() -> void
+    SafeDone() -> void
+    AttemptToTerminateServer() -> void
+    InterlockedIncrementObjectsCount() -> i4
+    InterlockedDecrementObjectsCount() -> i4
+    InterlockedIncrementServerLockCount() -> i4
+    InterlockedDecrementServerLockCount() -> i4
+    .ctor() -> void
+    .cctor() -> void
+
+TYPE CLSCTX   (fields=22, methods=0)
+
+TYPE REGCLS   (fields=6, methods=0)
+
+TYPE SnapshotFlags   (fields=8, methods=0)
+
+TYPE PROCESSENTRY32   (fields=11, methods=0)
+
+TYPE THREADENTRY32   (fields=7, methods=0)
+
+TYPE PEP.COM.ComApiCmdExecutor   (fields=3, methods=4)
+    .ctor(class:16) -> void
+    Execute() -> void
+    DoExecute() -> void
+    .cctor() -> void
+
+TYPE PEP.COM.ComApiCmdFilenameExecutor   (fields=1, methods=1)
+    .ctor(string, class:16) -> void
+
+TYPE PEP.COM.PrintFromFileEnvNotExecutor   (fields=1, methods=2)
+    .ctor(string, class:16, bool) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintFromFileInventoriesExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintFromFileRegistersExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.ShowImportDialogExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.ComApiCmdXmlExecutor   (fields=1, methods=1)
+    .ctor(string, class:16) -> void
+
+TYPE PEP.COM.ShowImporXmltDialogExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.CreateFromFileLetterExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.CreateFromFileIncomingExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintFromXmlEnvNotExecutor   (fields=1, methods=2)
+    .ctor(string, class:16, bool) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintFromXmlInventoriesExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintFromXmlRegistersExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintFromXmlRegistersWithoutFormExecutor   (fields=2, methods=2)
+    .ctor(string, string, string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintEnvelopeExecutor   (fields=6, methods=2)
+    .ctor(string, string, string, string, string, string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintEnvelopeAndCreateOutcomingExecutor   (fields=1, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.PrintNotificationAndCreateOutcomingExecutor   (fields=1, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.CreateFromXmlLetterExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.CreateFromXmlIncomingExecutor   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.UpdateContacts   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.NavigateToLetters   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.NavigateToIncomigs   (fields=0, methods=2)
+    .ctor(string, class:16) -> void
+    Execute() -> void
+
+TYPE PEP.COM.GarbageCollector   (fields=3, methods=3)
+    .ctor() -> void
+    Dispose() -> void
+    .cctor() -> void
+
+TYPE PEP.COM.GarbageCollection   (fields=5, methods=6)
+    .ctor(i4) -> void
+    GCWatch() -> void
+    ContinueThread() -> bool
+    StopThread() -> void
+    WaitForThreadToStop() -> void
+    .cctor() -> void
+
+TYPE PEP.EntryPoint   (fields=9, methods=62)
+    Main_UnknownArgs(string[) -> void
+    SetProcessDPIAware() -> bool
+    Main(string[) -> void
+    Main_Main(bool) -> void
+    Main_Main_SingleInstance(bool) -> void
+    Main_Main_SingleInstance_WithComAPI(bool) -> void
+    RunMainTaskOnActivation() -> void
+    StartApplication(bool) -> void
+    InitForLogAndForms() -> void
+    Main_COMServer() -> void
+    Main_WinApplication() -> void
+    UnlockInitialization() -> void
+    LockedInitialization(bool) -> void
+    InitXCeedLicenses() -> void
+    SetGlobalExceptionHandlers() -> void
+    SafeInitLog4Net() -> void
+    InitReportLib() -> void
+    ProcessException(class:61) -> void
+    OnThreadException(object, class:65) -> void
+    OnUnhandledException(object, class:69) -> void
+    .ctor() -> void
+    Initialize_IfNotValidDBFile(bool, class:73, string) -> bool
+    Initialize_DBFile_Does_not_exist(bool, class:73) -> bool
+    Initialize_DB_is_too_new(bool, class:73) -> bool
+    Initialize_NeedUpdateHome(bool, class:73, class:81) -> bool
+    InitializeHome_AsCOMServer() -> bool
+    InitializeHome_AsWinFormApplication() -> bool
+    InitializeHome_Par_AsWinFormApplication(bool) -> bool
+    Home_m_OnInitializationProgress(string) -> void
+    StopMainTaskOrAppExit(bool) -> void
+    ChooseAnotherDatabase(class:73) -> bool
+    SafeLockInitialization() -> bool
+    SafeDeactivateInstance() -> void
+    SafeActivatePrevInstance(bool) -> bool
+    ActivatePreviousInstance(bool) -> void
+    SafeStartSplash(bool) -> void
+    InitializeReportRtf() -> void
+    InitializeCurrentSender() -> void
+    SafeTaskNavigatorStartMainTask(bool) -> bool
+    TaskNavigatorStartApplication_MainForm() -> void
+    TaskNavigatorStartApplication(bool) -> void
+    OnApplicationExitSoon() -> void
+    SafeAddApplicationMessageFilter() -> void
+    StartSplash() -> void
+    Splash_InitReportLib_ShowWebNews() -> void
+    PrepStartMainTask() -> bool
+    Main_ChooseAndOpenDB() -> void
+    DoChooseAndOpenDB() -> void
+    Main_UnRegisterComAPI() -> void
+    DoUnRegisterComAPI() -> void
+    Main_RegisterComAPI() -> void
+    DoRegisterComAPI() -> void
+    Main_OpenLogFile() -> void
+    DoOpenLogFile() -> void
+    ConfigureLog4net() -> void
+    TryCopyStorageFile() -> void
+    TryCopySettingsAndData() -> void
+    TryCopyData(string&) -> void
+    CopyToDir(string[) -> void
+    TryCopyLogoPath() -> void
+    <InitializeHome_Par_AsWinFormApplication>b__0() -> valuetype:241
+    .cctor() -> void
+
+TYPE arg   (fields=2, methods=1)
+    .ctor() -> void
+
+TYPE PepMessageFilter   (fields=1, methods=3)
+    PreFilterMessage(valuetype:89&) -> bool
+    .ctor() -> void
+    .cctor() -> void
+
+TYPE <>c__DisplayClass1   (fields=1, methods=2)
+    .ctor() -> void
+    <PostMessageToActiveProcess>b__0(valuetype:48) -> bool
+
+TYPE <>c__DisplayClass4   (fields=1, methods=2)
+    .ctor() -> void
+    <PostMessageToSelfProcess>b__3(valuetype:48) -> bool
+
+TYPE <PrivateImplementationDetails>{8EFEDC1D-BFB7-4827-816C-C662AEAD0D37}   (fields=1, methods=0)
+
+====================================================================================================
+XML / ENVELOPE PROTOCOL MARKERS (all assemblies)
+====================================================================================================
+   AGetReadablePathFromPath
+   ActiveControlDataSaveToBuffer
+   AddAddressFrom
+   AddAddressTo
+   AddFilterToUserFilters
+   AddLetter
+   AddNewRowToGrid
+   AddOptionToSearchSubject
+   AddSubjectsToDistribution
+   AddUnicodeFirstSymbolToByteArray
+   AfterPrintEnvelopeNotify
+   AfterPrintIncomingRegistry
+   AppendToHistory
+   ApplyCellStyleToEditingControl
+   AttemptToTerminateServer
+   Begin_Print
+   BindToHandler
+   BringWindowToTop
+   BuildEnvelopeBlank
+   BuildEnvelopeString
+   ByteArrayToString
+   CalculatedMailOutAddress
+   CaptureScreenToFile
+   CaptureWindowToFile
+   CastStrToLong
+   ChangeArrowsToTriangles
+   ChangeLetters
+   ChangeToTable
+   ChangeToText
+   ChangeToWriter
+   CheckContinuePrint
+   ColNoToName
+   ControlsDataLoadFromBuffer
+   ConvertSQLParameterToOdbc
+   ConvertSQLParameterToOleDb
+   ConvertSQLParametersToOdbc
+   ConvertSQLParametersToOleDb
+   ConvertSQLWhereToOdbc
+   ConvertToXmlDom
+   ConvertToXmlElement
+   CopyCommonFieldsFromTo
+   CopyFrom
+   CopyFromTo
+   CopyFromTo_WithoutSubjects
+   CopyHeadFromTo
+   CopyLettersForPrint
+   CopySortFromSettings
+   CopyTo
+   CopyToDir
+   CreateEnvelopeData
+   CreateFromFileIncoming
+   CreateFromFileLetters
+   CreateFromXmlIncoming
+   CreateFromXmlLetters
+   CreateFromXmlString
+   CreateToolBar
+   CreateUrlBuilder_ToSetLicense
+   DataCopyFrom
+   DataLoadFromSubjectFields
+   DataSaveToSubjectFields
+   DeleteCharsFromString
+   DeleteDoubleCharFromString
+   DeleteDoubleSeparatorsFromDirectoryName
+   DeleteInvalidCharsFromDirectoryName
+   DeleteInvalidCharsFromFullDirectoryName
+   DeleteLetters
+   DeleteRowToFirstLine
+   DeleteShipmentsFromBatch
+   DeleteToRecycleBin
+   DoChangeContactFrom
+   DoChangeContactTo
+   DoPrintDocument
+   DoPrintInventory
+   DoPrintInventoryCustom
+   DoPrintInventoryCustomInternal
+   DoPrintInventoryInternal
+   DoPrintInventoryWithNagScreen
+   DoPrintRegistry
+   DoPrintRegistryWithNagScreen
+   DoToolGrid
+   DrawEnvelopePageBounds
+   End_Print
+   ExportToExcel
+   ExportToZip
+   ExporterToXMLFile
+   ExtractTo
+   ExtractZips_forPrintEnvelope
+   ExtractZips_forPrintPrintRegisters
+   FileNameFromName
+   FillFromAddress
+   FillFromColumnSettings
+   FillStreamFromBytes
+   FillStreamFromUserFilterFile
+   FillStreamFromZippedBytes
+   FillToAddress
+   FirstLetter
+   FixLettersToDelete
+   GetAddressLetter
+   GetBatchNameFromFullName
+   GetContractNumberFromBase
+   GetCurrentEnvelopeSize
+   GetEnvelopeFileName
+   GetEnvelopeOrNotificationBlanks
+   GetEnvelopePage
+   GetFilterByFromAndTo
+   GetFlagParseZipIndexFromAddress
+   GetFlagSenderFromFile
+   GetFromParts
+   GetImageFrom
+   GetIncomingByFrom
+   GetIncomingByTo
+   GetLetterByContr
+   GetLetterByFrom
+   GetLetterByTo
+   GetLetterInSession
+   GetLetters
+   GetLettersFilterForReceiver
+   GetListOfAvailableIncomingRegisterVariantToShow
+   GetListOfAvailableInventoryVariantToShow
+   GetListOfAvailableRegisterVariantToShow
+   GetMemberToSelect
+   GetMemberToShowInList
+   GetNameOfSubjectFromForm
+   GetNamesFromEnum
+   GetPageToName
+   GetPointToShowMenu
+   GetRussianPostToken
+   GetSizeOfPageForPrintableArea
+   GetWriteToNoteOnImport
+   GoToBegin
+   GoToEnd
+   GoToNext
+   GoToNextPage
+   GoToNextPageSet
+   GoToPage
+   GoToPrevious
+   GoToPreviousPage
+   GoToPreviousPageSet
+   HundredthsOfAnInchToMillimetr
+   ImportContragentsFromXml
+   InchToMillimetr
+   InitEnvelopeType
+   InitToolbar
+   InitTooltipWeight
+   InputToken
+   InventoryFromXmlString
+   InventoryItemsFromXmlFile
+   InventoryItemsFromXmlString
+   InventoryItemsToXmlString
+   InventoryToXmlString
+   IsLetter
+   IsNotEqualToOriginal
+   IsPrintCommand
+   IsPrinted
+   IsValueToCompareNull
+   LettersBySender
+   LinkToGroup
+   LoadDataToGridFormat
+   LoadDataToGridPreview
+   LoadFrom
+   LoadFromCache
+   LoadFromFile
+   LoadFromOldNotifyPackage
+   LoadFromOldNotifyXmlFile
+   LoadFromPackage
+   LoadFromXmlFile
+   LoadImageFromFile
+   LoadImageFromResurce
+   LoadListOfAvailableHardCodedInventoryVariantToShow
+   LoadListOfAvailableHardCodedRegisterVariantToShow
+   LoadListOfAvailableStdCustomIncomingRegisterVariantToShow
+   LoadListOfAvailableStdCustomInventoryVariantToShow
+   LoadListOfAvailableStdCustomRegisterVariantToShow
+   LoadListOfCustomVariantToShow
+   LoadSettingsFromListBox
+   LookToRoot
+   MoveSelectedRowToDown
+   MoveSelectedRowToUp
+   MoveToPos
+   NameForLetters
+   NavigateToIncomings
+   NavigateToLetters
+   NewRowFromBuilder
+   OnAddedToCollection
+   OnChangeContactFrom
+   OnChangeContactTo
+   OnChangeEnvelopeSize
+   OpenDummyFormToSetAsForeground
+   PEPTypeToTestTypeReadable
+   ParseToItem
+   PostMessageToActiveProcess
+   PostMessageToSelfProcess
+   PrepareAPICommandForPrintEnvelopes
+   PrepareCommandForPrintInventories
+   PrepareCommandForPrintRegisters
+   PrepareCreateLetters
+   PrepareDataToPrintEnvelopeNotify
+   PrepareDataToPrintInventories
+   PrepareDataToPrintRegisters
+   PrepareForReversedAndPrintSomeEnv
+   PrepareNameTo
+   PreparePrintEnvelopeWithCreateOutcoming
+   PreparePrintNotificationWithCreateOutcoming
+   PrepareSubjectToSave
+   Print
+   PrintEnvelope
+   PrintEnvelopeAndCreateOutcoming
+   PrintFromFileEnvInv
+   PrintFromFileEnvelopes
+   PrintFromFileInventories
+   PrintFromFileNotifications
+   PrintFromFileRegisters
+   PrintFromXmlEnvInv
+   PrintFromXmlEnvelopes
+   PrintFromXmlInventories
+   PrintFromXmlNotifications
+   PrintFromXmlRegisters
+   PrintFromXmlRegistersWithoutForm
+   PrintIncomingRegistry
+   PrintInventory
+   PrintNotificationAndCreateOutcoming
+   PrintRegister
+   PrintRegistry
+   Print_Page
+   Printed
+   PushToStream
+   ReadCurrentSenderFromHKCU
+   ReadFromFile
+   ReadFromFromXml
+   ReadFromSroTplXml
+   ReadFromStream
+   ReadFromString
+   ReadFromTextFile
+   ReadFromXml
+   ReadFromXmlString
+   ReadFromZip
+   ReadFromZipFile
+   ReadHeaderFromXml
+   ReadListFromXml
+   ReadListFromXmlAndFixForPrint
+   ReadPakageFromXml
+   ReadPakagesFromXml
+   ReadToFromXml
+   RefreshLetter
+   RemoveFromCache
+   RemoveTaskFromCache
+   RestoreSettingsFromKey
+   RowObjectToSelected
+   RussianPostSetTokens
+   SPrepareDataToPrintEnvelopeNotify
+   SPrepareDataToPrintInventories
+   SafeAskToDeleteEmpty
+   SafeAskToSaveChanges
+   SafeCopySentStatusToItems
+   SafeDoPrintEnvelopeNotify
+   SafeDoPrintRegistryInventory
+   SafeDropAllOld_FK_Letter
+   SafeDropAllOld_PK_Letter
+   SafeDropLetterConstraint
+   SafeGetCriteriaFromJoined
+   SavePostRegisterToOriginalPostRegister
+   SaveTo
+   SaveToFile
+   SaveToOriginal
+   SaveToPackage
+   SaveToPostRegister
+   SaveToText
+   SaveToWriter
+   SaveToXmlFile
+   SaveWithLettersInTransaction
+   SearchTextToolKeyPress
+   SearchTextToolKeyUp
+   SetCurrentEnvelopeByName
+   SetEnvelopePageSettings
+   SetFlagParseZipIndexFromAddress
+   SetFlagSenderFromFile
+   SetFromTo
+   SetLinkTo
+   SetPrinted
+   SetRealPrinter
+   SetRussianPostToken
+   SetTokens
+   SetUnPrinted
+   SetUpToolBar
+   SetValueToCompareNull
+   SetWriteToNoteOnImport
+   ShowFormToChooseTemplate
+   ShowFromFilePrintEnvelopes
+   ShowFromFilePrintInventories
+   ShowFromFilePrintRegisters
+   ShowFromXmlPrintEnvelopes
+   ShowFromXmlPrintInventories
+   ShowFromXmlPrintRegisters
+   ShowFromXmlPrintRegistersWithoutForm
+   ShowPrintEnvelope
+   ShowPrintPreview
+   ShowPrintPreviewWithRITtext
+   ShowPrintPreviewWithRITtextAndSampleData
+   ShowPrintPreviewWithSampleData
+   StartNewEnvelope
+   StringToObject
+   ToByteArray
+   ToDown
+   ToFileName
+   ToLegalPerson
+   ToString
+   ToUp
+   ToXmlString
+   ToolClick
+   TransformPointToPixel
+   TransformRctangleToPixel
+   UCLetters_Load
+   UCLetters_Resize
+   UpdateFrom
+   UpdateFromDescription
+   UpdateOnChangedFrom
+   UpdateOnChangedTo
+   UpdateTo
+   UpdateToDescription
+   ValidEnvelopeName
+   WaitForThreadToStop
+   WriteFieldsToXml
+   WriteHistoryToOutput
+   WriteListToXml
+   WriteToCsv
+   WriteToFile
+   WriteToOutput
+   WriteToStream
+   WriteToStreamWriter
+   WriteToString
+   WriteToText
+   WriteToXMLString
+   WriteToXml
+   XmlElement_forPrintEnvelope
+   XmlElement_forPrintInventories
+   XmlEndElement_forPrintEnvelope
+   XmlEndElement_forPrintInventories
+   XmlText_forPrintEnvelope
+   XmlText_forPrintInventories
+   XmlToDataSet
+   _From_SubjectChanged
+   _To_SubjectChanged
+   _txtFrom_TextChanged
+   _txtTo_TextChanged
+   actionPrintEnvelope_OpeningDropDown
+   actionPrintInventory_OpeningDropDown
+   actionPrintNotification_OpeningDropDown
+   actionPrintRegistry_OpeningDropDown
+   bPrint_Click
+   beforePrint
+   cbPrinted_CheckedChanged
+   cboxPrintVariants_SelectedIndexChanged
+   changeContactFrom_LinkClicked
+   changeContactTo_LinkClicked
+   chkFitToWindow_CheckedChanged
+   currentSenderMenuTool_OpeningDropDown
+   get_AddressFrom
+   get_AddressTo
+   get_AmountOfCODToPrint
+   get_BelongToDistribution
+   get_CanBePrinted
+   get_ConstrFieldsFrom
+   get_ConstrFieldsTo
+   get_ContactFrom
+   get_ContactTo
+   get_CountLetterReg
+   get_CurrContextRootToObject
+   get_CurrentIsLetter
+   get_CurrentLetter
+   get_CustomFieldsToSearch
+   get_DatePrinted
+   get_DateReceiveFromPerformer
+   get_DateTransferToPerformer
+   get_DefaultEnvelope
+   get_DefaultEnvelopeType
+   get_DefaultSystemEnvelope
+   get_EMail
+   get_EnvelopeCustomBlanks
+   get_EnvelopeName
+   get_EnvelopeNotifyBlanks
+   get_FeeForShippingToPrint
+   get_FitPortionSizeToWindow
+   get_From
+   get_FromPart
+   get_FromPhoneToPrint
+   get_FromReport
+   get_FromTo
+   get_FromToForDetail
+   get_IsPrinted
+   get_IsRealPrinter
+   get_IsTextAlignToCenter
+   get_LastNumberFromSettings
+   get_LetterID
+   get_LetterId
+   get_Letters
+   get_LettersCount
+   get_LinkTo
+   get_Mail
+   get_MailOutWeightTypes
+   get_NameFrom
+   get_NameTo
+   get_NameToReplace
+   get_NoteToPrint
+   get_PathToDatabase
+   get_PathToDirectoryWithRecentSettings
+   get_PostOfficeNameToPrint
+   get_PriceToPrint
+   get_PrintLogIsEnabled
+   get_PrintReversed
+   get_PrintSomeEnv
+   get_PrintableArea
+   get_Printed
+   get_ReplyToEmail
+   get_RussianPostToken
+   get_SearchTextTool
+   get_SendersToUseInComboBox
+   get_SortLetterRegAlphabet
+   get_StandardEnvelopeBlankSpecs
+   get_SubjectFrom
+   get_TextAddressTo
+   get_TextToReplace
+   get_To
+   get_ToAddress
+   get_ToDate
+   get_ToName
+   get_ToPhoneToPrint
+   get_ToolBarVisible
+   get_Toolbar
+   get_Toolbox
+   get_ToolboxVisible
+   get_Total
+   get_TypeEnvelope
+   get_ValueToCompare
+   get_ValueToCompareColumn
+   get_ValueToCompareWith
+   get_WeightToPrint
+   get_hFrom
+   get_hLettersCount
+   get_hTo
+   get_isToVisible
+   get_lookupFromSubject
+   get_lookupToSubject
+   get_m_FromName
+   get_txtFrom
+   get_txtTo
+   gridMailList_SizeChanged
+   linkLabelFrom_LinkClicked
+   linkLabelNameFrom_LinkClicked
+   linkLabelNameTo_LinkClicked
+   linkLabelTo_LinkClicked
+   llGoToEnd_LinkClicked
+   llGoToFirst_LinkClicked
+   llGoToNext_LinkClicked
+   llGoToPrevious_LinkClicked
+   lookupContactFrom_LinkClicked
+   lookupContactTo_LinkClicked
+   oldFileNameFromName
+   pnlToolbar_SizeChanged
+   rbtnCreateFromFile_CheckedChanged
+   set_AddressFrom
+   set_AddressTo
+   set_BelongToDistribution
+   set_ConstrFieldsFrom
+   set_ConstrFieldsTo
+   set_ContactFrom
+   set_ContactTo
+   set_CountLetterReg
+   set_CurrentLetter
+   set_DatePrinted
+   set_DateReceiveFromPerformer
+   set_DateTransferToPerformer
+   set_DefaultEnvelope
+   set_DefaultEnvelopeType
+   set_DefaultSystemEnvelope
+   set_EMail
+   set_FitPortionSizeToWindow
+   set_From
+   set_IsPrinted
+   set_IsRealPrinter
+   set_IsTextAlignToCenter
+   set_LetterId
+   set_Letters
+   set_MailOutWeightTypes
+   set_NameFrom
+   set_NameTo
+   set_NameToReplace
+   set_PathToDirectoryWithRecentSettings
+   set_PrintReversed
+   set_PrintSomeEnv
+   set_ReplyToEmail
+   set_RussianPostToken
+   set_SortLetterRegAlphabet
+   set_SubjectFrom
+   set_To
+   set_ToAddress
+   set_ToDate
+   set_ToName
+   set_ToolBarVisible
+   set_Toolbar
+   set_Toolbox
+   set_ToolboxVisible
+   set_TotalSize
+   set_TypeEnvelope
+   set_ValueToCompare
+   set_ValueToCompareWith
+   set_hFrom
+   set_hLettersCount
+   set_hTo
+   set_isToVisible
+   set_txtFrom
+   set_txtTo
+   tbDatePrinted_TextChanged
+   titleForFrmToolGrid
+   txtDatePrinted_TextChanged
+   txtFrom_TextChanged
+   txtTo_TextChanged
+   ucLetters_CountChanged
