@@ -1,0 +1,13 @@
+# Build artifacts
+bin/
+obj/
+.vs/
+*.user
+
+# IDE
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
