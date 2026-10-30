@@ -1,0 +1,62 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,xml,props,targets,config}]
+indent_size = 2
+
+[*.{csproj,sln}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# --- Соглашения по именованию ---
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_prefix
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_fields.required_modifiers =
+
+dotnet_naming_style.underscore_prefix.capitalization = camel_case
+dotnet_naming_style.underscore_prefix.required_prefix = _
+
+# --- Диагностика ---
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = false:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_prefer_braces = true:suggestion
+csharp_style_prefer_primary_constructors = false:none
+
+# --- Анализ ---
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA2007.severity = warning
+dotnet_diagnostic.CA1848.severity = warning
+dotnet_diagnostic.CA1031.severity = warning
+dotnet_diagnostic.CA1303.severity = none
+dotnet_diagnostic.CA1310.severity = warning
+dotnet_diagnostic.CA1305.severity = warning
+
+# Локализация интерфейсных строк выполняется файлами lang/<код>.xml (ТЗ §10.8),
+# а не таблицами ресурсов, поэтому требование CA1303 к проекту неприменимо.
+
+# Оболочка и тесты не являются библиотеками: ConfigureAwait в них не требуется.
+[src/Picket302.App/**.cs]
+dotnet_diagnostic.CA2007.severity = none
+
+[tests/**.cs]
+dotnet_diagnostic.CA2007.severity = none

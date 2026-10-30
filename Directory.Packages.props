@@ -1,0 +1,28 @@
+<Project>
+
+  <!-- Централизованное управление версиями пакетов NuGet (Central Package Management).
+       Все версии пакетов решения фиксируются только здесь. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Инфраструктура">
+    <!-- Локальный/переносимый режим СУБД: SQLite 3 (§10.1, §10.2). -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="8.0.33" />
+    <!-- Доступ к данным репозиториев через микро-ORM (§10.1: EF Core + Dapper). -->
+    <PackageVersion Include="Dapper" Version="2.1.66" />
+  </ItemGroup>
+
+  <ItemGroup Label="Печать">
+    <!-- Печать: GDI+/System.Drawing.Printing, System.Drawing.Common — только Windows (§10.1). -->
+    <PackageVersion Include="System.Drawing.Common" Version="8.0.33" />
+  </ItemGroup>
+
+  <ItemGroup Label="Тесты">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

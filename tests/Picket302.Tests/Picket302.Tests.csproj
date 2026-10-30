@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Тестовый проект решения: unit-тесты доменных правил и инфраструктурного стека.
+       ТЗ §11.1: юнит-тест — изолированная проверка доменных правил, без БД, принтера и UI;
+       §11.2: БД-мок — SQLite in-memory. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- Тесты обращаются к типам WinForms (MainShell) напрямую, поэтому проект
+         подключает набор ссылок Windows Desktop. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>Picket302.Tests</RootNamespace>
+    <AssemblyName>Picket302.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Label="Инфраструктурный стек для тестов слоя данных (§10.1, §11.2)">
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+
+  <ItemGroup Label="Тесты ссылаются на все проекты решения">
+    <ProjectReference Include="..\..\src\Picket302.App\Picket302.App.csproj" />
+    <ProjectReference Include="..\..\src\Picket302.Application\Picket302.Application.csproj" />
+    <ProjectReference Include="..\..\src\Picket302.Domain\Picket302.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Picket302.Infrastructure\Picket302.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Picket302.Printing\Picket302.Printing.csproj" />
+  </ItemGroup>
+
+</Project>

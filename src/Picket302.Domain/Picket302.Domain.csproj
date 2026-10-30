@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Доменный слой (ТЗ §2.1): сущности, правила целостности, инварианты адресации.
+       Слой не имеет зависимостей: ни ссылок на проекты, ни сторонних пакетов.
+       Целевая платформа — net8.0, чтобы домен оставался независимым от Windows. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Picket302.Domain</RootNamespace>
+    <AssemblyName>Picket302.Domain</AssemblyName>
+    <Description>Доменный слой Picket302: сущности и инварианты предметной области.</Description>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Слой печати (ТЗ §2.1): двухэтапный валидатор метрик, рендерер GDI+/DirectWrite,
+       генератор кодового штампа, кэш растровых QR-кодов.
+       Печать — подсистема Windows (System.Drawing.Printing / winspool.drv), §10.1,
+       поэтому слой собирается под net8.0-windows. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Picket302.Printing</RootNamespace>
+    <AssemblyName>Picket302.Printing</AssemblyName>
+    <Description>Слой печати Picket302: GDI+ и winspool.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Picket302.Domain\Picket302.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

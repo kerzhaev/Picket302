@@ -1,0 +1,27 @@
+<Project>
+
+  <!-- Общие параметры сборки всех проектов решения Picket302.
+       Источник требований: SPEC_INPUT/IMPLEMENTATION_SPEC.md, §10.1 «Стек и версии»:
+       ОС Windows 10/11 x64, .NET 8, C# 12. -->
+  <PropertyGroup>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <NeutralLanguage>ru-RU</NeutralLanguage>
+    <Company>Picket302</Company>
+    <Product>Picket302</Product>
+  </PropertyGroup>
+
+  <!-- Решение однозначно 64-разрядное (§10.1). Платформа по умолчанию для сборки
+       отдельного проекта задаётся x64, чтобы выходные каталоги совпадали со сборкой
+       решения (bin\x64\<Конфигурация>). При сборке через решение платформа передаётся
+       MSBuild как глобальное свойство и этим значением не переопределяется. -->
+  <PropertyGroup Condition="'$(Platform)' == ''">
+    <Platform>x64</Platform>
+  </PropertyGroup>
+
+</Project>

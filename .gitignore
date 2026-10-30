@@ -1,12 +1,22 @@
 # Build artifacts
 bin/
 obj/
+artifacts/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+*.received.*
 .vs/
 *.user
+*.suo
+*.userprefs
 
 # IDE
 .idea/
 *.swp
+*.code-workspace
 
 # OS
 Thumbs.db

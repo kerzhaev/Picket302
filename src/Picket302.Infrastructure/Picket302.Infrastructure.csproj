@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Слой инфраструктуры и данных (ТЗ §2.1): репозитории (SQLite/PostgreSQL),
+       файловый процессор бланков (.lbk/ZIP), экспорт OpenXML/XSLT, адаптеры периферии,
+       защищённое хранилище секретов.
+       Допустимые зависимости: доменный слой и слой печати. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Picket302.Infrastructure</RootNamespace>
+    <AssemblyName>Picket302.Infrastructure</AssemblyName>
+    <Description>Слой инфраструктуры и данных Picket302: СУБД, файлы, сеть.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Picket302.Domain\Picket302.Domain.csproj" />
+    <ProjectReference Include="..\Picket302.Printing\Picket302.Printing.csproj" />
+  </ItemGroup>
+
+</Project>

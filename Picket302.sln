@@ -1,0 +1,64 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{C64BC16C-9A2A-423C-AAA8-C6D7F5157C4C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Picket302.Domain", "src\Picket302.Domain\Picket302.Domain.csproj", "{D9C82D83-4892-4D0A-BB75-95067F52CD50}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Picket302.Application", "src\Picket302.Application\Picket302.Application.csproj", "{578132D3-4F92-40F4-B211-7FA6AF7FEB29}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Picket302.Infrastructure", "src\Picket302.Infrastructure\Picket302.Infrastructure.csproj", "{F1ABAA84-A34E-4A5D-8F17-3A3F5B97DB6F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Picket302.Printing", "src\Picket302.Printing\Picket302.Printing.csproj", "{792E1380-BCD7-45E9-8709-3A49BB263404}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Picket302.App", "src\Picket302.App\Picket302.App.csproj", "{3105F736-BE60-437F-9D7C-D8F718D6E0DC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{1D6FA7FB-E163-486F-96AE-FAEC37AB9314}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Picket302.Tests", "tests\Picket302.Tests\Picket302.Tests.csproj", "{9AAE49BC-8ACA-4848-AEE8-B5702925FCBD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D9C82D83-4892-4D0A-BB75-95067F52CD50}.Debug|x64.ActiveCfg = Debug|x64
+		{D9C82D83-4892-4D0A-BB75-95067F52CD50}.Debug|x64.Build.0 = Debug|x64
+		{D9C82D83-4892-4D0A-BB75-95067F52CD50}.Release|x64.ActiveCfg = Release|x64
+		{D9C82D83-4892-4D0A-BB75-95067F52CD50}.Release|x64.Build.0 = Release|x64
+		{578132D3-4F92-40F4-B211-7FA6AF7FEB29}.Debug|x64.ActiveCfg = Debug|x64
+		{578132D3-4F92-40F4-B211-7FA6AF7FEB29}.Debug|x64.Build.0 = Debug|x64
+		{578132D3-4F92-40F4-B211-7FA6AF7FEB29}.Release|x64.ActiveCfg = Release|x64
+		{578132D3-4F92-40F4-B211-7FA6AF7FEB29}.Release|x64.Build.0 = Release|x64
+		{F1ABAA84-A34E-4A5D-8F17-3A3F5B97DB6F}.Debug|x64.ActiveCfg = Debug|x64
+		{F1ABAA84-A34E-4A5D-8F17-3A3F5B97DB6F}.Debug|x64.Build.0 = Debug|x64
+		{F1ABAA84-A34E-4A5D-8F17-3A3F5B97DB6F}.Release|x64.ActiveCfg = Release|x64
+		{F1ABAA84-A34E-4A5D-8F17-3A3F5B97DB6F}.Release|x64.Build.0 = Release|x64
+		{792E1380-BCD7-45E9-8709-3A49BB263404}.Debug|x64.ActiveCfg = Debug|x64
+		{792E1380-BCD7-45E9-8709-3A49BB263404}.Debug|x64.Build.0 = Debug|x64
+		{792E1380-BCD7-45E9-8709-3A49BB263404}.Release|x64.ActiveCfg = Release|x64
+		{792E1380-BCD7-45E9-8709-3A49BB263404}.Release|x64.Build.0 = Release|x64
+		{3105F736-BE60-437F-9D7C-D8F718D6E0DC}.Debug|x64.ActiveCfg = Debug|x64
+		{3105F736-BE60-437F-9D7C-D8F718D6E0DC}.Debug|x64.Build.0 = Debug|x64
+		{3105F736-BE60-437F-9D7C-D8F718D6E0DC}.Release|x64.ActiveCfg = Release|x64
+		{3105F736-BE60-437F-9D7C-D8F718D6E0DC}.Release|x64.Build.0 = Release|x64
+		{9AAE49BC-8ACA-4848-AEE8-B5702925FCBD}.Debug|x64.ActiveCfg = Debug|x64
+		{9AAE49BC-8ACA-4848-AEE8-B5702925FCBD}.Debug|x64.Build.0 = Debug|x64
+		{9AAE49BC-8ACA-4848-AEE8-B5702925FCBD}.Release|x64.ActiveCfg = Release|x64
+		{9AAE49BC-8ACA-4848-AEE8-B5702925FCBD}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{D9C82D83-4892-4D0A-BB75-95067F52CD50} = {C64BC16C-9A2A-423C-AAA8-C6D7F5157C4C}
+		{578132D3-4F92-40F4-B211-7FA6AF7FEB29} = {C64BC16C-9A2A-423C-AAA8-C6D7F5157C4C}
+		{F1ABAA84-A34E-4A5D-8F17-3A3F5B97DB6F} = {C64BC16C-9A2A-423C-AAA8-C6D7F5157C4C}
+		{792E1380-BCD7-45E9-8709-3A49BB263404} = {C64BC16C-9A2A-423C-AAA8-C6D7F5157C4C}
+		{3105F736-BE60-437F-9D7C-D8F718D6E0DC} = {C64BC16C-9A2A-423C-AAA8-C6D7F5157C4C}
+		{9AAE49BC-8ACA-4848-AEE8-B5702925FCBD} = {1D6FA7FB-E163-486F-96AE-FAEC37AB9314}
+	EndGlobalSection
+EndGlobal
