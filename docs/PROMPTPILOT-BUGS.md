@@ -267,3 +267,78 @@ executor; фоновый `verdict-repair-watcher` — отдельный ком�
 Проверка каждого изменения: полный сьют из `pp-deploy` с `--basetemp` вне git-репозитория; PR — в
 `ivanarama/PromptPilot` по образцу #172–174 (симптом → до/после → файлы → совместимость → тесты → ограничения).
 Секреты в коммиты не добавлять (`git diff --cached --name-only` перед коммитом).
+
+---
+
+## P9. Контракт закрывающего вердикта не включается для workflow-задач: задачи завершаются с `verdict: null` без repair
+
+**Симптом.** Три раунда executor подряд (задачи #959, #960, #966 миссии Picket302) завершились со статусом
+`completed`, `exit_code=0`, `verdict: null` — после чего workflow-слой пометил раунды `executor.invalid_output`
+и перевёл миссию в `awaiting_human`. Штатный repair-механизм (`VERDICT_REPAIR`, issue #82) ни разу не сработал:
+в `logs/worker.log` за весь период нет ни одного `Verdict repaired via micro-request` и ни одного
+`Failed (pipeline result has no closing verdict)`.
+
+**Причина.** `promptpilot/worker.py:1742`:
+
+```python
+require_closing_verdict = bool(
+    route.get("profile_id") and route.get("queue_id")
+)
+```
+
+Контракт закрывающего вердикта (дописывание инструкции в промпт через `ensure_closing_verdict_contract`,
+принудительная проверка последней строки, repair micro-request'ом) включается **только** когда маршрут задачи
+содержит `profile_id` и `queue_id` (pipeline-snapshot маршрутизация). На развёртывании Picket302 pipeline-профили
+не сконфигурированы → `require_closing_verdict=False` → (а) контракт не дописывается в промпт, (б) отсутствие
+вердикта не проверяется на уровне задачи, (в) repair не вызывается; всё падает уже на уровне workflow
+(`executor.invalid_output`) — без repair и с постановкой миссии в ожидание человека.
+
+**Файлы.** `promptpilot/worker.py:1742` (условие), `promptpilot/worker.py:2240–2280`
+(обе ветки repair достижимы только при `require_closing_verdict=True` либо при `PP_VERDICT=1` — вторая ветка
+не сработала, см. ограничения), `promptpilot/herdr_exec.py:528` (`_closing_workflow_verdict`).
+
+**Совместимость.** Аддитивно: включать контракт для workflow-задач (роль executor/reviewer при наличии
+`workflow_id`) независимо от pipeline-маршрута; `ensure_closing_verdict_contract` уже идемпотентен.
+
+**Тесты.** (1) Workflow-задача с провайдером, не вернувшим `ИТОГ` → repair micro-request вызван; при успехе —
+верdict заполнен, при неудаче — задача FAILED с понятным текстом (не «completed» с `verdict: null`);
+(2) workflow-задача с валидным ИТОГ → поведение не изменилось; (3) pipeline-маршрут с profile/queue → прежнее
+поведение.
+
+**Ограничения.** Вторая ветка (`else`, не-pipeline задачи) с `PP_VERDICT=1` тоже не сработала — причине
+установить не удалось (подозрение: `VERDICT_REQUIRED` вычисляется при импорте конфига, а worker-процесс мог
+быть запущен без загруженного `.env`); починившему агенту — проверить фактическое значение
+`VERDICT_REQUIRED`/`VERDICT_REPAIR` в рантайме worker-процесса.
+
+**Дополнительно (следствие для интеграций).** Определение роли по тексту промпта ненадёжно: в executor-промпт
+попадает `previous_review` со строками `AUDIT_VERDICT/AUDIT_FINDINGS_JSON` прошлых аудитов, поэтому внешние
+обёртки провайдеров ошибочно классифицируют executor-задачу как ревьюер. Рекомендация: передавать роль
+структурно (env `PP_WORKFLOW_ROLE`, `PP_WORKFLOW_STAGE` в окружение провайдера) — тогда обёртки смогут
+адаптировать хвост отчёта без эвристик. (Реализовано обходом: wrapper v3 делает канонический хвост для обеих
+ролей — `AUDIT_` пара + `ИТОГ` последней.)
+
+---
+
+## P10. `executor.invalid_output` не покрывается авто-resume: миссия стоит в `awaiting_human` неопределённо долго
+
+**Симптом.** Миссия Picket302 провела в `awaiting_human` 9,5 часов (00:02–09:31 UTC 31.10) после
+`executor.invalid_output`, при `automation.auto_resume_revision=true` и живом воркере; авто-продолжения не было.
+
+**Причина.** Ветка авто-resume в `advance_workflow` (workflows.py, обработка `AWAITING_HUMAN`) срабатывает только
+для `round.status == REVISION_REQUIRED`. Превращение раунда в `awaiting_human` по причине
+`executor.invalid_output` (task completed, verdict null) не переводит раунд в `revision_required` —
+продолжения нет; resume доступен только человеку/внешнему супервизору.
+
+**Файлы.** `promptpilot/workflows.py` (обработка `WorkflowStatus.AWAITING_HUMAN`, ветка
+`current_round.status is WorkflowRoundStatus.REVISION_REQUIRED`).
+
+**Совместимость.** Аддитивно: либо помечать раунд `revision_required` при invalid_output (тогда существующий
+auto-resume заработает), либо добавить отдельный флаг `automation.auto_resume_invalid_output` с лимитом
+подряд идущих попыток (иначе цикл на систематически молчащем провайдере).
+
+**Тесты.** (1) invalid_output при включённом флаге → один автоматический re-dispatch; (2) три подряд
+invalid_output → стоп с `awaiting_human` и понятным событием; (3) обычный invalid_output без флага → прежнее
+поведение.
+
+**Ограничения.** Не ломать сценарий «invalid_output = всегда человек» для тех, кто на это рассчитывает;
+по умолчанию флаг выключен.
