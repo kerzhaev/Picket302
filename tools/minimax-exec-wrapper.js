@@ -36,6 +36,9 @@ let prompt;
 let cliArgs;
 if (stdinPromptIdx !== -1) {
   const rest = [...args.slice(0, stdinPromptIdx), ...args.slice(stdinPromptIdx + 1)];
+  // U17/upstream-конвенция: шаблон stdin-режима заканчивается литералом '-'
+  // (placeholder промпта). Wrapper сам читает stdin, '-' в mcode не нужен.
+  if (rest[rest.length - 1] === '-') rest.pop();
   let stdinData = '';
   try { stdinData = fs.readFileSync(0, 'utf8'); } catch (_) { stdinData = ''; }
   prompt = stdinData;

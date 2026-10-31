@@ -678,3 +678,15 @@ warn. Без этого deploy-форк и mainline несовместимы н�
 на уровне владельца (см. К-12): если авто-рестартер оригинального репо продолжит перезапуски,
 миссии будут снова ломаться — требуется решение владельца (миграция данных или фикс совместимости
 в upstream, или запрет авто-рестартера).
+
+**Дополнение (19:20, финал К-12).** У upstream stdin-конвенция ДРУГАЯ: `build_cmd` НЕ удаляет маркер
+(pp-deploy: `if not (p == marker and cfg.get("prompt_stdin"))`; upstream config.py:761 — без фильтра),
+вместо этого режим stdin = «шаблон заканчивается литералом `-`» + `cfg.prompt_stdin` (config.py:806,
+goose-конвенция U17). Рабочий шаблон для ОБЕИХ версий:
+`node.exe wrapper.js exec --output-format text --permission full --prompt-mode coding --stdin-prompt -`
+(wrapper v3.4: при `--stdin-prompt` читает промпт из СВОЕГО stdin, отбрасывает хвостовой `-`,
+передаёт mcode через `--input -`). Проверено: upstream build_cmd — промпт не в argv, cmd[-1]=='-';
+фейк-CLI получил 40k промпт целым; задача #996 (38238 симв.) исполняется под upstream-стеком.
+Важно: upstream `save_provider` НЕ имеет параметра prompt_stdin и затирает поле при перезаписи —
+обновлять провайдер надо pp-deploy-версией save_provider (та же общая providers.json) либо
+добавить параметр в upstream (в tie с P18-б).
