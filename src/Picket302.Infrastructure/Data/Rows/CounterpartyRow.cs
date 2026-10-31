@@ -66,6 +66,9 @@ internal sealed class CounterpartyRow
 
     public string? SpecialNotes { get; set; }
 
+    /// <summary>Источник появления записи (ТЗ §8.12, функция 75).</summary>
+    public string? Source { get; set; }
+
     /// <summary>Логотип компании — растровый файл (ТЗ §8.1, функция 47).</summary>
     public byte[]? Logo { get; set; }
 
@@ -165,6 +168,7 @@ internal sealed class CounterpartyRow
             Email = Email,
             Phone = Phone,
             SpecialNotes = SpecialNotes,
+            Source = Source,
             Logo = Logo,
             AddressMainType = (ТипАдреса)AddressMainType,
             GroupId = GroupId,

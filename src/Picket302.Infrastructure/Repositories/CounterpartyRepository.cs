@@ -17,7 +17,7 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
     private const string КолонкиВставки = """
         type, name, short_name, inn, kpp, ogrn, okfs, okpo, okved, bik, ks, rs, rkc, bank_name,
         passport_series, passport_number, passport_issued_by, passport_issued_date,
-        birth_date, birth_place, position, director_fio, email, phone, special_notes,
+        birth_date, birth_place, position, director_fio, email, phone, special_notes, source,
         legal_zip, legal_str1, legal_str2, legal_str3, legal_str4, legal_str5, legal_str6, legal_raw,
         post_zip, post_str1, post_str2, post_str3, post_str4, post_str5, post_str6, post_raw,
         fact_zip, fact_str1, fact_str2, fact_str3, fact_str4, fact_str5, fact_str6, fact_raw,
@@ -48,7 +48,7 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
             VALUES (
                 @Type, @Name, @ShortName, @Inn, @Kpp, @Ogrn, @Okfs, @Okpo, @Okved, @Bik, @Ks, @Rs, @Rkc, @BankName,
                 @PassportSeries, @PassportNumber, @PassportIssuedBy, @PassportIssuedDate,
-                @BirthDate, @BirthPlace, @Position, @DirectorFio, @Email, @Phone, @SpecialNotes,
+                @BirthDate, @BirthPlace, @Position, @DirectorFio, @Email, @Phone, @SpecialNotes, @Source,
                 @LegalZip, @LegalStr1, @LegalStr2, @LegalStr3, @LegalStr4, @LegalStr5, @LegalStr6, @LegalRaw,
                 @PostZip, @PostStr1, @PostStr2, @PostStr3, @PostStr4, @PostStr5, @PostStr6, @PostRaw,
                 @FactZip, @FactStr1, @FactStr2, @FactStr3, @FactStr4, @FactStr5, @FactStr6, @FactRaw,
@@ -91,6 +91,7 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
                 passport_issued_by = @PassportIssuedBy, passport_issued_date = @PassportIssuedDate,
                 birth_date = @BirthDate, birth_place = @BirthPlace, position = @Position,
                 director_fio = @DirectorFio, email = @Email, phone = @Phone, special_notes = @SpecialNotes,
+                source = @Source,
                 legal_zip = @LegalZip, legal_str1 = @LegalStr1, legal_str2 = @LegalStr2, legal_str3 = @LegalStr3,
                 legal_str4 = @LegalStr4, legal_str5 = @LegalStr5, legal_str6 = @LegalStr6, legal_raw = @LegalRaw,
                 post_zip = @PostZip, post_str1 = @PostStr1, post_str2 = @PostStr2, post_str3 = @PostStr3,
@@ -223,6 +224,56 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
         var элементы = строки.Select(строка => строка.ToEntity()).ToList();
 
         return new Page<Counterparty>(элементы, нормализованный.Offset, нормализованный.Limit, всего);
+    }
+
+    /// <inheritdoc />
+    public async Task<Counterparty?> FindByMergeKeyAsync(
+        string? inn,
+        string name,
+        string? zip,
+        CancellationToken cancellationToken = default)
+    {
+        // Ключ слияния импорта (ТЗ §8.12, функция 74): при заданном ИНН
+        // совпадение ищется по ИНН, иначе — по наименованию и индексу.
+        if (!string.IsNullOrWhiteSpace(inn))
+        {
+            var поИнн = await _сессия.QueryFirstOrDefaultAsync<CounterpartyRow>(
+                """
+                SELECT * FROM counterparties
+                WHERE is_deleted = 0 AND inn IS NOT NULL AND inn <> '' AND inn = @Inn
+                ORDER BY id LIMIT 1;
+                """,
+                new { Inn = inn.Trim() },
+                cancellationToken).ConfigureAwait(false);
+
+            if (поИнн is not null)
+            {
+                return поИнн.ToEntity();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var условие = "is_deleted = 0 AND name = @Name";
+
+        if (!string.IsNullOrWhiteSpace(zip))
+        {
+            условие += " AND post_zip = @Zip";
+        }
+
+        var параметры = new DynamicParameters();
+        параметры.Add("Name", name.Trim());
+        параметры.Add("Zip", string.IsNullOrWhiteSpace(zip) ? null : zip.Trim());
+
+        var поНаименованию = await _сессия.QueryFirstOrDefaultAsync<CounterpartyRow>(
+            $"SELECT * FROM counterparties WHERE {условие} ORDER BY id LIMIT 1;",
+            параметры,
+            cancellationToken).ConfigureAwait(false);
+
+        return поНаименованию?.ToEntity();
     }
 
     /// <inheritdoc />
@@ -376,6 +427,7 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
         параметры.Add("Email", counterparty.Email);
         параметры.Add("Phone", counterparty.Phone);
         параметры.Add("SpecialNotes", counterparty.SpecialNotes);
+        параметры.Add("Source", counterparty.Source);
         параметры.Add("AddressMainType", (int)counterparty.AddressMainType);
         параметры.Add("GroupId", counterparty.GroupId);
         параметры.Add("IsVip", counterparty.IsVip);

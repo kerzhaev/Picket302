@@ -99,6 +99,12 @@ public sealed class Counterparty
     public string? SpecialNotes { get; set; }
 
     /// <summary>
+    /// Источник появления записи: «Импорт &lt;формат&gt; от &lt;дата&gt; из &lt;файл&gt;»
+    /// (ТЗ §8.12, функция 75). Для записей, созданных вручную, пусто.
+    /// </summary>
+    public string? Source { get; set; }
+
+    /// <summary>
     /// Логотип компании — растровый файл (PNG/BMP/JPEG), накладываемый на
     /// конверт (ТЗ §8.1, функция 47: «Таблица counterparties (колонка logo)»).
     /// </summary>

@@ -9,6 +9,10 @@
     <RootNamespace>Picket302.Infrastructure</RootNamespace>
     <AssemblyName>Picket302.Infrastructure</AssemblyName>
     <Description>Слой инфраструктуры и данных Picket302: СУБД, файлы, сеть.</Description>
+    <!-- Экспорт в Excel без Office (ТЗ §8.5, функции 61 и 69) обращается к
+         представлению грида DataGridView: тип требуется лишь для чтения
+         данных, вызовов OLE/COM Excel в слое нет. -->
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>

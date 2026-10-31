@@ -109,6 +109,22 @@ public interface ICounterpartyRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Ищет контрагента по ключу слияния импорта: ИНН (УНП), а при его
+    /// отсутствии — по наименованию и почтовому индексу
+    /// (ТЗ §8.12, функция 74: «Тонкое слияние»).
+    /// </summary>
+    /// <param name="inn">ИНН (УНП) контрагента; может быть пустым.</param>
+    /// <param name="name">Наименование контрагента.</param>
+    /// <param name="zip">Почтовый индекс; может быть пустым.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Найденный контрагент либо <see langword="null"/>.</returns>
+    Task<Counterparty?> FindByMergeKeyAsync(
+        string? inn,
+        string name,
+        string? zip,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Выполняет пакетное изменение одного поля у выделенных записей
     /// (ТЗ §8.1, функция 18: «Пакетное редактирование одного поля у выделенных
     /// записей»).
