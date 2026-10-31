@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace Picket302.Domain.Common;
 
 /// <summary>
@@ -12,13 +10,13 @@ namespace Picket302.Domain.Common;
 /// текст ошибки и список предупреждений. Коды ошибок не вводятся — в ТЗ их нет.
 /// </remarks>
 /// <typeparam name="T">Тип значения при успешном исходе.</typeparam>
-public sealed class Result<T> where T : class
+public sealed class Result<T> where T : notnull
 {
     private static readonly string[] ПустыеПредупреждения = Array.Empty<string>();
 
-    private readonly T? _value;
+    private readonly T _value;
 
-    private Result(T? value, string? error, IReadOnlyList<string> warnings)
+    private Result(T value, string? error, IReadOnlyList<string> warnings)
     {
         IsSuccess = error is null;
         _value = value;
@@ -46,20 +44,23 @@ public sealed class Result<T> where T : class
     /// <see cref="InvalidOperationException"/> — проверять <see cref="IsSuccess"/> обязательно.
     /// </summary>
     public T Value => IsSuccess
-        ? _value!
+        ? _value
         : throw new InvalidOperationException($"Значение результата недоступно: операция завершилась ошибкой. {Error}");
 
     /// <summary>Извлекает значение без исключения при неуспешном исходе.</summary>
-    /// <param name="value">Значение успешного исхода; иначе — <see langword="null"/>.</param>
+    /// <param name="value">
+    /// Значение успешного исхода; при неуспешном исходе — значение по умолчанию
+    /// для типа <typeparamref name="T"/>.
+    /// </param>
     /// <returns><see langword="true"/>, если операция завершилась успешно.</returns>
-    public bool TryGetValue([MaybeNullWhen(false)] out T value)
+    public bool TryGetValue(out T value)
     {
-        value = _value;
+        value = IsSuccess ? _value : default!;
         return IsSuccess;
     }
 
     /// <summary>Создаёт успешный результат.</summary>
-    /// <param name="value">Значение результата.</param>
+    /// <param name="value">Значение успешного исхода.</param>
     /// <param name="warnings">Предупреждения, не препятствующие успешному исходу.</param>
     /// <returns>Успешный результат.</returns>
     public static Result<T> Success(T value, params string[] warnings)
@@ -80,6 +81,6 @@ public sealed class Result<T> where T : class
     public static Result<T> Failure(string error)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(error);
-        return new Result<T>(null, error, ПустыеПредупреждения);
+        return new Result<T>(default!, error, ПустыеПредупреждения);
     }
 }

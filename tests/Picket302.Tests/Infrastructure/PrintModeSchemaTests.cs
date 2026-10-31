@@ -80,7 +80,9 @@ public sealed class PrintModeSchemaTests
     {
         await using var база = await SqliteTestDatabase.CreateAsync(сМиграциями: false);
 
-        await ПрименитьМиграцииКромеПоследнейAsync(база);
+        // Миграция 004 пересобирает таблицу реестра печати: база приводится к
+        // состоянию до неё.
+        await ПрименитьМиграцииДоAsync(база, "004");
 
         // До пересборки режим пробной печати схемой не принимается.
         await Assert.ThrowsAsync<SqliteException>(() => база.Connection.ExecuteAsync(
@@ -98,10 +100,10 @@ public sealed class PrintModeSchemaTests
             """,
             new { PrintJobId = записьПечати });
 
-        // Применяется последняя миграция — пересборка таблицы реестра печати.
+        // Применяется миграция 004 — пересборка таблицы реестра печати.
         var применённые = await new MigrationRunner().ApplyAsync(база.Connection);
 
-        Assert.Single(применённые);
+        Assert.Contains(применённые, миграция => миграция.Version == "004");
 
         // Данные на месте.
         Assert.Equal(1, await база.Connection.QuerySingleAsync<long>("SELECT COUNT(*) FROM print_jobs;"));
@@ -158,7 +160,9 @@ public sealed class PrintModeSchemaTests
     {
         await using var база = await SqliteTestDatabase.CreateAsync(сМиграциями: false);
 
-        await ПрименитьМиграцииКромеПоследнейAsync(база);
+        // Миграция 004 требует отключения внешних ключей: проверяется, что они
+        // возвращаются в исходное состояние.
+        await ПрименитьМиграцииДоAsync(база, "004");
 
         await new MigrationRunner().ApplyAsync(база.Connection);
 
@@ -171,18 +175,22 @@ public sealed class PrintModeSchemaTests
     }
 
     /// <summary>
-    /// Применяет все миграции, кроме последней: база приводится к состоянию
-    /// предыдущей версии схемы.
+    /// Применяет миграции схемы с номерами меньше указанного: база приводится
+    /// к состоянию предыдущей версии схемы.
     /// </summary>
     /// <param name="база">Тестовая база данных.</param>
+    /// <param name="доВерсии">
+    /// Номер версии, до которой применяются миграции (не включая её саму).
+    /// </param>
     /// <returns>Задача завершения.</returns>
-    private static async Task ПрименитьМиграцииКромеПоследнейAsync(SqliteTestDatabase база)
+    private static async Task ПрименитьМиграцииДоAsync(SqliteTestDatabase база, string доВерсии)
     {
         var миграции = MigrationCatalog.Load(typeof(MigrationRunner).Assembly).ToList();
 
         Assert.True(миграции.Count >= 2, "Ожидается не менее двух миграций схемы.");
 
-        foreach (var миграция in миграции.Take(миграции.Count - 1))
+        foreach (var миграция in миграции.Where(
+            м => string.CompareOrdinal(м.Version, доВерсии) < 0))
         {
             await база.Connection.ExecuteAsync(миграция.Sql);
 

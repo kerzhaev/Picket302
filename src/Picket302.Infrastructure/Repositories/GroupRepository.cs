@@ -36,8 +36,8 @@ public sealed class GroupRepository : IGroupRepository
 
         var идентификатор = await _сессия.ExecuteScalarAsync<long>(
             """
-            INSERT INTO groups (name, note, is_default, is_closed, sort_order)
-            VALUES (@Name, @Note, @IsDefault, @IsClosed, @SortOrder);
+            INSERT INTO groups (name, note, is_default, is_closed, sort_order, parent_id)
+            VALUES (@Name, @Note, @IsDefault, @IsClosed, @SortOrder, @ParentId);
             SELECT last_insert_rowid();
             """,
             new
@@ -47,6 +47,7 @@ public sealed class GroupRepository : IGroupRepository
                 group.IsDefault,
                 group.IsClosed,
                 group.SortOrder,
+                group.ParentId,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -96,7 +97,7 @@ public sealed class GroupRepository : IGroupRepository
         return await _сессия.ExecuteAsync(
             """
             UPDATE groups SET name = @Name, note = @Note, is_default = @IsDefault,
-                is_closed = @IsClosed, sort_order = @SortOrder
+                is_closed = @IsClosed, sort_order = @SortOrder, parent_id = @ParentId
             WHERE id = @Id;
             """,
             new
@@ -106,6 +107,7 @@ public sealed class GroupRepository : IGroupRepository
                 group.IsDefault,
                 group.IsClosed,
                 group.SortOrder,
+                group.ParentId,
                 group.Id,
             },
             cancellationToken).ConfigureAwait(false);

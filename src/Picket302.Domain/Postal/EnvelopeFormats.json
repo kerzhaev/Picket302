@@ -1,0 +1,222 @@
+{
+  "//": "Справочник форматов конвертов (ТЗ §8.5, функция 149). Размеры — ГОСТ Р 51506-99, таблица 1 (H × L, мм); тип клапана — п. 4.1.3 (Б/В/В-Б); территория хождения — п. 4.1.5 (Вн/Мн); варианты «/О» — с окном на месте зоны адреса адресата (п. 4.1.2).",
+  "formats": [
+    {
+      "code": "C6",
+      "displayName": "C6 (114×162 мм)",
+      "heightMm": 114,
+      "lengthMm": 162,
+      "flapType": "В",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS", "UKR"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "C6",
+      "displayName": "C6 (114×162 мм), международный",
+      "heightMm": 114,
+      "lengthMm": 162,
+      "flapType": "В",
+      "territory": "Мн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 3,
+      "internationalIndex": "555",
+      "addressOrderSmallToLarge": true
+    },
+    {
+      "code": "C6/О",
+      "displayName": "C6/О (114×162 мм), с окном",
+      "heightMm": 114,
+      "lengthMm": 162,
+      "flapType": "В",
+      "territory": "Вн",
+      "hasWindow": true,
+      "countries": ["RUS", "UKR"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "C6/О",
+      "displayName": "C6/О (114×162 мм), с окном, международный",
+      "heightMm": 114,
+      "lengthMm": 162,
+      "flapType": "В",
+      "territory": "Мн",
+      "hasWindow": true,
+      "countries": ["RUS"],
+      "indexDigitCount": 3,
+      "internationalIndex": "555",
+      "addressOrderSmallToLarge": true
+    },
+    {
+      "code": "DL",
+      "displayName": "DL (110×220 мм), европейский стандарт Е65",
+      "heightMm": 110,
+      "lengthMm": 220,
+      "flapType": "В",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS", "UKR"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "DL",
+      "displayName": "DL (110×220 мм), международный",
+      "heightMm": 110,
+      "lengthMm": 220,
+      "flapType": "В",
+      "territory": "Мн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 3,
+      "internationalIndex": "555",
+      "addressOrderSmallToLarge": true
+    },
+    {
+      "code": "DL/О",
+      "displayName": "DL/О (110×220 мм), с окном",
+      "heightMm": 110,
+      "lengthMm": 220,
+      "flapType": "В",
+      "territory": "Вн",
+      "hasWindow": true,
+      "countries": ["RUS", "UKR"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "DL/О",
+      "displayName": "DL/О (110×220 мм), с окном, международный",
+      "heightMm": 110,
+      "lengthMm": 220,
+      "flapType": "В",
+      "territory": "Мн",
+      "hasWindow": true,
+      "countries": ["RUS"],
+      "indexDigitCount": 3,
+      "internationalIndex": "555",
+      "addressOrderSmallToLarge": true
+    },
+    {
+      "code": "C5",
+      "displayName": "C5 (162×229 мм)",
+      "heightMm": 162,
+      "lengthMm": 229,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS", "UKR"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "C5/О",
+      "displayName": "C5/О (162×229 мм), с окном",
+      "heightMm": 162,
+      "lengthMm": 229,
+      "flapType": "В",
+      "territory": "Вн",
+      "hasWindow": true,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "C4",
+      "displayName": "C4 (229×324 мм)",
+      "heightMm": 229,
+      "lengthMm": 324,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS", "UKR"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "C3",
+      "displayName": "C3 (324×458 мм)",
+      "heightMm": 324,
+      "lengthMm": 458,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "B4",
+      "displayName": "B4 (250×353 мм)",
+      "heightMm": 250,
+      "lengthMm": 353,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "E65",
+      "displayName": "E65 (110×220 мм), европейский стандарт",
+      "heightMm": 110,
+      "lengthMm": 220,
+      "flapType": "В",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS", "UKR"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "E4",
+      "displayName": "E4 (220×312 мм)",
+      "heightMm": 220,
+      "lengthMm": 312,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "K5",
+      "displayName": "K5 (145×215 мм)",
+      "heightMm": 145,
+      "lengthMm": 215,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "K6",
+      "displayName": "K6 (125×125 мм)",
+      "heightMm": 125,
+      "lengthMm": 125,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "K8",
+      "displayName": "K8 (150×150 мм)",
+      "heightMm": 150,
+      "lengthMm": 150,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    },
+    {
+      "code": "K65",
+      "displayName": "K65 (125×190 мм)",
+      "heightMm": 125,
+      "lengthMm": 190,
+      "flapType": "В/Б",
+      "territory": "Вн",
+      "hasWindow": false,
+      "countries": ["RUS"],
+      "indexDigitCount": 6
+    }
+  ]
+}

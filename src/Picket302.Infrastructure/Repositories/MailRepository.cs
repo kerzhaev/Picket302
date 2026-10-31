@@ -2,6 +2,7 @@ using Dapper;
 using Picket302.Domain.Common;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
+using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure.Data.Rows;
 
 using Picket302.Infrastructure.Data;
@@ -213,6 +214,39 @@ public sealed class MailRepository : IMailRepository
             cancellationToken).ConfigureAwait(false);
 
         return строки.Select(строка => строка.ToEntity()).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<int> UpdateDraftRecipientAddressAsync(
+        long counterpartyId,
+        Address address,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        // Обновляются только отправления в статусе «Черновик»: напечатанные
+        // письма хранят снимок адреса на момент печати и не изменяются
+        // (ТЗ §8.1, функция 15).
+        return await _сессия.ExecuteAsync(
+            """
+            UPDATE mails SET
+                to_zip = @ToZip,
+                to_str1 = @ToStr1, to_str2 = @ToStr2, to_str3 = @ToStr3,
+                to_str4 = @ToStr4, to_str5 = @ToStr5, to_str6 = @ToStr6
+            WHERE counterparty_id = @CounterpartyId AND status = 0;
+            """,
+            new
+            {
+                ToZip = address.Zip,
+                ToStr1 = address.Line1,
+                ToStr2 = address.Line2,
+                ToStr3 = address.Line3,
+                ToStr4 = address.Line4,
+                ToStr5 = address.Line5,
+                ToStr6 = address.Line6,
+                CounterpartyId = counterpartyId,
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

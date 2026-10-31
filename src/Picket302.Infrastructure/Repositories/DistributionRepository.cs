@@ -1,3 +1,4 @@
+using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
 
@@ -63,6 +64,42 @@ public sealed class DistributionRepository : IDistributionRepository
         var рассылки = await _сессия.QueryAsync<Distribution>(
             "SELECT * FROM distributions ORDER BY created_at, id;",
             cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return рассылки.ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Distribution>> GetListAsync(
+        DistributionFilter? filter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var условия = new List<string>();
+        var параметры = new Dictionary<string, object?>();
+
+        if (filter?.CreatedFrom is not null)
+        {
+            условия.Add("created_at >= @CreatedFrom");
+            параметры["CreatedFrom"] = filter.CreatedFrom.Value;
+        }
+
+        if (filter?.State is not null)
+        {
+            условия.Add("state = @State");
+            параметры["State"] = (int)filter.State.Value;
+        }
+
+        if (filter?.SenderId is not null)
+        {
+            условия.Add("sender_id = @SenderId");
+            параметры["SenderId"] = filter.SenderId.Value;
+        }
+
+        var where = условия.Count > 0 ? " WHERE " + string.Join(" AND ", условия) : string.Empty;
+
+        var рассылки = await _сессия.QueryAsync<Distribution>(
+            $"SELECT * FROM distributions{where} ORDER BY created_at, id;",
+            параметры,
+            cancellationToken).ConfigureAwait(false);
 
         return рассылки.ToList();
     }

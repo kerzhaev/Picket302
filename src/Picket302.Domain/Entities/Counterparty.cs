@@ -1,3 +1,6 @@
+using Picket302.Domain.Common;
+using Picket302.Domain.Contracts;
+using Picket302.Domain.Rules;
 using Picket302.Domain.ValueObjects;
 
 namespace Picket302.Domain.Entities;
@@ -102,16 +105,38 @@ public sealed class Counterparty
     public byte[]? Logo { get; set; }
 
     /// <summary>Юридический адрес.</summary>
-    public Address? LegalAddress { get; set; }
+    public Address? LegalAddress
+    {
+        get => Addresses.Legal;
+        set => Addresses.SetAddress(AddressMainType.Legal, value, false);
+    }
 
     /// <summary>Почтовый адрес.</summary>
-    public Address? PostalAddress { get; set; }
+    public Address? PostalAddress
+    {
+        get => Addresses.Postal;
+        set => Addresses.SetAddress(AddressMainType.Postal, value, false);
+    }
 
     /// <summary>Фактический адрес.</summary>
-    public Address? ActualAddress { get; set; }
+    public Address? ActualAddress
+    {
+        get => Addresses.Actual;
+        set => Addresses.SetAddress(AddressMainType.Actual, value, false);
+    }
+
+    /// <summary>
+    /// Три независимых среза адресации записи (ТЗ §8.1, функция 3).
+    /// Единственный источник модели адресации контрагента.
+    /// </summary>
+    public AddressSet Addresses { get; } = new();
 
     /// <summary>Тип адреса, используемый по умолчанию.</summary>
-    public AddressMainType AddressMainType { get; set; } = DefaultAddressMainType;
+    public AddressMainType AddressMainType
+    {
+        get => Addresses.MainType;
+        set => Addresses.SetMainType(value);
+    }
 
     /// <summary>Группа (категория) адресной книги.</summary>
     public long? GroupId { get; set; }
@@ -137,33 +162,163 @@ public sealed class Counterparty
     /// <summary>Возвращает адрес заданного типа.</summary>
     /// <param name="type">Тип адреса.</param>
     /// <returns>Адрес либо <see langword="null"/>, если адрес этого типа не заведён.</returns>
-    public Address? GetAddress(AddressMainType type) => type switch
-    {
-        AddressMainType.Legal => LegalAddress,
-        AddressMainType.Postal => PostalAddress,
-        AddressMainType.Actual => ActualAddress,
-        _ => null,
-    };
+    public Address? GetAddress(AddressMainType type) => Addresses.GetAddress(type);
 
     /// <summary>Заменяет адрес заданного типа.</summary>
     /// <param name="type">Тип адреса.</param>
     /// <param name="address">Новый адрес; <see langword="null"/> — адрес не заведён.</param>
     public void SetAddress(AddressMainType type, Address? address)
+        => Addresses.SetAddress(type, address, false);
+
+    /// <summary>
+    /// Заменяет адрес заданного среза и, при <paramref name="makeMain"/>,
+    /// назначает этот срез основным (ТЗ §8.1, функция 3).
+    /// </summary>
+    /// <param name="type">Тип среза адреса.</param>
+    /// <param name="address">Новый адрес среза.</param>
+    /// <param name="makeMain">Сделать срез основным.</param>
+    public void SetAddress(AddressMainType type, Address? address, bool makeMain)
+        => Addresses.SetAddress(type, address, makeMain);
+
+    /// <summary>
+    /// Устанавливает тип контрагента: юридическое или физическое лицо
+    /// (ТЗ §8.1, функция 2).
+    /// </summary>
+    /// <param name="type">Новый тип контрагента.</param>
+    /// <remarks>
+    /// Реквизиты юридического лица (КПП, ОГРН, БИК) при смене типа не
+    /// уничтожаются: они скрываются в карточке, но остаются в записи, чтобы
+    /// смена типа не приводила к потере введённых данных. Проверка «ЮЛ без КПП»
+    /// выполняется при сохранении карточки.
+    /// </remarks>
+    public void SetCounterpartyType(CounterpartyType type)
     {
-        switch (type)
+        if (!Enum.IsDefined(type))
         {
-            case AddressMainType.Legal:
-                LegalAddress = address;
-                break;
-            case AddressMainType.Postal:
-                PostalAddress = address;
-                break;
-            case AddressMainType.Actual:
-                ActualAddress = address;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(type), type, "Неизвестный тип адреса.");
+            throw new ArgumentOutOfRangeException(nameof(type), type, "Неизвестный тип контрагента.");
         }
+
+        Type = type;
+    }
+
+    /// <summary>
+    /// Переключает признак «Избранный адрес» (ТЗ §8.1, функция 17).
+    /// </summary>
+    /// <param name="isVip">Новое значение признака.</param>
+    public void ToggleVipStatus(bool isVip) => IsVip = isVip;
+
+    /// <summary>
+    /// Помечает запись как отправителя либо снимает признак
+    /// (ТЗ §8.1, функция 139).
+    /// </summary>
+    /// <param name="value">
+    /// <see langword="true"/> — запись доступна в справочнике отправителей,
+    /// <see langword="false"/> — признак снимается.
+    /// </param>
+    public void MarkAsSender(bool value) => IsSender = value;
+
+    /// <summary>
+    /// Применяет реквизиты карточки к записи, проверяя их правилами
+    /// целостности (ТЗ §8.1, функция 1).
+    /// </summary>
+    /// <param name="dto">Новые реквизиты карточки.</param>
+    /// <returns>
+    /// Успешный результат с обновлённой карточкой либо текст нарушения
+    /// (некорректный ИНН, КПП или БИК).
+    /// </returns>
+    public Result<Counterparty> UpdateDetails(CounterpartyDetailsDto dto)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        var проверка = ПроверитьРеквизиты(dto);
+
+        if (проверка.IsFailure)
+        {
+            return Result<Counterparty>.Failure(проверка.Error!);
+        }
+
+        Type = dto.Type;
+        Name = dto.Name;
+        ShortName = dto.ShortName;
+        Inn = dto.Inn;
+        Kpp = dto.Kpp;
+        Ogrn = dto.Ogrn;
+        Okfs = dto.Okfs;
+        Okpo = dto.Okpo;
+        Okved = dto.Okved;
+        Bik = dto.Bik;
+        Ks = dto.Ks;
+        Rs = dto.Rs;
+        Rkc = dto.Rkc;
+        BankName = dto.BankName;
+        PassportSeries = dto.PassportSeries;
+        PassportNumber = dto.PassportNumber;
+        PassportIssuedBy = dto.PassportIssuedBy;
+        PassportIssuedDate = dto.PassportIssuedDate;
+        BirthDate = dto.BirthDate;
+        BirthPlace = dto.BirthPlace;
+        Position = dto.Position;
+        DirectorFio = dto.DirectorFio;
+        Email = dto.Email;
+        Phone = dto.Phone;
+        SpecialNotes = dto.SpecialNotes;
+        GroupId = dto.GroupId;
+        IsVip = dto.IsVip;
+        IsSender = dto.IsSender;
+        IsActive = dto.IsActive;
+
+        Addresses.SetAddress(AddressMainType.Legal, dto.LegalAddress, false);
+        Addresses.SetAddress(AddressMainType.Actual, dto.ActualAddress, false);
+        Addresses.SetAddress(AddressMainType.Postal, dto.PostalAddress, false);
+        Addresses.SetMainType(dto.AddressMainType);
+
+        return Result<Counterparty>.Success(this);
+    }
+
+    /// <summary>
+    /// Проверяет реквизиты карточки: ИНН по контрольным суммам, КПП (9 символов)
+    /// и БИК (9 цифр) (ТЗ §8.1, функция 1).
+    /// </summary>
+    /// <param name="dto">Проверяемые реквизиты.</param>
+    /// <returns>Успешный результат либо текст нарушения.</returns>
+    private static Result<Counterparty> ПроверитьРеквизиты(CounterpartyDetailsDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Name))
+        {
+            return Result<Counterparty>.Failure("Наименование контрагента не заполнено.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Inn))
+        {
+            var проверкаИнн = InnValidator.Validate(dto.Inn, dto.Type);
+
+            if (проверкаИнн.IsFailure)
+            {
+                return Result<Counterparty>.Failure(проверкаИнн.Error!);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Kpp))
+        {
+            var проверкаКпп = BankRequisitesValidator.ValidateKpp(dto.Kpp);
+
+            if (проверкаКпп.IsFailure)
+            {
+                return Result<Counterparty>.Failure(проверкаКпп.Error!);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Bik))
+        {
+            var проверкаБик = BankRequisitesValidator.ValidateBik(dto.Bik);
+
+            if (проверкаБик.IsFailure)
+            {
+                return Result<Counterparty>.Failure(проверкаБик.Error!);
+            }
+        }
+
+        return Result<Counterparty>.Success(new Counterparty());
     }
 
     /// <summary>Помечает запись как удалённую (мягкое удаление).</summary>

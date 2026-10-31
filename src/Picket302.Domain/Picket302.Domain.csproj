@@ -10,4 +10,10 @@
     <Description>Доменный слой Picket302: сущности и инварианты предметной области.</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Справочник форматов конвертов поставляется данными (ТЗ §8.5, функция 149),
+         а не константами кода: JSON встраивается в сборку домена. -->
+    <EmbeddedResource Include="Postal\EnvelopeFormats.json" />
+  </ItemGroup>
+
 </Project>

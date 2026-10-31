@@ -110,6 +110,24 @@ public sealed class Mail
     public long? FolderId { get; set; }
 
     /// <summary>
+    /// Назначает категорию почтового отправления (ТЗ §8.1, функция 23:
+    /// «Классификация категории почтового отправления»).
+    /// </summary>
+    /// <param name="category">
+    /// Категория отправления: Простое, Заказное, С объявленной ценностью,
+    /// 1-й класс. Категория определяет набор доступных бланков и тарификацию.
+    /// </param>
+    public void SetCategory(MailCategory category)
+    {
+        if (!Enum.IsDefined(category))
+        {
+            throw new ArgumentOutOfRangeException(nameof(category), category, "Неизвестная категория отправления.");
+        }
+
+        MailCategory = category;
+    }
+
+    /// <summary>
     /// Перемещает отправление в указанную папку (ТЗ §8.1, функция 22).
     /// </summary>
     /// <param name="folderId">Идентификатор папки.</param>

@@ -29,6 +29,16 @@ public sealed class Group
     /// <summary>Блокировка добавления новых записей в группу.</summary>
     public bool IsClosed { get; set; }
 
+    /// <summary>
+    /// Родительская категория; <see langword="null"/> — категория верхнего уровня
+    /// (ТЗ §8.12, функция 154: «Дерево категорий адресатов»).
+    /// </summary>
+    /// <remarks>
+    /// Ссылка на родителя хранится в колонке <c>groups.parent_id</c>. Циклические
+    /// ссылки пресекаются валидатором домена и триггером схемы БД.
+    /// </remarks>
+    public long? ParentId { get; set; }
+
     /// <summary>Порядок сортировки в справочнике.</summary>
     public int SortOrder { get; set; }
 

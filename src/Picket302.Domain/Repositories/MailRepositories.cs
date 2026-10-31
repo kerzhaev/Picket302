@@ -1,5 +1,7 @@
 using Picket302.Domain.Common;
+using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
+using Picket302.Domain.ValueObjects;
 
 namespace Picket302.Domain.Repositories;
 
@@ -76,6 +78,19 @@ public interface IMailRepository
     Task<IReadOnlyList<Mail>> GetByDistributionAsync(
         long distributionId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Обновляет снимок адреса получателя у отправлений в статусе «Черновик»
+    /// (ТЗ §8.1, функция 15: «Массовое каскадное обновление адресов писем»).
+    /// </summary>
+    /// <param name="counterpartyId">Идентификатор контрагента-получателя.</param>
+    /// <param name="address">Новый адрес получателя.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Число обновлённых отправлений.</returns>
+    Task<int> UpdateDraftRecipientAddressAsync(
+        long counterpartyId,
+        Address address,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -99,6 +114,17 @@ public interface IDistributionRepository
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Список рассылок.</returns>
     Task<IReadOnlyList<Distribution>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Возвращает рассылки, отобранные по условиям фильтра
+    /// (ТЗ §8.12, функция 156: «Сохранённые и отправленные рассылки»).
+    /// </summary>
+    /// <param name="filter">Условия отбора.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список рассылок, упорядоченный по дате создания.</returns>
+    Task<IReadOnlyList<Distribution>> GetListAsync(
+        DistributionFilter? filter = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Обновляет рассылку.</summary>
     /// <param name="distribution">Сохраняемая рассылка.</param>

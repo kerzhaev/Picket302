@@ -83,6 +83,50 @@ public interface ICounterpartyRepository
     Task<IReadOnlyList<Counterparty>> GetByGroupAsync(
         long groupId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Возвращает справочник отправителей — записи адресной книги с установленным
+    /// флагом <c>is_sender</c> (ТЗ §8.1, функция 139).
+    /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список отправителей, упорядоченный по наименованию.</returns>
+    Task<IReadOnlyList<Counterparty>> GetSendersAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Возвращает различные значения поля адресной книги, упорядоченные по
+    /// алфавиту (ТЗ §8.11, функция 133: «Подбор значения поля из имеющихся
+    /// записей»).
+    /// </summary>
+    /// <param name="field">
+    /// Имя поля: <c>name</c>, <c>inn</c>, <c>phone</c>, <c>email</c>,
+    /// <c>post_zip</c>, <c>post_str5</c> (город) или <c>post_str1</c>.
+    /// </param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список уникальных значений поля.</returns>
+    Task<IReadOnlyList<string>> GetDistinctFieldValuesAsync(
+        string field,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Выполняет пакетное изменение одного поля у выделенных записей
+    /// (ТЗ §8.1, функция 18: «Пакетное редактирование одного поля у выделенных
+    /// записей»).
+    /// </summary>
+    /// <param name="ids">Идентификаторы изменяемых записей.</param>
+    /// <param name="propertyName">
+    /// Имя изменяемого свойства: <c>Name</c>, <c>ShortName</c>, <c>Inn</c>,
+    /// <c>Kpp</c>, <c>Phone</c>, <c>Email</c>, <c>GroupId</c>, <c>IsVip</c>,
+    /// <c>IsActive</c>.
+    /// </param>
+    /// <param name="newValue">Новое значение свойства.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Число изменённых записей.</returns>
+    Task<int> UpdateFieldAsync(
+        IReadOnlyList<long> ids,
+        string propertyName,
+        object? newValue,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

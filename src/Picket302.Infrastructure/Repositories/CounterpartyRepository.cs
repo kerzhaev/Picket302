@@ -238,6 +238,110 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
         return строки.Select(строка => строка.ToEntity()).ToList();
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Counterparty>> GetSendersAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var строки = await _сессия.QueryAsync<CounterpartyRow>(
+            """
+            SELECT * FROM counterparties
+            WHERE is_sender = 1 AND is_deleted = 0
+            ORDER BY name, id;
+            """,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return строки.Select(строка => строка.ToEntity()).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<string>> GetDistinctFieldValuesAsync(
+        string field,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(field);
+
+        var колонка = СоответствующаяКолонка(field);
+
+        var значения = await _сессия.QueryAsync<string>(
+            $"""
+             SELECT DISTINCT {колонка} FROM counterparties
+             WHERE is_deleted = 0 AND {колонка} IS NOT NULL AND TRIM({колонка}) <> ''
+             ORDER BY {колонка} COLLATE NOCASE;
+             """,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return значения.ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<int> UpdateFieldAsync(
+        IReadOnlyList<long> ids,
+        string propertyName,
+        object? newValue,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        if (ids.Count == 0)
+        {
+            return 0;
+        }
+
+        var колонка = СоответствующаяКолонка(propertyName);
+
+        var параметры = new DynamicParameters();
+        параметры.Add("Ids", ids);
+        параметры.Add("Value", newValue);
+        параметры.Add("UpdatedAt", DateTime.UtcNow);
+
+        return await _сессия.ExecuteAsync(
+            $"""
+             UPDATE counterparties SET {колонка} = @Value, updated_at = @UpdatedAt
+             WHERE id IN @Ids;
+             """,
+            параметры,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Сопоставляет имя поля справочника колонке таблицы контрагентов.
+    /// </summary>
+    /// <param name="field">Имя поля.</param>
+    /// <returns>Имя колонки таблицы <c>counterparties</c>.</returns>
+    /// <exception cref="ArgumentException">
+    /// Выбрасывается, если поле не входит в перечень допустимых.
+    /// </exception>
+    private static string СоответствующаяКолонка(string field)
+    {
+        var соответствие = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["name"] = "name",
+            ["shortname"] = "short_name",
+            ["inn"] = "inn",
+            ["kpp"] = "kpp",
+            ["phone"] = "phone",
+            ["email"] = "email",
+            ["groupid"] = "group_id",
+            ["isvip"] = "is_vip",
+            ["issender"] = "is_sender",
+            ["isactive"] = "is_active",
+            ["post_zip"] = "post_zip",
+            ["zip"] = "post_zip",
+            ["post_str1"] = "post_str1",
+            ["post_str5"] = "post_str5",
+            ["city"] = "post_str5",
+        };
+
+        if (!соответствие.TryGetValue(field.Trim(), out var колонка))
+        {
+            throw new ArgumentException(
+                $"Поле «{field}» не поддерживается для выборки или пакетного изменения.",
+                nameof(field));
+        }
+
+        return колонка;
+    }
+
     /// <summary>
     /// Формирует параметры команды записи контрагента: адресные составляющие
     /// передаются отдельными колонками.
