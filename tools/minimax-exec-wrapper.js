@@ -11,6 +11,7 @@
 // со строками AUDIT_* (ловушка v1/v2), поэтому канонизируем хвост всегда.
 'use strict';
 const { spawnSync } = require('child_process');
+const fs = require('fs');
 
 const CLI = process.env.PP_WRAPPER_CLI ||
   'C:\\Users\\FIREBAT\\.minimax-code\\releases\\0.5.8\\node_modules\\@minimax-ai\\code\\cli.js';
@@ -23,15 +24,39 @@ if (!args.length) {
   process.stdout.write('AUDIT_FINDINGS_JSON: []\nAUDIT_VERDICT: REVISION_REQUIRED\nИТОГ: НЕ СМОГ — wrapper не получил аргументы (ожидался промпт последним argv)\n');
   process.exit(2);
 }
-// build_cmd кладёт промпт последним элементом argv; всё до него — опции exec.
-const prompt = args[args.length - 1];
-const cliArgs = [...args.slice(0, -1), prompt];
+
+// P18: промпты >32767 символов (ревизионные раунды вбирают полное ревью)
+// превышают лимит командной строки Windows CreateProcess; Popen кидает
+// FileNotFoundError (WinError 206), воркер маскирует это как «CLI not found».
+// Режим --stdin-prompt: воркер (prompt_stdin=true) передаёт промпт через STDIN
+// и НЕ кладёт его в argv; wrapper читает stdin и передаёт промпт в mcode
+// через `--input -` (stdin mcode), чтобы и внутренний спавн был без лимита.
+const stdinPromptIdx = args.indexOf('--stdin-prompt');
+let prompt;
+let cliArgs;
+if (stdinPromptIdx !== -1) {
+  const rest = [...args.slice(0, stdinPromptIdx), ...args.slice(stdinPromptIdx + 1)];
+  let stdinData = '';
+  try { stdinData = fs.readFileSync(0, 'utf8'); } catch (_) { stdinData = ''; }
+  prompt = stdinData;
+  if (!prompt.trim()) {
+    process.stdout.write('AUDIT_FINDINGS_JSON: []\nAUDIT_VERDICT: REVISION_REQUIRED\nИТОГ: НЕ СМОГ — режим --stdin-prompt: stdin пуст (промпт не передан воркером)\n');
+    process.exit(2);
+  }
+  // `--input -` = читать промпт из stdin у mcode; сам prompt идёт через input.
+  cliArgs = [...rest, '--input', '-'];
+} else {
+  // Старый режим: build_cmd кладёт промпт последним элементом argv.
+  prompt = args[args.length - 1];
+  cliArgs = [...args.slice(0, -1), prompt];
+}
 
 const r = spawnSync(process.execPath, [CLI, ...cliArgs], {
   encoding: 'utf8',
   maxBuffer: 256 * 1024 * 1024,
   timeout: RUN_TIMEOUT_MS,
   cwd: process.cwd(),
+  input: stdinPromptIdx !== -1 ? prompt : undefined,
 });
 
 let out = (r.stdout || '').trimEnd();

@@ -599,3 +599,82 @@ allowed-paths». Watchdog переведён на этот предикат (в�
 «cpEvent новее последнего коммита И dirty src/tests/docs» (синтаксис и сухой прогон проверены).
 Побочно: разовое падение 1/404 теста при прогоне в момент параллельной активности исполнителя S4 в
 том же дереве (вероятно файловые блокировки) — не воспроизвелось в двух повторах; наблюдать.
+
+---
+
+## P18. Промпт >32 767 символов роняет спавн: FileNotFoundError (WinError 206) маскируется под «CLI not found»
+
+**Симптом.** 31.10.2026 18:27/18:33 — executor-диспетчи ревизионного раунда 11 S4 (задачи #991/#992)
+упали за ~21 с: `CLI 'minimax-m31' not found. Is it installed and in PATH?` (exit -1). CLI существует
+и прекрасно спавнится вручную. Повторы дают тот же отказ — детерминированно.
+
+**Причина.** Ревизионный промпт раунда (задача стадии + полное ревью + отчёт) — **38 238 символов**,
+что превышает лимит командной строки Windows CreateProcess (32 767). `build_cmd` кладёт промпт
+последним argv → `subprocess.Popen` кидает **FileNotFoundError с WinError 206** («The filename or
+extension is too long» — эмпирически подтверждено), worker.py:1989–1990 перехватывает ЛЮБОЙ
+FileNotFoundError и пишет вводящий в заблуждение текст про «CLI not found». Успешные промпты —
+12–20 тыс. символов; порог перейден только на ревизиях объёмных аудитов.
+
+**Файлы.** `promptpilot/config.py` build_cmd (промпт в argv), `promptpilot/worker.py:1989–1990`
+(маскирующий перехват FileNotFoundError), `worker.py:1046–1052` (U16-ретрай: `exists(cmd[0])` True →
+одна пауза-повтор → тот же отказ).
+
+**Совместимость.** В build_cmd УЖЕ есть штатный stdin-транспорт: `cfg["prompt_stdin"]=true` → маркер
+`\x00PROMPT\x00` удаляется из argv, промпт пишется в stdin воркером (worker.py:1887, 1977, 2016–2018
+с закрытием stdin). НО: `POST /api/providers` включает prompt_stdin ТОЛЬКО при клонировании
+провайдера-источника с тем же cmd (api.py:1700 `stdin_transport = source.prompt_stdin and cmd == source.cmd`)
+— для кастомного cmd-провайдера включить транспорт через API НЕВОЗМОЖНО (отдельный пробел — см. P18-б).
+
+**Тесты.** (1) Popen с argv-элементом 40k → FileNotFoundError(WinError 206); (2) build_cmd при
+prompt_stdin=true → промпт не в argv; (3) задача с промптом 40k при prompt_stdin=true → спавн успешен;
+(4) сообщение об ошибке спавна должно различать «не найден CLI» и WinError 206 (по `e.winerror`).
+
+**Обход супервизора (реализован, К-12).** wrapper v3.4: флаг `--stdin-prompt` в шаблоне cmd —
+wrapper читает промпт из СВОЕГО stdin и передаёт mcode через `--input -` (mcode exec умеет
+`--input -` = stdin; воркер закрывает stdin после записи — worker.py:748–757). Провайдер обновлён
+напрямую через `promptpilot.config.save_provider(..., prompt_stdin=True)` (штатный атомарный писатель
+стека; API-замок обойдён вызовом функции, файл не правился руками). Проверено: фейк-CLI получил 40k
+промпт целым; build_cmd не кладёт промпт в argv; задача #994 (38238 симв.) запущена и работает.
+
+### P18-б. API не позволяет включить prompt_stdin кастомному cmd-провайдеру
+
+`api_provider_create` (api.py:1700, 1728): `prompt_stdin` сохраняется как True только если
+`source.get("prompt_stdin") and p.cmd == source.cmd` — т.е. транспорт включается лишь при клонировании
+уже-stdin провайдера с неизменным cmd. Для нового cmd-провайдера (или смены шаблона) включить
+stdin-транспорт невозможно. Фикс: отдельное поле `prompt_stdin` в ProviderCreate (или флаг
+`--prompt-stdin`), сохраняемый без замка на равенство cmd.
+
+---
+
+## P19. Upstream удалил `execution_mode` из WorkflowStageSpec (strict extra=forbid) — стек новой версии не может прочитать ни одну миссию, созданную прежним кодом
+
+**Симптом.** 31.10.2026 ~18:40 стек на машине был перезапущен (НЕ супервизором Picket302) из
+оригинального репозитория `C:\Users\FIREBAT\Desktop\Projets\PromptPilot` (HEAD 198926e) с тем же
+`PP_DATA_DIR`. После этого: `GET /api/workflows*` → 500, resume миссии →
+`automation.paused: ValidationError: 1 validation error for WorkflowStageInDB — execution_mode:
+Extra inputs are not permitted`. Ни одна миссия, созданная кодом pp-deploy, не читается.
+
+**Причина.** pp-deploy-эра: `WorkflowStageSpec.execution_mode` существовал (pp-deploy
+models.py:598) и писался в `spec_json` всех стадий. Upstream поле удалил, модель
+`ConfigDict(extra="forbid")` (PromptPilot models.py:468–469, 514) → `db.list_workflow_stages` →
+`WorkflowStageInDB(**spec)` → ValidationError (db.py:4859). Миграции/шиммы совместимости нет.
+
+**Файлы.** `PromptPilot/promptpilot/models.py:468–481` (WorkflowStageSpec без execution_mode,
+extra=forbid), `PromptPilot/promptpilot/db.py:4859` (_row_to_workflow_stage), данные:
+`workflow_stages.spec_json`.
+
+**Совместимость.** Требуется обратная совместимость чтения: (а) миграция, вычищающая
+`execution_mode` из spec_json всех стадий; ИЛИ (б) `execution_mode: Optional[str] = None`
+(legacy-игнор) в WorkflowStageSpec; ИЛИ (в) в _row_to_workflow_stage — pop неизвестных ключей с
+warn. Без этого deploy-форк и mainline несовместимы на общих данных.
+
+**Тесты.** (1) миссия, созданная кодом со execution_mode, читается новой версией (report/list/advance);
+(2) создание миссии новой версией — spec_json без устаревших полей; (3) реверс-совместимость:
+старый код читает миссии новой версии.
+
+**Обход супервизора (реализован, К-12).** Стек возвращён на pp-deploy (stop.ps1/start.ps1,
+предвыданное разрешение); зомби-инстансы оригинального репо (`pp.exe server/worker`, авто-респаун
+каждые ~5 мин, держали порт и 500-тили) остановлены точечно. Конфликт «кто владеет портом 8420» —
+на уровне владельца (см. К-12): если авто-рестартер оригинального репо продолжит перезапуски,
+миссии будут снова ломаться — требуется решение владельца (миграция данных или фикс совместимости
+в upstream, или запрет авто-рестартера).

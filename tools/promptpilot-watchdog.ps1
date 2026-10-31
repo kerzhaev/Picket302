@@ -38,6 +38,7 @@ $state = Get-State
 $now = Get-Date
 if (-not ($state.PSObject.Properties['lastVersion'])) { $state | Add-Member -NotePropertyName lastVersion -NotePropertyValue 0 }
 if (-not ($state.PSObject.Properties['lastStatus']))  { $state | Add-Member -NotePropertyName lastStatus -NotePropertyValue '' }
+if (-not ($state.PSObject.Properties['reportFailStreak'])) { $state | Add-Member -NotePropertyName reportFailStreak -NotePropertyValue 0 }
 
 function Do-Resume($why) {
   $body = @{ expected_version = $wf.state_version; text = "Watchdog: auto-resume. Reason: $why"; resume = $true } | ConvertTo-Json
@@ -60,6 +61,43 @@ function Patch-Limits {
     Log 'LIMITS: budget raised'
     return $true
   } catch { Log ("LIMITS-ERROR: " + $_.Exception.Message); return $false }
+}
+
+# ---------- 0. Stack identity guard (P19/К-12) ----------
+# A foreign/incompatible stack instance (e.g. upstream code that cannot read
+# missions created by the deploy fork) answers /api/worker/status fine but
+# 500s on /report. Two consecutive passes with worker-online + report-500 ->
+# restart the stack from pp-deploy (pre-authorized).
+try {
+  $repProbe = Invoke-WebRequest -Uri "$api/api/workflows/$wid/report" -TimeoutSec 20 -UseBasicParsing
+  $state.reportFailStreak = 0
+  Set-State $state
+} catch {
+  # report failed - see streak logic below
+  $workerProbe = $null
+  try { $workerProbe = Invoke-RestMethod -Uri "$api/api/worker/status" -TimeoutSec 10 } catch {}
+  if ($null -ne $workerProbe -and $workerProbe.state -eq 'online' -and -not $workerProbe.paused) {
+    $streak = 0
+    if ($state.PSObject.Properties['reportFailStreak']) { $streak = [int]$state.reportFailStreak }
+    $streak = $streak + 1
+    $state.reportFailStreak = $streak
+    Set-State $state
+    if ($streak -ge 2) {
+      Log 'STACK-INCOMPATIBLE: worker online but /report 500 twice - restarting stack from pp-deploy'
+      try {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $deploy 'stop.ps1') | Out-Null
+        $env:Path = 'C:\Program Files\dotnet;' + $env:Path
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $deploy 'start.ps1') | Out-Null
+        Start-Sleep -Seconds 12
+        $state.reportFailStreak = 0
+        Set-State $state
+        Log 'STACK-INCOMPATIBLE: stack restarted from pp-deploy'
+      } catch { Log ("STACK-INCOMPATIBLE: restart error: " + $_.Exception.Message) }
+      Log 'PASS DONE (after stack restart); next check in 15 min'
+      exit 0
+    }
+    Log ("REPORT-500 streak=" + $streak + " (worker online) - waiting for 2nd pass")
+  }
 }
 
 # ---------- 1. Worker health ----------
