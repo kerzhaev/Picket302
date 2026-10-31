@@ -22,12 +22,16 @@ public sealed class Address
     /// <summary>Максимальное количество знаков в одной адресной строке (<c>VARCHAR(255)</c>).</summary>
     public const int MaxLineLength = 255;
 
+    /// <summary>Разделитель строк в текстовом снимке адреса.</summary>
+    public const char SnapshotSeparator = '\n';
+
     private readonly string[] _lines;
 
-    private Address(string zip, string[] lines)
+    private Address(string zip, string[] lines, string? raw)
     {
         Zip = zip;
         _lines = lines;
+        Raw = raw;
     }
 
     /// <summary>Почтовый индекс: ровно 6 цифровых символов.</summary>
@@ -55,6 +59,19 @@ public sealed class Address
     public string Line6 => _lines[5];
 
     /// <summary>
+    /// Исходная строка адреса, как она была в файле импорта. Служит только для
+    /// round-trip импорта и не является носителем структурированных данных
+    /// (ТЗ §3.1.19: «поле <c>*_raw</c> служит только для round-trip импорта»).
+    /// </summary>
+    public string? Raw { get; }
+
+    /// <summary>
+    /// Признак наличия структурированных данных: индекс задан и хотя бы одна
+    /// адресная строка непуста.
+    /// </summary>
+    public bool IsEmpty => string.IsNullOrEmpty(Zip) && _lines.All(string.IsNullOrEmpty);
+
+    /// <summary>
     /// Создаёт адрес по почтовому индексу и шести адресным строкам.
     /// </summary>
     /// <param name="zip">Почтовый индекс: ровно 6 цифровых символов.</param>
@@ -66,6 +83,25 @@ public sealed class Address
     /// Успешный результат с адресом либо текст нарушения правила адреса.
     /// </returns>
     public static Result<Address> Create(string zip, string[] lines)
+        => Create(zip, lines, null);
+
+    /// <summary>
+    /// Создаёт адрес по почтовому индексу, шести адресным строкам и исходной
+    /// строке импорта.
+    /// </summary>
+    /// <param name="zip">Почтовый индекс: ровно 6 цифровых символов.</param>
+    /// <param name="lines">
+    /// Ровно 6 адресных строк. Строка длиной свыше 255 знаков обрезается,
+    /// в результат добавляется предупреждение.
+    /// </param>
+    /// <param name="raw">
+    /// Исходная строка адреса из файла импорта. Сохраняется без изменений и
+    /// используется только для round-trip импорта.
+    /// </param>
+    /// <returns>
+    /// Успешный результат с адресом либо текст нарушения правила адреса.
+    /// </returns>
+    public static Result<Address> Create(string zip, string[] lines, string? raw)
     {
         if (zip is null)
         {
@@ -105,6 +141,66 @@ public sealed class Address
             prepared[i] = line;
         }
 
-        return Result<Address>.Success(new Address(zip, prepared), warnings.ToArray());
+        return Result<Address>.Success(new Address(zip, prepared, raw), warnings.ToArray());
     }
+
+    /// <summary>
+    /// Создаёт адрес из строки в формате «индекс + 6 строк», разделённых
+    /// переводом строки. Используется при разборе значения <c>*_raw</c>.
+    /// </summary>
+    /// <param name="raw">
+    /// Исходная строка: первая строка — индекс, далее — до шести адресных строк.
+    /// </param>
+    /// <returns>
+    /// Успешный результат с адресом либо текст нарушения правила адреса.
+    /// </returns>
+    public static Result<Address> Parse(string raw)
+    {
+        if (raw is null)
+        {
+            return Result<Address>.Failure("Исходная строка адреса не задана.");
+        }
+
+        var parts = raw.Split(SnapshotSeparator, StringSplitOptions.None);
+        var zip = parts.Length > 0 ? parts[0].Trim() : string.Empty;
+        var lines = new string[LineCount];
+
+        for (var i = 0; i < LineCount; i++)
+        {
+            lines[i] = parts.Length > i + 1 ? parts[i + 1] : string.Empty;
+        }
+
+        return Create(zip, lines, raw);
+    }
+
+    /// <summary>
+    /// Формирует текстовый снимок адреса для журнала напечатанных конвертов
+    /// (ТЗ §3.1.7, §3.1.19: «<c>print_history</c> хранит текстовые снимки адресов
+    /// на момент печати»).
+    /// </summary>
+    /// <returns>
+    /// Снимок: индекс и шесть адресных строк, разделённые переводом строки.
+    /// Пустые строки сохраняются, чтобы структура снимка не менялась.
+    /// </returns>
+    public string ToSnapshot()
+    {
+        var parts = new string[LineCount + 1];
+        parts[0] = Zip;
+
+        for (var i = 0; i < LineCount; i++)
+        {
+            parts[i + 1] = _lines[i];
+        }
+
+        return string.Join(SnapshotSeparator, parts);
+    }
+
+    /// <summary>
+    /// Возвращает копию адреса с заменёнными адресными строками, сохраняя
+    /// индекс и исходную строку импорта.
+    /// </summary>
+    /// <param name="lines">Новые шесть адресных строк.</param>
+    /// <returns>Успешный результат с новым адресом либо текст нарушения правила адреса.</returns>
+    public Result<Address> WithLines(string[] lines)
+        => Create(Zip, lines, Raw);
 }
