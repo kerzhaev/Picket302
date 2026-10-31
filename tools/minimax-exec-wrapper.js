@@ -35,8 +35,16 @@ const r = spawnSync(process.execPath, [CLI, ...cliArgs], {
 
 let out = (r.stdout || '').trimEnd();
 const errTail = (r.stderr || '').trimEnd();
-if (errTail) {
-  out += '\n\n[stderr: последние 2000 символов]\n' + errTail.slice(-2000);
+
+// К-9/P13: транзиентные отказы рантайма MiniMax («Runtime completed without a
+// final assistant response», «Retry after the connection recovers») не
+// матчатся классификаторами воркера (RATE_LIMIT_RE/OVERLOADED_RE/ENV_FAILURE_RE),
+// из-за чего задача уходит в failed без requeue-паузы. Переводим отказ в форму,
+// которую воркер распознаёт (OVERLOADED_RE: "overloaded" + "try again later"),
+// чтобы сработала штатная пауза rate_limited → requeue с бэкоффом.
+const TRANSIENT_RE = /Runtime completed without a final assistant response|Retry after the connection|failed to connect|ECONNRESET|ETIMEDOUT|socket hang up/i;
+if (errTail && TRANSIENT_RE.test(errTail)) {
+  process.stderr.write('\npromptpilot-wrapper: provider runtime overloaded, try again later (transient runtime failure translated for the worker classifier, K-9/P13)\n');
 }
 
 const killed = !!(r.error && r.error.killed);

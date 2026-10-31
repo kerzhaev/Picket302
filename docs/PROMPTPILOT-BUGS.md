@@ -402,3 +402,37 @@ stdout, сетевые ошибки) — не ретраить валидные 
 
 **Обход супервизора.** Ручной resume ( watchdog: добавить обработку `executor.failed` — см.
 `tools/promptpilot-watchdog.ps1`).
+
+---
+
+## P13. Транзиентный отказ рантайма MiniMax не матчится классификаторами повтора — задача уходит в failed вместо rate_limited-паузы
+
+**Симптом.** Задача #975 (executor S3): «mcode exec failed: The run failed: Runtime completed without a
+final assistant response.. Retry after the connection recovers» (exit_code=4). Классификаторы повтора
+(`RATE_LIMIT_RE`, `OVERLOADED_RE`, `ENV_FAILURE_RE` — worker.py:29–45) не дали совпадения → `retry_reason`
+вернул None → задача помечена failed без requeue (`retry_count=0` при `max_retries=3`), миссия встала в
+`awaiting_human`. Штатный механизм паузы (`_mark_rate_limited` → requeue с бэкоффом, worker.py:2113) был
+доступен, но не сработал из-за непокрытого паттерна.
+
+**Причина.** Сообщение отказа — специфичное для рантайма MiniMax Code — не входит ни в один из трёх
+регексов классификатора. Классификатор расширяем по дизайну, но новые сообщения провайдеров попадают в
+него только вручную.
+
+**Файлы.** `promptpilot/worker.py:29–45` (RATE_LIMIT_RE, OVERLOADED_RE, ENV_FAILURE_RE), `worker.py:96`
+(`retry_reason`), `worker.py:2113` (точка вызова на nonzero-exit пути).
+
+**Совместимость.** Аддитивно: добавить паттерн
+`Runtime completed without a final assistant response` (и/или обобщённый `Retry after the (connection|.*)
+recovers`) в `ENV_FAILURE_RE`/`OVERLOADED_RE`. Регресс: существующие паттерны не трогаются.
+
+**Тесты.** (1) `retry_reason("...Runtime completed without a final assistant response.. Retry after the
+connection recovers.", 4)` → не None; (2) задача с этим stderr при exit 4 → `rate_limited` + requeue;
+(3) обычный отказ без маркеров → failed как раньше.
+
+**Ограничения.** Не расширять классификатор «жирно» (ложные паузы хуже отсутствия); паттерн привязывать к
+конкретным формулировкам провайдеров.
+
+**Обход супервизора (реализован).** `tools/minimax-exec-wrapper.js` v3.2: при обнаружении транзиентного
+паттерна в stderr mcode дописывает в СВОЙ stderr маркер «provider runtime overloaded, try again later» —
+`OVERLOADED_RE` воркера матчит его → штатная пауза `rate_limited` → requeue с бэкоффом. Проверено
+симуляцией (фейковый CLI с транзиентным stderr → wrapper exit 4, маркер в stderr присутствует).
