@@ -21,3 +21,7 @@ coverage*.json
 # OS
 Thumbs.db
 .DS_Store
+
+# Watchdog runtime artifacts
+tools/watchdog.log
+tools/watchdog-state.json
