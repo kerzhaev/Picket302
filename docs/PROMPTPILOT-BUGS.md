@@ -372,3 +372,33 @@ allowed_paths стадии и verified-подписями (frozen content по-�
 
 **Обход.** Ручной коммит супервизора после чекпоинта (S1: `5b7b3a7`, S2: `48e98fd`). Полный разбор:
 `docs/SUPERVISOR-ESCALATIONS.md`, кейс К-7.
+
+---
+
+## P12. Workflow-задачи не ретраятся при транзиентных отказах провайдера (retry_count=0 при max_retries=3)
+
+**Симптом.** Задача #975 (executor, стадия S3, миссия Picket302): процесс агента упал с `exit_code=4`,
+stderr «mcode exec failed: The run failed: Runtime completed without a final assistant response.. Retry after
+the connection…» — транзиентный отказ рантайма модели, сам текст предписывает повтор. `retry_count = 0` при
+`max_retries = 3` (конфиг роли) — повторов не было; задача сразу `failed` → раунд в `awaiting_human`.
+
+**Причина.** Ретраи применяются только к части классов отказов (или только к non-workflow задачам):
+для workflow-dispatch'ей провал процесса уходит напрямую в `run.failed` → `executor.failed` → `awaiting_human`,
+минуя механизм `retry_count`. Точная ветка подлежит уточнению фиксирующим агентом (кандидаты:
+worker-обработка исключений процесса против `_mark_failed` для workflow-задач).
+
+**Файлы.** `promptpilot/worker.py` (обработка неудачного завершения процесса, ветки `retry`), контекст
+диспетчеризации `promptpilot/workflows.py` (`_dispatch_configured_role` → задача с `max_retries` роли).
+
+**Совместимость.** Аддитивно: ретраить только классы «процесс умер без валидного отчёта» (exit != 0, пустой
+stdout, сетевые ошибки) — не ретраить валидные `ИТОГ: НЕ СМОГ` (это осмысленный ответ).
+
+**Тесты.** (1) Workflow-задача, процесс умер до вывода → до 3 попыток с бэкоффом; (2) задача с
+`ИТОГ: НЕ СМОГ` → без ретраев; (3) исчерпание ретраев → `awaiting_human` с событием, содержащим
+`retry_count`.
+
+**Ограничения.** Бэкофф не должен блокировать конвейер на часы; после исчерпания — понятная причина в
+`awaiting_human`.
+
+**Обход супервизора.** Ручной resume ( watchdog: добавить обработку `executor.failed` — см.
+`tools/promptpilot-watchdog.ps1`).
