@@ -75,6 +75,48 @@ if ($wf.current_stage_id -ne $state.lastStage -or $round -ne $state.lastRound) {
   Set-State $state
 }
 
+# ---------- 1.5 Checkpoint compensation (К-7/P11 workaround) ----------
+# The stage checkpoint attributes ONLY the last executor-run's changes; on
+# multi-round stages the earlier rounds' deliverable stays uncommitted
+# (checkpoint payload "sha": null). Compensation: after a checkpoint with no
+# commit, verify build+test and commit the finished stage's allowed files.
+try {
+  $rep2 = Invoke-RestMethod -Uri "$api/api/workflows/$wid/report" -TimeoutSec 15
+  $cpEvent = $rep2.events | Where-Object { $_.event_type -eq 'stage.checkpoint' } | Select-Object -Last 1
+  if ($cpEvent -and $cpEvent.payload -and (-not $cpEvent.payload.sha)) {
+    # Compensate ONLY when the checkpoint is newer than the last git commit:
+    # otherwise it is already compensated (or the next stage's work is in flight).
+    $cpTime = [datetime]$cpEvent.created_at
+    $lastCommit = git -C $repo log -1 --format=%cI 2>$null
+    $lastCommitTime = [datetime]$lastCommit
+    if ($cpTime -gt $lastCommitTime) {
+      $cpStage = $cpEvent.payload.stage_code
+      $dirty = @(git -C $repo status --porcelain | Where-Object { $_ -match '(src|tests|docs)/' })
+      if ($dirty.Count -gt 0) {
+        Log ("CHECKPOINT-K7: stage $cpStage has uncommitted deliverable (" + $dirty.Count + " paths) - verifying and committing")
+        $env:Path = 'C:\Program Files\dotnet;' + $env:Path
+        Push-Location $repo
+        $null = & dotnet build Picket302.sln -c Debug --nologo -v q 2>&1 | Select-Object -Last 3
+        if ($LASTEXITCODE -eq 0) {
+          $tst = (& dotnet test Picket302.sln -c Debug --nologo --no-build -v q 2>&1 | Select-Object -Last 1) -join ''
+          if ($LASTEXITCODE -eq 0 -and $tst -match 'Passed!') {
+            git add src tests docs
+            git commit -m "Stage ${cpStage}: stage deliverable (supervisor compensation for checkpoint attribution defect K-7/P11)" | Out-Null
+            Log ("CHECKPOINT-K7: committed stage $cpStage deliverable; tests: " + $tst)
+          } else {
+            Log ("CHECKPOINT-K7: tests NOT green - no commit. Tail: " + $tst)
+          }
+        } else {
+          Log "CHECKPOINT-K7: build failed - no commit"
+        }
+        Pop-Location
+      } else {
+        Log ("CHECKPOINT-K7: stage $cpStage checkpoint had no commit, but nothing dirty in allowed paths - OK")
+      }
+    }
+  }
+} catch { Log ("K7-CHECK-ERROR: " + $_.Exception.Message) }
+
 if ($status -in @('queued','executing','gating','reviewing','revision_required')) {
   Log ("OK: status=$status, round=$round")
   exit 0
