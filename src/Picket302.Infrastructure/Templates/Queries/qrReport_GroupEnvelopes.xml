@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_GroupEnvelopes" version="1.0">
+  <Name>Выборка групп конвертов для групповой обработки</Name>
+  <Parameters>
+    <Parameter name="GroupId" type="Int64" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        c.id AS contr_id,
+        c.post_zip AS ind_to,
+        c.post_str1 AS str_to1, c.post_str2 AS str_to2, c.post_str3 AS str_to3,
+        c.post_str4 AS str_to4, c.post_str5 AS str_to5, c.post_str6 AS str_to6,
+        c.special_notes AS prim,
+        g.name AS group_name
+      FROM counterparties c
+      JOIN groups g ON c.group_id = g.id
+      WHERE g.id = :GroupId AND c.is_active = TRUE AND c.is_deleted = FALSE
+      ORDER BY c.name ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        c.id AS contr_id,
+        c.post_zip AS ind_to,
+        c.post_str1 AS str_to1, c.post_str2 AS str_to2, c.post_str3 AS str_to3,
+        c.post_str4 AS str_to4, c.post_str5 AS str_to5, c.post_str6 AS str_to6,
+        c.special_notes AS prim,
+        g.name AS group_name
+      FROM counterparties c
+      JOIN groups g ON c.group_id = g.id
+      WHERE g.id = :GroupId AND c.is_active = 1 AND c.is_deleted = 0
+      ORDER BY c.name ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

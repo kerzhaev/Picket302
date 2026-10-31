@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_MailingStats" version="1.0">
+  <Name>Статистика почтовых рассылок по категориям</Name>
+  <Parameters>
+    <Parameter name="DateFrom" type="DateTime" required="true" default="Today-30d" />
+    <Parameter name="DateTo" type="DateTime" required="true" default="Today" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="DateRange" start="DateFrom" end="DateTo" maxDays="90" />
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        g.name AS gr_name,
+        COUNT(m.id) AS count_konv,
+        SUM(m.fee) AS total_fee,
+        SUM(m.declared_value) AS total_val,
+        CAST(m.date_created AS DATE) AS date_stat
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN groups g ON c.group_id = g.id
+      WHERE m.date_created BETWEEN :DateFrom AND :DateTo
+      GROUP BY g.name, CAST(m.date_created AS DATE)
+      ORDER BY date_stat DESC, gr_name ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        g.name AS gr_name,
+        COUNT(m.id) AS count_konv,
+        SUM(m.fee) AS total_fee,
+        SUM(m.declared_value) AS total_val,
+        date(m.date_created) AS date_stat
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN groups g ON c.group_id = g.id
+      WHERE m.date_created BETWEEN :DateFrom AND :DateTo
+      GROUP BY g.name, date(m.date_created)
+      ORDER BY date_stat DESC, gr_name ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

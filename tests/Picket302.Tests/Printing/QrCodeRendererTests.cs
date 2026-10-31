@@ -69,6 +69,14 @@ public sealed class QrCodeRendererTests
         {
             Изображения.Add(image);
         }
+
+        public void DrawStringMm(string text, string fontName, float sizePt, bool bold, float xMm, float yMm)
+        {
+        }
+
+        public void DrawRectangleMm(float xMm, float yMm, float widthMm, float heightMm)
+        {
+        }
     }
 
     [Fact]

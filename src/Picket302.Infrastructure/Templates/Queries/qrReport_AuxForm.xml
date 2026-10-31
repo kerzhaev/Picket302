@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_AuxForm" version="1.0">
+  <Name>Ведомости сдачи партионной почты (формы 5 и 6)</Name>
+  <Parameters>
+    <Parameter name="SelectedMailIds" type="Int64" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.outgoing_number AS out_num,
+        m.russian_post_id AS barcode,
+        m.to_zip AS recipient_zip,
+        c.name AS recipient_name,
+        m.weight AS item_weight,
+        m.fee AS item_fee,
+        m.declared_value AS item_value
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE m.id IN (:SelectedMailIds)
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.outgoing_number AS out_num,
+        m.russian_post_id AS barcode,
+        m.to_zip AS recipient_zip,
+        c.name AS recipient_name,
+        m.weight AS item_weight,
+        m.fee AS item_fee,
+        m.declared_value AS item_value
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE m.id IN (:SelectedMailIds)
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrQRcode_Fetch" version="1.0">
+  <Name>Выборка растра QR-кода адресата</Name>
+  <Parameters>
+    <Parameter name="PayloadHash" type="String" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        qc.image_blob AS img_qrcode
+      FROM qr_cache qc
+      WHERE qc.payload_hash = :PayloadHash;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        qc.image_blob AS img_qrcode
+      FROM qr_cache qc
+      WHERE qc.payload_hash = :PayloadHash;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

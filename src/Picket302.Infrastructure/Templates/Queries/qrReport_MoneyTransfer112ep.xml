@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_MoneyTransfer112ep" version="1.0">
+  <Name>Реестр почтовых переводов ф.112эп</Name>
+  <Parameters>
+    <Parameter name="MailId" type="Int64" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        m.id,
+        m.declared_value AS transfer_amount,
+        c.name AS recipient_fio,
+        c.passport_series AS pass_ser,
+        c.passport_number AS pass_num,
+        c.passport_issued_by AS pass_whowhen,
+        c.bik, c.rs, c.ks, c.bank_name,
+        s.name AS sender_fio,
+        s.inn AS sender_inn
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN counterparties s ON m.sender_id = s.id
+      WHERE m.id = :MailId;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        m.id,
+        m.declared_value AS transfer_amount,
+        c.name AS recipient_fio,
+        c.passport_series AS pass_ser,
+        c.passport_number AS pass_num,
+        c.passport_issued_by AS pass_whowhen,
+        c.bik, c.rs, c.ks, c.bank_name,
+        s.name AS sender_fio,
+        s.inn AS sender_inn
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN counterparties s ON m.sender_id = s.id
+      WHERE m.id = :MailId;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

@@ -88,4 +88,29 @@ public sealed class GdiGraphicsContext : IGraphicsContext
 
         _графика.DrawImage(image, new RectangleF(xMm, yMm, widthMm, heightMm));
     }
+
+    /// <inheritdoc />
+    public void DrawStringMm(string text, string fontName, float sizePt, bool bold, float xMm, float yMm)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        using var шрифт = new Font(
+            string.IsNullOrWhiteSpace(fontName) ? "Tahoma" : fontName,
+            sizePt,
+            bold ? FontStyle.Bold : FontStyle.Regular,
+            GraphicsUnit.Point);
+
+        using var кисть = new SolidBrush(Color);
+        _графика.DrawString(text, шрифт, кисть, xMm, yMm, StringFormat.GenericTypographic);
+    }
+
+    /// <inheritdoc />
+    public void DrawRectangleMm(float xMm, float yMm, float widthMm, float heightMm)
+    {
+        using var перо = new Pen(Color, 0.2f);
+        _графика.DrawRectangle(перо, xMm, yMm, widthMm, heightMm);
+    }
 }

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_F103_ByIds" version="1.0">
+  <Name>Реестр ф.103 по списку отправлений</Name>
+  <Parameters>
+    <Parameter name="SelectedMailIds" type="Int64" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.sender_id AS sender_id,
+        s.name AS sender_name,
+        m.outgoing_number AS out_num,
+        m.date_dispatched AS dispatch_date,
+        c.name AS recipient_name,
+        m.to_zip AS recipient_zip,
+        CONCAT_WS(', ', m.to_str6, m.to_str5, m.to_str2, m.to_str3, m.to_str4) AS recipient_address,
+        m.weight AS item_weight,
+        m.declared_value AS item_value,
+        m.fee AS item_fee,
+        m.russian_post_id AS barcode
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN counterparties s ON m.sender_id = s.id
+      WHERE m.id IN (:SelectedMailIds)
+        AND m.status != 4
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.sender_id AS sender_id,
+        s.name AS sender_name,
+        m.outgoing_number AS out_num,
+        m.date_dispatched AS dispatch_date,
+        c.name AS recipient_name,
+        m.to_zip AS recipient_zip,
+        (COALESCE(m.to_str6 || ', ', '') || COALESCE(m.to_str5 || ', ', '') || COALESCE(m.to_str2, '')) AS recipient_address,
+        m.weight AS item_weight,
+        m.declared_value AS item_value,
+        m.fee AS item_fee,
+        m.russian_post_id AS barcode
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN counterparties s ON m.sender_id = s.id
+      WHERE m.id IN (:SelectedMailIds)
+        AND m.status != 4
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

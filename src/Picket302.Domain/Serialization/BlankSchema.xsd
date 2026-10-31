@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Схема формата бланка blank.xml (ТЗ §5.1). Валидация строго обязательна
+     при загрузке: несоответствие вызывает отказ с указанием строки ошибки. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="unqualified">
+
+  <xs:element name="CustomBlank">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="xs:string" />
+        <xs:element name="Country" type="xs:string" />
+        <xs:element name="StandardLayout" type="xs:boolean" />
+        <xs:element name="Geometry" type="GeometryType" />
+        <xs:element name="Pages" type="PagesType" />
+      </xs:sequence>
+      <xs:attribute name="version" type="xs:string" use="required" />
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="GeometryType">
+    <xs:sequence>
+      <xs:element name="Width">
+        <xs:complexType>
+          <xs:attribute name="mm" type="xs:decimal" use="required" />
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Height">
+        <xs:complexType>
+          <xs:attribute name="mm" type="xs:decimal" use="required" />
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Orientation">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="Portrait" />
+            <xs:enumeration value="Landscape" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="Bleed">
+        <xs:complexType>
+          <xs:attribute name="mm" type="xs:decimal" use="required" />
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="CropMarks" type="xs:boolean" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="PagesType">
+    <xs:sequence>
+      <xs:element name="Page" type="PageType" minOccurs="1" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="PageType">
+    <xs:sequence>
+      <xs:element name="Background" type="BackgroundType" minOccurs="0" maxOccurs="1" />
+      <xs:element name="Fields" type="FieldsType" minOccurs="0" maxOccurs="1" />
+    </xs:sequence>
+    <xs:attribute name="number" type="xs:int" use="required" />
+  </xs:complexType>
+
+  <xs:complexType name="BackgroundType">
+    <xs:attribute name="file" type="xs:string" use="required" />
+    <xs:attribute name="opacity" type="xs:decimal" use="optional" default="1.0" />
+  </xs:complexType>
+
+  <xs:complexType name="FieldsType">
+    <xs:sequence>
+      <xs:element name="Field" type="FieldType" minOccurs="1" maxOccurs="unbounded" />
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="FieldType">
+    <xs:sequence>
+      <xs:element name="Bounds" type="BoundsType" />
+      <xs:element name="PostIndex" type="PostIndexType" minOccurs="0" maxOccurs="1" />
+      <xs:element name="Font" type="FontType" minOccurs="0" maxOccurs="1" />
+      <xs:element name="Align" type="AlignType" minOccurs="0" maxOccurs="1" />
+      <xs:element name="Wrap" type="WrapType" minOccurs="0" maxOccurs="1" />
+      <xs:element name="Rendering" type="RenderingType" minOccurs="0" maxOccurs="1" />
+      <xs:element name="Script" type="ScriptType" minOccurs="0" maxOccurs="unbounded" />
+    </xs:sequence>
+    <xs:attribute name="name" type="xs:string" use="required" />
+    <xs:attribute name="kind" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="text" />
+          <xs:enumeration value="post_index" />
+          <xs:enumeration value="picture" />
+          <xs:enumeration value="qr" />
+          <xs:enumeration value="zone" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="rotation" use="optional" default="0">
+      <xs:simpleType>
+        <xs:restriction base="xs:int">
+          <xs:enumeration value="0" />
+          <xs:enumeration value="90" />
+          <xs:enumeration value="180" />
+          <xs:enumeration value="270" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="frame" use="optional" default="None">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="None" />
+          <xs:enumeration value="Box" />
+          <xs:enumeration value="Underline" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="visible" type="xs:boolean" use="optional" default="true" />
+    <xs:attribute name="printable" type="xs:boolean" use="optional" default="true" />
+    <xs:attribute name="maxChars" type="xs:int" use="optional" default="255" />
+    <xs:attribute name="italic" type="xs:boolean" use="optional" default="false" />
+  </xs:complexType>
+
+  <xs:complexType name="BoundsType">
+    <xs:attribute name="x" type="xs:decimal" use="required" />
+    <xs:attribute name="y" type="xs:decimal" use="required" />
+    <xs:attribute name="width" type="xs:decimal" use="required" />
+    <xs:attribute name="height" type="xs:decimal" use="required" />
+  </xs:complexType>
+
+  <xs:complexType name="PostIndexType">
+    <xs:attribute name="mmDigitWidth" type="xs:decimal" use="required" />
+    <xs:attribute name="mmDigitHeight" type="xs:decimal" use="required" />
+    <xs:attribute name="mmLineWidth" type="xs:decimal" use="required" />
+    <xs:attribute name="mmSpacing" type="xs:decimal" use="required" />
+    <xs:attribute name="digitCount" type="xs:int" use="required" />
+    <xs:attribute name="showGrid" type="xs:boolean" use="required" />
+  </xs:complexType>
+
+  <xs:complexType name="FontType">
+    <xs:attribute name="name" type="xs:string" use="required" />
+    <xs:attribute name="sizePt" type="xs:decimal" use="required" />
+    <xs:attribute name="minSizePt" type="xs:decimal" use="optional" default="6.5" />
+    <xs:attribute name="maxSizePt" type="xs:decimal" use="optional" default="11.0" />
+    <xs:attribute name="bold" type="xs:boolean" use="optional" default="false" />
+    <xs:attribute name="italic" type="xs:boolean" use="optional" default="false" />
+  </xs:complexType>
+
+  <xs:complexType name="AlignType">
+    <xs:attribute name="horizontal" use="optional" default="Left">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="Left" />
+          <xs:enumeration value="Center" />
+          <xs:enumeration value="Right" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="vertical" use="optional" default="Center">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="Top" />
+          <xs:enumeration value="Center" />
+          <xs:enumeration value="Bottom" />
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:complexType>
+
+  <xs:complexType name="WrapType">
+    <xs:attribute name="wordWrap" type="xs:boolean" use="optional" default="true" />
+    <xs:attribute name="maxLines" type="xs:int" use="optional" default="1" />
+  </xs:complexType>
+
+  <xs:complexType name="RenderingType">
+    <xs:attribute name="antialiasing" type="xs:boolean" use="optional" default="false" />
+    <xs:attribute name="center" type="xs:boolean" use="optional" default="true" />
+    <xs:attribute name="transparent" type="xs:boolean" use="optional" default="false" />
+  </xs:complexType>
+
+  <xs:complexType name="ScriptType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="event" use="optional" default="onBeforePrint">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="onBeforePrint" />
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:attribute>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+</xs:schema>

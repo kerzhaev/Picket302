@@ -29,4 +29,17 @@
     <EmbeddedResource Include="Data\Migrations\**\*.sql" />
   </ItemGroup>
 
+  <!-- Определения запросов слоя данных хранятся файлами query.xml, а не в
+       коде (ТЗ §4.1); для текущей поставки обязательна команда диалекта
+       Sqlite, PostgreSQL-вариант хранится для совместимости. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\Queries\*.xml" />
+  </ItemGroup>
+
+  <!-- Словари суммы прописью (.lng) — расширяемый набор файлов локализации
+       (ТЗ §8.11, функции 150–151). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Text\lng\*.lng" />
+  </ItemGroup>
+
 </Project>

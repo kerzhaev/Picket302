@@ -2477,6 +2477,21 @@ public sealed class MainShell : Form
     }
 
     /// <summary>
+    /// Открывает встроенный редактор бланков по F8
+    /// (ТЗ §7.4, §7.5; §8.3, функция 38).
+    /// </summary>
+    private void ОткрытьРедакторБланков()
+    {
+        // Новый шаблон создаётся копированием существующего, а не с нуля:
+        // редактор открывает эталонный бланк библиотеки (ТЗ §7.5).
+        var бланк = new Infrastructure.Templates.BuiltinTemplatesCatalog()
+            .GetBuiltinTemplate(Infrastructure.Templates.BuiltinFormType.Form112ep);
+
+        using var редактор = new UI.Forms.FormBlankEditor(бланк);
+        редактор.ShowDialog(this);
+    }
+
+    /// <summary>
     /// Открывает форму поиска и переходит к следующей совпавшей записи
     /// (ТЗ §7.7: «последовательный перебор, кнопка «Найти далее», показывает
     /// одну следующую запись, не подсвечивает все совпадения»).
@@ -2603,12 +2618,7 @@ public sealed class MainShell : Form
                 ПечатьВыделенные(сПредпросмотром: false);
                 break;
             case ShellAction.ОткрытьРедакторБланков:
-                MessageBox.Show(
-                    this,
-                    "Встроенный редактор бланков реализуется на этапе S5.",
-                    "Печать",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                ОткрытьРедакторБланков();
                 break;
             case ShellAction.ОтменитьДействие:
                 СброситьПоиск();

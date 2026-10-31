@@ -36,6 +36,31 @@ public interface IGraphicsContext
         float xMm,
         float yMm);
 
+    /// <summary>
+    /// Рисует строку текста с явным кеглем и начертанием (ТЗ §8.3: отметки
+    /// «Заказное»/«С уведомлением» — 12pt bold).
+    /// </summary>
+    /// <param name="text">Текст.</param>
+    /// <param name="fontName">Гарнитура шрифта.</param>
+    /// <param name="sizePt">Кегль, пунктов.</param>
+    /// <param name="bold">Полужирное начертание.</param>
+    /// <param name="xMm">Положение по горизонтали, мм.</param>
+    /// <param name="yMm">Положение по вертикали, мм.</param>
+    void DrawStringMm(
+        string text,
+        string fontName,
+        float sizePt,
+        bool bold,
+        float xMm,
+        float yMm);
+
+    /// <summary>Рисует контур прямоугольника.</summary>
+    /// <param name="xMm">Положение по горизонтали, мм.</param>
+    /// <param name="yMm">Положение по вертикали, мм.</param>
+    /// <param name="widthMm">Ширина, мм.</param>
+    /// <param name="heightMm">Высота, мм.</param>
+    void DrawRectangleMm(float xMm, float yMm, float widthMm, float heightMm);
+
     /// <summary>Выводит растровое изображение в заданные габариты.</summary>
     /// <param name="image">Изображение.</param>
     /// <param name="xMm">Положение по горизонтали, мм.</param>

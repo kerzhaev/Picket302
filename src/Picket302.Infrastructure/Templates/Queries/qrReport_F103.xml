@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_F103" version="1.0">
+  <Name>Формирование почтового реестра ф.103</Name>
+  <Parameters>
+    <Parameter name="DateFrom" type="DateTime" required="true" default="Today-30d" />
+    <Parameter name="DateTo" type="DateTime" required="true" default="Today" />
+    <Parameter name="SenderId" type="Int64" required="true" />
+    <Parameter name="MailCategory" type="Int32" required="false" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="DateRange" start="DateFrom" end="DateTo" maxDays="90" />
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.outgoing_number AS out_num,
+        m.date_dispatched AS dispatch_date,
+        c.name AS recipient_name,
+        m.to_zip AS recipient_zip,
+        CONCAT_WS(', ', m.to_str6, m.to_str5, m.to_str2, m.to_str3, m.to_str4) AS recipient_address,
+        m.weight AS item_weight,
+        m.declared_value AS item_value,
+        m.fee AS item_fee,
+        m.russian_post_id AS barcode
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE m.sender_id = :SenderId
+        AND m.date_created BETWEEN :DateFrom AND :DateTo
+        AND (:MailCategory IS NULL OR m.mail_category = :MailCategory)
+        AND m.status != 4
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.outgoing_number AS out_num,
+        m.date_dispatched AS dispatch_date,
+        c.name AS recipient_name,
+        m.to_zip AS recipient_zip,
+        (COALESCE(m.to_str6 || ', ', '') || COALESCE(m.to_str5 || ', ', '') || COALESCE(m.to_str2, '')) AS recipient_address,
+        m.weight AS item_weight,
+        m.declared_value AS item_value,
+        m.fee AS item_fee,
+        m.russian_post_id AS barcode
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE m.sender_id = :SenderId
+        AND m.date_created BETWEEN :DateFrom AND :DateTo
+        AND (:MailCategory IS NULL OR m.mail_category = :MailCategory)
+        AND m.status != 4
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

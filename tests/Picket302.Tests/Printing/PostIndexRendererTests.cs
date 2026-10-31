@@ -35,6 +35,14 @@ public sealed class PostIndexRendererTests
         public void DrawImageMm(Image image, float xMm, float yMm, float widthMm, float heightMm)
         {
         }
+
+        public void DrawStringMm(string text, string fontName, float sizePt, bool bold, float xMm, float yMm)
+        {
+        }
+
+        public void DrawRectangleMm(float xMm, float yMm, float widthMm, float heightMm)
+        {
+        }
     }
 
     private sealed class ШрифтЕсть : IZipcodeFontGuard

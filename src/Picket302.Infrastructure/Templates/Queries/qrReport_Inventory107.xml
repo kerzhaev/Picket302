@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_Inventory107" version="1.0">
+  <Name>Опись вложений ф.107</Name>
+  <Parameters>
+    <Parameter name="InventoryId" type="Int64" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        inv.name AS inv_name,
+        c.name AS komu,
+        CONCAT_WS(', ', m.to_zip, m.to_str6, m.to_str5, m.to_str2) AS kuda,
+        it.name AS det_name,
+        it.quantity AS kol,
+        it.cost AS cost,
+        (it.quantity * it.cost) AS total_item_cost,
+        COUNT(*) OVER(PARTITION BY inv.id) AS count_konv
+      FROM inventories inv
+      JOIN mails m ON m.inventory_id = inv.id
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN inventory_items it ON it.inventory_id = inv.id
+      WHERE inv.id = :InventoryId
+      ORDER BY it.id ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        inv.name AS inv_name,
+        c.name AS komu,
+        (COALESCE(m.to_zip || ', ', '') || COALESCE(m.to_str6 || ', ', '') || COALESCE(m.to_str5 || ', ', '') || COALESCE(m.to_str2, '')) AS kuda,
+        it.name AS det_name,
+        it.quantity AS kol,
+        it.cost AS cost,
+        (it.quantity * it.cost) AS total_item_cost,
+        COUNT(*) OVER(PARTITION BY inv.id) AS count_konv
+      FROM inventories inv
+      JOIN mails m ON m.inventory_id = inv.id
+      JOIN counterparties c ON m.counterparty_id = c.id
+      JOIN inventory_items it ON it.inventory_id = inv.id
+      WHERE inv.id = :InventoryId
+      ORDER BY it.id ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

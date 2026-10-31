@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_PrintHistoryReport" version="1.0">
+  <Name>Исторический срез сессий печати</Name>
+  <Parameters>
+    <Parameter name="DateFrom" type="DateTime" required="true" default="Today-30d" />
+    <Parameter name="DateTo" type="DateTime" required="true" default="Today" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="DateRange" start="DateFrom" end="DateTo" maxDays="90" />
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        ph.printed_at,
+        ph.template_description,
+        ph.recipient_address_snapshot,
+        ph.sender_address_snapshot,
+        ph.copy_count,
+        pj.printer_name,
+        pj.paper_size_name,
+        pj.status
+      FROM print_history ph
+      JOIN print_jobs pj ON ph.print_job_id = pj.id
+      WHERE ph.printed_at BETWEEN :DateFrom AND :DateTo
+      ORDER BY ph.printed_at DESC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        ph.printed_at,
+        ph.template_description,
+        ph.recipient_address_snapshot,
+        ph.sender_address_snapshot,
+        ph.copy_count,
+        pj.printer_name,
+        pj.paper_size_name,
+        pj.status
+      FROM print_history ph
+      JOIN print_jobs pj ON ph.print_job_id = pj.id
+      WHERE ph.printed_at BETWEEN :DateFrom AND :DateTo
+      ORDER BY ph.printed_at DESC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

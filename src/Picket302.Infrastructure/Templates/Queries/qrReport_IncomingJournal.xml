@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_IncomingJournal" version="1.0">
+  <Name>Журнал регистрации входящей корреспонденции</Name>
+  <Parameters>
+    <Parameter name="DateFrom" type="DateTime" required="true" default="Today-30d" />
+    <Parameter name="DateTo" type="DateTime" required="true" default="Today" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="DateRange" start="DateFrom" end="DateTo" maxDays="90" />
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        m.incoming_number AS inc_num,
+        m.date_created AS reg_date,
+        c.name AS sender_name,
+        c.inn AS sender_inn,
+        m.to_str1 AS subject,
+        m.note AS execution_mark,
+        m.status AS doc_state
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE m.date_created BETWEEN :DateFrom AND :DateTo
+        AND m.incoming_number IS NOT NULL
+      ORDER BY m.date_created DESC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        m.incoming_number AS inc_num,
+        m.date_created AS reg_date,
+        c.name AS sender_name,
+        c.inn AS sender_inn,
+        m.to_str1 AS subject,
+        m.note AS execution_mark,
+        m.status AS doc_state
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE m.date_created BETWEEN :DateFrom AND :DateTo
+        AND m.incoming_number IS NOT NULL
+      ORDER BY m.date_created DESC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

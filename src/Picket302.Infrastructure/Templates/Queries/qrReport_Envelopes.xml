@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_Envelopes" version="1.0">
+  <Name>Пакетная выборка данных для печати конвертов</Name>
+  <Parameters>
+    <Parameter name="SelectedMailIds" type="Int64" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.to_zip AS ind_to,
+        m.to_str1 AS str_to1, m.to_str2 AS str_to2, m.to_str3 AS str_to3,
+        m.to_str4 AS str_to4, m.to_str5 AS str_to5, m.to_str6 AS str_to6,
+        s.post_zip AS ind_from,
+        s.post_str1 AS str_from1, s.post_str2 AS str_from2, s.post_str3 AS str_from3,
+        s.post_str4 AS str_from4, s.post_str5 AS str_from5, s.post_str6 AS str_from6,
+        m.note AS prim,
+        m.copy_count AS copyes,
+        m.is_vip AS vip,
+        NOW() AS date_print
+      FROM mails m
+      JOIN counterparties s ON m.sender_id = s.id
+      WHERE m.id IN (:SelectedMailIds)
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        m.id AS mail_id,
+        m.to_zip AS ind_to,
+        m.to_str1 AS str_to1, m.to_str2 AS str_to2, m.to_str3 AS str_to3,
+        m.to_str4 AS str_to4, m.to_str5 AS str_to5, m.to_str6 AS str_to6,
+        s.post_zip AS ind_from,
+        s.post_str1 AS str_from1, s.post_str2 AS str_from2, s.post_str3 AS str_from3,
+        s.post_str4 AS str_from4, s.post_str5 AS str_from5, s.post_str6 AS str_from6,
+        m.note AS prim,
+        m.copy_count AS copyes,
+        m.is_vip AS vip,
+        datetime('now') AS date_print
+      FROM mails m
+      JOIN counterparties s ON m.sender_id = s.id
+      WHERE m.id IN (:SelectedMailIds)
+      ORDER BY m.id ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>

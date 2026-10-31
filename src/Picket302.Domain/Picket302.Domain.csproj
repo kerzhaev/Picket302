@@ -16,4 +16,10 @@
     <EmbeddedResource Include="Postal\EnvelopeFormats.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- XSD-схема формата бланка blank.xml (ТЗ §8.3, функция 39) встраивается
+         в сборку домена: загрузка бланка строго валидируется. -->
+    <EmbeddedResource Include="Serialization\*.xsd" />
+  </ItemGroup>
+
 </Project>

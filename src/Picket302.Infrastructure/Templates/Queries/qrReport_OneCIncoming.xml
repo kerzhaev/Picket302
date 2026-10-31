@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportQueryDefinition id="qrReport_OneCIncoming" version="1.0">
+  <Name>Реестр входящей корреспонденции — проекция 1С:Документооборот</Name>
+  <Parameters>
+    <Parameter name="Date" type="DateTime" required="true" />
+  </Parameters>
+  <ValidationRules>
+    <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+  </ValidationRules>
+  <Command dialect="PostgreSql">
+    <![CDATA[
+      SELECT
+        m.incoming_number AS reg_number,
+        m.date_created AS reg_date,
+        c.name AS correspondent,
+        c.inn AS correspondent_inn,
+        m.to_str1 AS subject,
+        m.note AS summary,
+        m.status AS doc_state
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE CAST(m.date_created AS DATE) = CAST(:Date AS DATE)
+        AND m.incoming_number IS NOT NULL
+      ORDER BY m.incoming_number ASC;
+    ]]>
+  </Command>
+  <Command dialect="Sqlite">
+    <![CDATA[
+      SELECT
+        m.incoming_number AS reg_number,
+        m.date_created AS reg_date,
+        c.name AS correspondent,
+        c.inn AS correspondent_inn,
+        m.to_str1 AS subject,
+        m.note AS summary,
+        m.status AS doc_state
+      FROM mails m
+      JOIN counterparties c ON m.counterparty_id = c.id
+      WHERE date(m.date_created) = date(:Date)
+        AND m.incoming_number IS NOT NULL
+      ORDER BY m.incoming_number ASC;
+    ]]>
+  </Command>
+</ReportQueryDefinition>
