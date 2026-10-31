@@ -36,6 +36,31 @@ function Set-State($s) {
 
 $state = Get-State
 $now = Get-Date
+if (-not ($state.PSObject.Properties['lastVersion'])) { $state | Add-Member -NotePropertyName lastVersion -NotePropertyValue 0 }
+if (-not ($state.PSObject.Properties['lastStatus']))  { $state | Add-Member -NotePropertyName lastStatus -NotePropertyValue '' }
+
+function Do-Resume($why) {
+  $body = @{ expected_version = $wf.state_version; text = "Watchdog: auto-resume. Reason: $why"; resume = $true } | ConvertTo-Json
+  try {
+    Invoke-RestMethod -Uri "$api/api/workflows/$wid/human-input" -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 15 | Out-Null
+    $state.lastResumeAt = $now
+    $state.consecutiveResumes = [int]$state.consecutiveResumes + 1
+    Set-State $state
+    Log ("RESUMED: $why (streak: " + $state.consecutiveResumes + ")")
+  } catch { Log ("RESUME-ERROR: " + $_.Exception.Message) }
+}
+
+function Patch-Limits {
+  try {
+    $cfg = $wf.config
+    $cfg.limits.max_rounds = [int]$cfg.limits.max_rounds + 20
+    $cfg.planning.max_revisions_per_stage = [int]$cfg.planning.max_revisions_per_stage + 4
+    $body = @{ config = $cfg; expected_version = $wf.state_version } | ConvertTo-Json -Depth 12
+    Invoke-RestMethod -Uri "$api/api/workflows/$wid" -Method Patch -ContentType 'application/json' -Body $body -TimeoutSec 15 | Out-Null
+    Log 'LIMITS: budget raised'
+    return $true
+  } catch { Log ("LIMITS-ERROR: " + $_.Exception.Message); return $false }
+}
 
 # ---------- 1. Worker health ----------
 $worker = $null
@@ -118,7 +143,22 @@ try {
 } catch { Log ("K7-CHECK-ERROR: " + $_.Exception.Message) }
 
 if ($status -in @('queued','executing','gating','reviewing','revision_required')) {
-  Log ("OK: status=$status, round=$round")
+  # P15 guard: revision_required is a TRANSIENT state (worker advances it on
+  # task completion). If it persists across two passes (30 min) with no
+  # state_version change, a review was recorded via API and nothing advanced
+  # it (api.py record_review lacks advance_workflow). Resume is exactly what
+  # advance_workflow would do (workflows.py:3521-3531). Guards apply.
+  if ($status -eq 'revision_required' -and $state.lastStatus -eq 'revision_required' -and $state.lastVersion -eq [int]$wf.state_version) {
+    $minsSinceResume2 = 9999
+    if ($state.lastResumeAt) { $minsSinceResume2 = ($now - [datetime]$state.lastResumeAt).TotalMinutes }
+    if (-not $state.escalated -and $minsSinceResume2 -ge 20 -and $state.consecutiveResumes -lt 4) {
+      Do-Resume 'revision_required stalled with no version change for 2 passes (P15): advancing to next round'
+    }
+  }
+  Log ("OK: status=$status, round=$round, ver=$($wf.state_version)")
+  $state.lastStatus = $status
+  $state.lastVersion = [int]$wf.state_version
+  Set-State $state
   exit 0
 }
 
@@ -144,29 +184,6 @@ if ($state.consecutiveResumes -ge 4) {
   Log 'ESCALATE: 4 consecutive resumes without progress - human eyes needed'
   $state.escalated = $true; Set-State $state
   exit 0
-}
-
-function Do-Resume($why) {
-  $body = @{ expected_version = $wf.state_version; text = "Watchdog: auto-resume. Reason: $why"; resume = $true } | ConvertTo-Json
-  try {
-    Invoke-RestMethod -Uri "$api/api/workflows/$wid/human-input" -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 15 | Out-Null
-    $state.lastResumeAt = $now
-    $state.consecutiveResumes = [int]$state.consecutiveResumes + 1
-    Set-State $state
-    Log ("RESUMED: $why (streak: " + $state.consecutiveResumes + ")")
-  } catch { Log ("RESUME-ERROR: " + $_.Exception.Message) }
-}
-
-function Patch-Limits {
-  try {
-    $cfg = $wf.config
-    $cfg.limits.max_rounds = [int]$cfg.limits.max_rounds + 20
-    $cfg.planning.max_revisions_per_stage = [int]$cfg.planning.max_revisions_per_stage + 4
-    $body = @{ config = $cfg; expected_version = $wf.state_version } | ConvertTo-Json -Depth 12
-    Invoke-RestMethod -Uri "$api/api/workflows/$wid" -Method Patch -ContentType 'application/json' -Body $body -TimeoutSec 15 | Out-Null
-    Log 'LIMITS: budget raised'
-    return $true
-  } catch { Log ("LIMITS-ERROR: " + $_.Exception.Message); return $false }
 }
 
 switch -Regex ($lastType) {

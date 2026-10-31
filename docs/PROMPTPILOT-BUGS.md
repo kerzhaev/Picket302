@@ -436,3 +436,79 @@ connection recovers.", 4)` → не None; (2) задача с этим stderr п
 паттерна в stderr mcode дописывает в СВОЙ stderr маркер «provider runtime overloaded, try again later» —
 `OVERLOADED_RE` воркера матчит его → штатная пауза `rate_limited` → requeue с бэкоффом. Проверено
 симуляцией (фейковый CLI с транзиентным stderr → wrapper exit 4, маркер в stderr присутствует).
+
+---
+
+## P14. Находка ревьюера с `payload`-строкой вместо словаря валидацией отбрасывает ВЕСЬ отчёт — automation.paused вместо мягкой деградации
+
+**Симптом.** Ревьюер S3 раунд 7 (задача #978, 31.10.2026 16:09–16:25 UTC) вернул валидный хвост:
+`AUDIT_FINDINGS_JSON: [...]` + `AUDIT_VERDICT: REVISION_REQUIRED` + одна строка `ИТОГ: ГОТОВО — …`.
+Регекс `WORKFLOW_CLOSING_VERDICT_RE` и `json.loads` проходят, но `parse_reviewer_report` вернул None →
+`review.awaiting_decision` → `automation.paused: «Аудитор не вернул валидные AUDIT_VERDICT/AUDIT_FINDINGS_JSON»`
+→ миссия в `awaiting_human`. При этом отчёт аудита ПОЛНЫЙ (4 находки с доказательствами).
+
+**Причина.** Модель положила в поле `payload` каждой находки строку-прозу
+(`"payload":"Git-доказательство: git log --all -S 'GetSendersAsync' пуст …"`), а
+`ReviewFindingInput` (models.py:831–837) требует `payload: dict[str, Any]`. Pydantic
+`ValidationError (dict_type)` на первой находке → except в parse_reviewer_report (workflows.py:3272–3279)
+→ `return None` — весь отчёт отбрасывается. Хвост-канонизация wrapper'ом (P5/P9) бессильна: хвост
+корректен, ломается СХЕМА находок внутри JSON, которую wrapper не проверяет.
+
+**Файлы.** `promptpilot/workflows.py:3272–3279` (try/except вокруг model_validate → None),
+`promptpilot/models.py:831–837` (ReviewFindingInput.payload dict-only),
+`promptpilot/herdr_exec.py:76–80` (WORKFLOW_CLOSING_VERDICT_RE — проходит).
+
+**Совместимость.** Аддитивная мягкая деградация: при `ValidationError` с `dict_type` на `payload` —
+обернуть строку в `{"report": <строка>}` и продолжить (по образцу существующего фолбэка P24:
+REVISION_REQUIRED без находок синтезирует находку-обёртку, workflows.py:3281–3289). Строгий режим можно
+оставить флагом. Альтернатива: ко-эрсия строкового payload на уровне ReviewFindingInput
+(`field_validator`) — тогда чинится и для внешних вызовов.
+
+**Тесты.** (1) отчёт с payload-строкой → parse вернёт decision с 4 находками, payload={"report": …};
+(2) payload-число/список → тоже обёртка `{"report": json.dumps(...)}` или осмысленная ошибка с
+fingerprint находки в тексте; (3) честный dict-payload — без изменений; (4) REVISION_REQUIRED без
+находок — старый фолбэк P24 не сломан.
+
+**Ограничения.** Не терять текст находки: сейчас единственный источник деталей — summary всего отчёта.
+Обёртка `{"report": …}` сохраняет текст; слепое молчаливое отбрасывание отчёта — худший исход.
+
+**Обход супервизора (реализован, см. К-10).** Вердикт ревьюера записан вручную через
+`POST /api/workflows/{id}/review` с оборачиванием payload-строк в `{"report": …}` (node-скрипт,
+не bash — защита от порчи backslashes, см. историю embedded-null).
+
+---
+
+## P15. `POST /api/workflows/{id}/review` не вызывает `advance_workflow` — вердикт через API оставляет миссию в `revision_required` навсегда, без маркера останова
+
+**Симптом.** После ручной записи вердикта REVISION_REQUIRED (31.10.2026 16:33 UTC, обход P14) статус
+завис в `revision_required` (ver 88): ни раунда, ни `automation.paused`, ни `awaiting_human` —
+тихий останов без сигнала. Воркер online, heartbeat свежий. Продвинулось только после явного
+`POST …/human-input {resume:true}` (16:35) → раунд 8 создан, executor dispatch (16:37).
+
+**Причина.** `api_record_workflow_review` (api.py:1148–1151) возвращает результат `record_review`
+НАПРЯМУЮ, в отличие от `api_approve_workflow_plan` (api.py:1108–1112) и
+`api_workflow_external_result` (api.py:1182–1184), которые вызывают `workflows.advance_workflow(...)`
+после действия. Штатный путь авто-ревью не страдает: воркер продвигает конвейер в обработчике
+завершения задачи. Но при записи вердикта через API (человек/супервизор) триггера нет, а цикл
+воркера не делает периодического sweep `advance_workflow` по активным миссиям.
+
+**Файлы.** `promptpilot/api.py:1148–1151` (record_review без advance),
+`api.py:1108–1112` и `api.py:1182–1184` (эталонное поведение с advance),
+`promptpilot/workflows.py:3521–3531` (ветка REVISION_REQUIRED в advance_workflow — сама логика
+авто-resume корректна, просто не вызывается).
+
+**Совместимость.** Аддитивно: `return workflows.advance_workflow(recorded.id)` в api_record_workflow_review.
+Для PASS-вердикта advance сам сделает чекпоинт/переход; для HUMAN_REQUIRED — вернёт awaiting_human
+(ветка workflows.py:3517–3518). Регресс: двойное применение вердикта исключено — record_review
+идемпотентен по раунду (повторный вызов без нового reviewer-run упрётся в «no completed reviewer run»/
+touch-защиту).
+
+**Тесты.** (1) POST /review c REVISION_REQUIRED при auto_resume_revision=true → статус `queued`/
+`executing` нового раунда, а не `revision_required`; (2) POST /review c PASS → чекпоинт/следующая
+стадия; (3) POST /review c HUMAN_REQUIRED → awaiting_human; (4) auto_resume_revision=false →
+остаётся revision_required (штатно ждёт человека).
+
+**Ограничения.** До фикса супервизор/владелец, записывающий вердикт руками, ОБЯЗАН сам вызвать
+`POST …/human-input {resume:true}` при `revision_required`. Watchdog'у статусы из списка
+«OK» (`revision_required` в т.ч.) не сигнализируют об останове — см. компенсацию в
+`tools/promptpilot-watchdog.ps1` (защита от тихого останова).
