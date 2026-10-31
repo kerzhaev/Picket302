@@ -25,3 +25,4 @@ Thumbs.db
 # Watchdog runtime artifacts
 tools/watchdog.log
 tools/watchdog-state.json
+tmp_audit/
