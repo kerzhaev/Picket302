@@ -171,6 +171,7 @@ function Patch-Limits {
 
 switch -Regex ($lastType) {
   '^executor\.invalid_output$' { Do-Resume 'executor report had no machine-readable verdict; restarting round' }
+  '^executor\.failed$' { Do-Resume 'executor process failed (transient provider/runtime error); restarting round - WIP in worktree will be picked up' }
   '^review\.(no_diff|diff_origin_unknown)$' { Do-Resume 'review without diff/unknown origin; restarting round' }
   '^stage\.checkpoint_failed$' {
     $gn = git -C $repo config user.name 2>$null
