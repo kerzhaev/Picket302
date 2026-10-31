@@ -19,10 +19,23 @@ public sealed class PostIndexRenderer
     public const string LineWidthWarning =
         "Толщина линии вне ГОСТ (0.2-0.5мм): задано {0:0.##} мм.";
 
+    /// <summary>Текст предупреждения о габаритах знака вне допуска ГОСТ.</summary>
+    public const string DigitSizeWarning =
+        "Габариты знака кодового штампа вне допуска ГОСТ ({0:0.##}±{1:0.##} мм): " +
+        "ширина {2:0.##} мм, высота {3:0.##} мм.";
+
     /// <summary>Текст блокирующего предупреждения об отсутствии шрифта ZIPcode.</summary>
     public const string MissingFontWarning =
         "Шрифт ZIPcode не найден в системе. Требуется переустановить системные " +
         "шрифты из комплекта поставки. Подмена на Arial/Times не допускается.";
+
+    /// <summary>Текст предупреждения о неверном имени шрифта кодового штампа.</summary>
+    public const string FontNameWarning =
+        "Для кодового штампа должен применяться шрифт ZIPcode (задано «{0}»).";
+
+    /// <summary>Текст блокирующего предупреждения о неверном имени шрифта.</summary>
+    public const string FontNameBlockReason =
+        "Для кодового штампа должен применяться шрифт ZIPcode.";
 
     private readonly IZipcodeFontGuard _шрифт;
 
@@ -63,6 +76,37 @@ public sealed class PostIndexRenderer
         if (spec.LineWidthMm < PostIndexSpec.MinLineWidthMm)
         {
             предупреждения.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, LineWidthWarning, spec.LineWidthMm));
+        }
+
+        // Допуск по габаритам знака (±0,1 мм) — предупреждение, печать не блокируется.
+        var отклонениеШирины = Math.Abs(spec.DigitWidthMm - PostIndexSpec.DefaultDigitWidthMm);
+        var отклонениеВысоты = Math.Abs(spec.DigitHeightMm - PostIndexSpec.DefaultDigitHeightMm);
+
+        if (отклонениеШирины > PostIndexSpec.DigitWidthToleranceMm ||
+            отклонениеВысоты > PostIndexSpec.DigitHeightToleranceMm)
+        {
+            предупреждения.Add(string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                DigitSizeWarning,
+                PostIndexSpec.DefaultDigitWidthMm,
+                PostIndexSpec.DigitWidthToleranceMm,
+                spec.DigitWidthMm,
+                spec.DigitHeightMm));
+        }
+
+        if (!string.Equals(spec.FontName, PostIndexSpec.DefaultFontName, StringComparison.OrdinalIgnoreCase))
+        {
+            предупреждения.Add(string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                FontNameWarning,
+                spec.FontName));
+
+            return new PostIndexValidationResult
+            {
+                IsBlocked = true,
+                Warnings = предупреждения,
+                BlockReason = FontNameBlockReason,
+            };
         }
 
         if (!_шрифт.IsZipcodeFontAvailable)
@@ -121,8 +165,8 @@ public sealed class PostIndexRenderer
                 spec.FontName,
                 (float)(spec.DigitWidthMm * масштаб),
                 (float)(spec.DigitHeightMm * масштаб),
-                (float)(индекс * spec.AdvanceMm * масштаб),
-                0f);
+                spec.OriginXMm + (float)(индекс * spec.AdvanceMm * масштаб),
+                spec.OriginYMm);
         }
     }
 
@@ -170,7 +214,9 @@ public sealed class PostIndexRenderer
             return 1m;
         }
 
-        var требуемаяШирина = spec.DigitCount * spec.AdvanceMm;
+        // Ширина штампа: расстояние от начала первого знака до конца последнего —
+        // (число знаков − 1) × шаг + ширина знака.
+        var требуемаяШирина = ((spec.DigitCount - 1) * spec.AdvanceMm) + spec.DigitWidthMm;
 
         if (требуемаяШирина <= доступнаяШирина)
         {

@@ -159,8 +159,8 @@ public static class DevModeConstants
     /// <summary>Формат Quarto (215,9×275,2 мм).</summary>
     public const short DMPAPER_QUARTO = 15;
 
-    /// <summary>Формат «приглашение» (216,9×279,4 мм).</summary>
-    public const short DMPAPER_ENV_INVITE = 19;
+    /// <summary>Конверт «приглашение» (216,9×279,4 мм).</summary>
+    public const short DMPAPER_ENV_INVITE = 47;
 
     /// <summary>Конверт №10 (229×114 мм).</summary>
     public const short DMPAPER_ENV_10 = 20;
@@ -172,22 +172,37 @@ public static class DevModeConstants
     public const short DMPAPER_ENV_12 = 22;
 
     /// <summary>Конверт №9 (225×114 мм).</summary>
-    public const short DMPAPER_ENV_9 = 23;
+    public const short DMPAPER_ENV_9 = 19;
+
+    /// <summary>Конверт №14 (235×125 мм).</summary>
+    public const short DMPAPER_ENV_14 = 23;
+
+    /// <summary>Конверт DL (110×220 мм).</summary>
+    public const short DMPAPER_ENV_DL = 27;
 
     /// <summary>Конверт C5 (162×229 мм).</summary>
-    public const short DMPAPER_ENV_C5 = 26;
+    public const short DMPAPER_ENV_C5 = 28;
 
     /// <summary>Конверт C3 (324×458 мм).</summary>
-    public const short DMPAPER_ENV_C3 = 27;
+    public const short DMPAPER_ENV_C3 = 29;
 
     /// <summary>Конверт C4 (229×324 мм).</summary>
-    public const short DMPAPER_ENV_C4 = 28;
+    public const short DMPAPER_ENV_C4 = 30;
 
     /// <summary>Конверт C6 (114×162 мм).</summary>
-    public const short DMPAPER_ENV_C6 = 30;
+    public const short DMPAPER_ENV_C6 = 31;
 
-    /// <summary>Конверт C65 (229×114 мм).</summary>
-    public const short DMPAPER_ENV_C65 = 31;
+    /// <summary>Конверт C65 (114×229 мм).</summary>
+    public const short DMPAPER_ENV_C65 = 32;
+
+    /// <summary>Конверт B4 (250×353 мм).</summary>
+    public const short DMPAPER_ENV_B4 = 33;
+
+    /// <summary>Конверт B5 (176×250 мм).</summary>
+    public const short DMPAPER_ENV_B5 = 34;
+
+    /// <summary>Конверт B6 (176×125 мм).</summary>
+    public const short DMPAPER_ENV_B6 = 35;
 
     /// <summary>Пользовательский формат носителя.</summary>
     public const short DMPAPER_USER = 256;
@@ -207,15 +222,38 @@ public static class DevModeConstants
     /// <summary>Двусторонняя печать с переворотом по короткому краю.</summary>
     public const short DMDUP_HORIZONTAL = 3;
 
-    /// <summary>Константа <c>DC_PAPERS</c> функции <c>DeviceCapabilitiesW</c>.</summary>
-    public const int DC_PAPERS = 8;
+    /// <summary>
+    /// Константа <c>DC_PAPERS</c> функции <c>DeviceCapabilitiesW</c>:
+    /// перечисление поддерживаемых драйвером форматов бумаги
+    /// (wingdi.h: <c>#define DC_PAPERS 2</c>).
+    /// </summary>
+    public const int DC_PAPERS = 2;
 
-    /// <summary>Константа <c>DC_PAPERSIZE</c> функции <c>DeviceCapabilitiesW</c>.</summary>
-    public const int DC_PAPERSIZE = 9;
+    /// <summary>
+    /// Константа <c>DC_PAPERSIZE</c> функции <c>DeviceCapabilitiesW</c>:
+    /// размер текущего формата носителя в сотых долях миллиметра
+    /// (wingdi.h: <c>#define DC_PAPERSIZE 3</c>).
+    /// </summary>
+    public const int DC_PAPERSIZE = 3;
 
-    /// <summary>Константа <c>DC_DUPLEX</c> функции <c>DeviceCapabilitiesW</c>.</summary>
-    public const int DC_DUPLEX = 13;
+    /// <summary>
+    /// Константа <c>DC_DUPLEX</c> функции <c>DeviceCapabilitiesW</c>:
+    /// перечисление поддерживаемых режимов двусторонней печати
+    /// (wingdi.h: <c>#define DC_DUPLEX 7</c>).
+    /// </summary>
+    public const int DC_DUPLEX = 7;
 
-    /// <summary>Константа <c>DC_BINS</c> функции <c>DeviceCapabilitiesW</c>.</summary>
-    public const int DC_BINS = 11;
+    /// <summary>
+    /// Константа <c>DC_BINS</c> функции <c>DeviceCapabilitiesW</c>:
+    /// перечисление поддерживаемых лотков подачи
+    /// (wingdi.h: <c>#define DC_BINS 6</c>).
+    /// </summary>
+    public const int DC_BINS = 6;
+
+    /// <summary>
+    /// Константа <c>DC_PAPERNAMES</c> функции <c>DeviceCapabilitiesW</c>:
+    /// наименования поддерживаемых форматов бумаги
+    /// (wingdi.h: <c>#define DC_PAPERNAMES 16</c>).
+    /// </summary>
+    public const int DC_PAPERNAMES = 16;
 }

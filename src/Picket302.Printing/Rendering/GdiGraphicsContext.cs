@@ -1,0 +1,91 @@
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using Picket302.Printing.Elements;
+
+namespace Picket302.Printing.Rendering;
+
+/// <summary>
+/// Графический контекст GDI+ с физическими единицами измерения (ТЗ §10.1).
+/// </summary>
+/// <remarks>
+/// Контекст работает в миллиметрах и не сглаживает штрихи: для машиночитаемого
+/// индекса и QR-кода это обязательное условие (ТЗ §6.3, §6.4).
+/// </remarks>
+public sealed class GdiGraphicsContext : IGraphicsContext
+{
+    private readonly Graphics _графика;
+
+    /// <summary>
+    /// Создаёт контекст поверх графического объекта GDI+.
+    /// </summary>
+    /// <param name="graphics">Графический объект.</param>
+    public GdiGraphicsContext(Graphics graphics)
+    {
+        ArgumentNullException.ThrowIfNull(graphics);
+
+        _графика = graphics;
+        _графика.PageUnit = GraphicsUnit.Millimeter;
+        _графика.InterpolationMode = InterpolationMode.NearestNeighbor;
+        _графика.SmoothingMode = SmoothingMode.None;
+        _графика.PixelOffsetMode = PixelOffsetMode.Half;
+    }
+
+    /// <inheritdoc />
+    public Color Color { get; set; } = Color.Black;
+
+    /// <inheritdoc />
+    public void FillRectangleMm(float xMm, float yMm, float widthMm, float heightMm)
+    {
+        using var кисть = new SolidBrush(Color);
+        _графика.FillRectangle(кисть, xMm, yMm, widthMm, heightMm);
+    }
+
+    /// <inheritdoc />
+    public void DrawStringMm(
+        string text,
+        string fontName,
+        float widthMm,
+        float heightMm,
+        float xMm,
+        float yMm)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        using var шрифт = new Font(
+            string.IsNullOrWhiteSpace(fontName) ? "Tahoma" : fontName,
+            100f,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
+
+        var формат = StringFormat.GenericTypographic;
+        var естественный = _графика.MeasureString(text, шрифт, int.MaxValue, формат);
+
+        if (естественный.Width <= 0 || естественный.Height <= 0)
+        {
+            return;
+        }
+
+        var масштабX = widthMm / естественный.Width;
+        var масштабY = heightMm / естественный.Height;
+
+        var состояние = _графика.Save();
+        _графика.ScaleTransform(масштабX, масштабY);
+        _графика.TranslateTransform(xMm, yMm);
+
+        using var кисть = new SolidBrush(Color);
+        _графика.DrawString(text, шрифт, кисть, 0f, 0f, формат);
+
+        _графика.Restore(состояние);
+    }
+
+    /// <inheritdoc />
+    public void DrawImageMm(Image image, float xMm, float yMm, float widthMm, float heightMm)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+
+        _графика.DrawImage(image, new RectangleF(xMm, yMm, widthMm, heightMm));
+    }
+}

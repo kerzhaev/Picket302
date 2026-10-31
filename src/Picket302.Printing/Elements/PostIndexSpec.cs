@@ -69,4 +69,15 @@ public sealed record PostIndexSpec
     /// пропорционального уменьшения штампа при нехватке места.
     /// </summary>
     public decimal? AvailableWidthMm { get; init; }
+
+    /// <summary>
+    /// Положение штампа по горизонтали, мм. Задаётся координатой поля индекса
+    /// на бланке с учётом калибровочного смещения принтера.
+    /// </summary>
+    public float OriginXMm { get; init; }
+
+    /// <summary>
+    /// Положение штампа по вертикали, мм.
+    /// </summary>
+    public float OriginYMm { get; init; }
 }

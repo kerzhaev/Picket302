@@ -14,6 +14,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Dapper" />
+    <!-- Контроль шрифта ZIPcode (GDI32, §6.3): перечисление установленных шрифтов. -->
+    <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
 
   <ItemGroup>

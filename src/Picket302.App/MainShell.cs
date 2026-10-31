@@ -8,6 +8,10 @@ using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Services;
 
+using Picket302.Printing;
+using Picket302.Printing.Devices;
+using Picket302.Printing.Preview;
+using Picket302.Printing.Validation;
 namespace Picket302.App;
 
 /// <summary>
@@ -86,6 +90,12 @@ public sealed class MainShell : Form
     private readonly ToolStripMenuItem _пунктПометитьОтправителем = new("Пометить как отправителя");
 
     /// <summary>
+    /// Пункт меню «Печать» с галкой «Показывать список шаблонов перед
+    /// печатью» (ТЗ §8.6, функция 82).
+    /// </summary>
+    private ToolStripMenuItem? _пунктСпискаШаблонов;
+
+    /// <summary>
     /// Создаёт главное окно оператора.
     /// </summary>
     public MainShell()
@@ -120,6 +130,9 @@ public sealed class MainShell : Form
 
     /// <summary>Панель строки состояния.</summary>
     private readonly Panel _строкаСостояния = new();
+
+    /// <summary>Метка состояния печатной сессии в строке состояния (ТЗ §7.2).</summary>
+    private readonly Label _состояниеПечати = new();
 
     /// <summary>
     /// Признак готовности окна к работе: база данных открыта и данные загружены.
@@ -232,8 +245,22 @@ public sealed class MainShell : Form
 
         var печать = new ToolStripMenuItem("Печать");
         печать.DropDownItems.Add("Текущий конверт (F5)", null, (_, _) => ПечатьТекущийКонверт());
-        печать.DropDownItems.Add("Выделенные с предпросмотром (F6)", null, (_, _) => ПечатьВыделенные());
-        печать.DropDownItems.Add("Выделенные без предпросмотра (F7)", null, (_, _) => ПечатьВыделенные());
+        печать.DropDownItems.Add("Выделенные с предпросмотром (F6)", null, (_, _) => ПечатьВыделенные(сПредпросмотром: true));
+        печать.DropDownItems.Add("Выделенные без предпросмотра (F7)", null, (_, _) => ПечатьВыделенные(сПредпросмотром: false));
+        печать.DropDownItems.Add(new ToolStripSeparator());
+        печать.DropDownItems.Add("Настройки принтера…", null, (_, _) => НастройкиПринтера());
+        печать.DropDownItems.Add(new ToolStripSeparator());
+
+        _пунктСпискаШаблонов = new ToolStripMenuItem("Показывать список шаблонов перед печатью")
+        {
+            CheckOnClick = true,
+            Checked = true,
+        };
+
+        _пунктСпискаШаблонов.CheckedChanged += async (_, _) =>
+            await СохранитьОпциюСпискаШаблоновAsync(_пунктСпискаШаблонов.Checked).ConfigureAwait(true);
+
+        печать.DropDownItems.Add(_пунктСпискаШаблонов);
 
         var рассылки = new ToolStripMenuItem("Рассылки");
         рассылки.DropDownItems.Add("Новая рассылка…", null, (_, _) => СоздатьРассылку());
@@ -468,7 +495,7 @@ public sealed class MainShell : Form
         печать.Click += (_, _) => ПечатьТекущийКонверт();
 
         var превью = Кнопка("F6 Превью", "Печать выделенных с предпросмотром (F6)");
-        превью.Click += (_, _) => ПечатьВыделенные();
+        превью.Click += (_, _) => ПечатьВыделенные(сПредпросмотром: true);
 
         var настройки = Кнопка("⚙", "Настройка таблицы");
         настройки.Click += (_, _) => НастроитьТаблицу();
@@ -708,12 +735,14 @@ public sealed class MainShell : Form
         Настроить(_выведено, "Выведено: 0", 220);
         Настроить(_копий, "Копий: 0", 330);
         Настроить(_состояниеБазы, "База: не подключена", 460);
+        Настроить(_состояниеПечати, string.Empty, 620);
 
         _строкаСостояния.Controls.Add(_всего);
         _строкаСостояния.Controls.Add(_выбрано);
         _строкаСостояния.Controls.Add(_выведено);
         _строкаСостояния.Controls.Add(_копий);
         _строкаСостояния.Controls.Add(_состояниеБазы);
+        _строкаСостояния.Controls.Add(_состояниеПечати);
     }
 
     /// <summary>
@@ -1837,6 +1866,8 @@ public sealed class MainShell : Form
             return;
         }
 
+        await ВыполнитьПечатьAsync(new[] { письмо.Id }, сПредпросмотром: true).ConfigureAwait(true);
+
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         ОбновитьСтрокуСостояния(_состав);
     }
@@ -1844,7 +1875,11 @@ public sealed class MainShell : Form
     /// <summary>
     /// Формирует отправления для всех выделенных получателей.
     /// </summary>
-    private async void ПечатьВыделенные()
+    /// <param name="сПредпросмотром">
+    /// Признак печати с интерактивным предпросмотром (F6); без предпросмотра —
+    /// прямая печать в спулер (F7).
+    /// </param>
+    private async void ПечатьВыделенные(bool сПредпросмотром)
     {
         if (_состав is null || _выбранныеПолучатели.Count == 0)
         {
@@ -1865,6 +1900,7 @@ public sealed class MainShell : Form
         }
 
         var создано = 0;
+        var идентификаторы = new List<long>();
 
         foreach (var идентификатор in _выбранныеПолучатели)
         {
@@ -1898,6 +1934,7 @@ public sealed class MainShell : Form
             if (результат.IsSuccess)
             {
                 создано++;
+                идентификаторы.Add(письмо.Id);
             }
         }
 
@@ -1908,8 +1945,474 @@ public sealed class MainShell : Form
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
 
+        await ВыполнитьПечатьAsync(идентификаторы, сПредпросмотром, пакетнаяПечать: true).ConfigureAwait(true);
+
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         ОбновитьСтрокуСостояния(_состав);
+    }
+
+    /// <summary>
+    /// Выполняет печатную сессию: диалог печати, интерактивный предпросмотр,
+    /// затем передача задания в спулер (ТЗ §8.6, функция 79).
+    /// </summary>
+    /// <param name="mailIds">Идентификаторы отправлений.</param>
+    /// <param name="сПредпросмотром">Признак показа интерактивного предпросмотра.</param>
+    /// <param name="пакетнаяПечать">Признак пакетной печати (F6 / F7).</param>
+    private async Task ВыполнитьПечатьAsync(
+        IReadOnlyList<long> mailIds,
+        bool сПредпросмотром,
+        bool пакетнаяПечать = false)
+    {
+        var состав = _состав;
+
+        if (состав is null || mailIds.Count == 0)
+        {
+            return;
+        }
+
+        // ТЗ §8.6, функция 78: без принтера по умолчанию печать блокируется.
+        if (состав.СлужбаПринтеров.GetDefaultPrinter() is null)
+        {
+            MessageBox.Show(
+                this,
+                PrinterManager.NoDefaultPrinterMessage,
+                "Печать",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        var запрос = await ПоказатьДиалогПечатиAsync(mailIds, сПредпросмотром, пакетнаяПечать)
+            .ConfigureAwait(true);
+
+        if (запрос is null)
+        {
+            return;
+        }
+
+        if (await состав.ПодсказкаПодачи.ShouldShowAsync().ConfigureAwait(true))
+        {
+            using var подсказка = new FormFeedOrientationHint();
+
+            if (подсказка.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (подсказка.ПодавитьПредупреждение)
+            {
+                await состав.ПодсказкаПодачи.SetSuppressedAsync(true).ConfigureAwait(true);
+            }
+        }
+
+        for (var попытка = 0; попытка < 3; попытка++)
+        {
+            // ТЗ §8.6, функция 80: предпросмотр показывается до передачи
+            // задания в спулер; отказ оператора отменяет печать.
+            if (сПредпросмотром && !await ПоказатьПредпросмотрAsync(запрос).ConfigureAwait(true))
+            {
+                return;
+            }
+
+            var итог = await ЗапуститьПечатьAsync(mailIds, запрос).ConfigureAwait(true);
+
+            if (!string.Equals(итог.Status, PrintJobStatus.BlockedSize, StringComparison.Ordinal))
+            {
+                if (!итог.IsSuccess && !string.IsNullOrEmpty(итог.ErrorMessage))
+                {
+                    MessageBox.Show(
+                        this,
+                        итог.ErrorMessage!,
+                        "Печать",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+
+                return;
+            }
+
+            var решение = await ПоказатьДиалогРазмераAsync(запрос).ConfigureAwait(true);
+
+            if (решение == PaperSizeBlockedDecision.Отмена)
+            {
+                return;
+            }
+
+            if (решение == PaperSizeBlockedDecision.ЗафиксироватьA4)
+            {
+                запрос = запрос with { FixA4 = true };
+                continue;
+            }
+
+            var новыйЗапрос = await ПоказатьДиалогПечатиAsync(mailIds, сПредпросмотром, пакетнаяПечать)
+                .ConfigureAwait(true);
+
+            if (новыйЗапрос is null)
+            {
+                return;
+            }
+
+            запрос = новыйЗапрос;
+        }
+    }
+
+    /// <summary>
+    /// Показывает диалог печати и формирует параметры печатной операции
+    /// (ТЗ §8.6, функция 79, §8.6, функция 82).
+    /// </summary>
+    /// <param name="mailIds">Идентификаторы отправлений.</param>
+    /// <param name="сПредпросмотром">Признак показа интерактивного предпросмотра.</param>
+    /// <param name="пакетнаяПечать">Признак пакетной печати (F6 / F7).</param>
+    /// <returns>Параметры печати либо <see langword="null"/>, если оператор отказался.</returns>
+    private async Task<PrintRequest?> ПоказатьДиалогПечатиAsync(
+        IReadOnlyList<long> mailIds,
+        bool сПредпросмотром,
+        bool пакетнаяПечать)
+    {
+        var состав = _состав;
+
+        if (состав is null)
+        {
+            return null;
+        }
+
+        var шаблоны = await состав.ШаблоныПечати
+            .GetAllAsync(PrintTemplateKind.Envelope)
+            .ConfigureAwait(true);
+
+        var принтеры = состав.СлужбаПринтеров.EnumeratePrinters();
+
+        // ТЗ §8.6, функция 82: опция «Показывать список шаблонов перед печатью».
+        var показыватьСписокШаблонов = await состав.ПараметрыПечати
+            .GetShowTemplateListAsync()
+            .ConfigureAwait(true);
+
+        СинхронизироватьПунктСпискаШаблонов(показыватьСписокШаблонов);
+
+        var последнийШаблон = await НайтиПоследнийШаблонAsync(состав, шаблоны).ConfigureAwait(true);
+
+        // ТЗ §8.6, функция 89: предупреждение о соответствии ГОСТ Р 51506-99.
+        var показыватьПредупреждениеРазлиновки = await состав.РежимРазлиновки
+            .ShouldShowAsync()
+            .ConfigureAwait(true);
+
+        using var диалог = new FormEnvelopePrint(
+            шаблоны,
+            принтеры,
+            показыватьСписокШаблонов,
+            последнийШаблон: последнийШаблон,
+            службаПринтеров: состав.СлужбаПринтеров,
+            показыватьПредупреждениеРазлиновки: показыватьПредупреждениеРазлиновки);
+
+        if (диалог.ShowDialog(this) != DialogResult.OK)
+        {
+            return null;
+        }
+
+        if (диалог.ПоказатьСписокШаблонов != показыватьСписокШаблонов)
+        {
+            показыватьСписокШаблонов = диалог.ПоказатьСписокШаблонов;
+
+            await состав.ПараметрыПечати
+                .SetShowTemplateListAsync(показыватьСписокШаблонов)
+                .ConfigureAwait(true);
+
+            СинхронизироватьПунктСпискаШаблонов(показыватьСписокШаблонов);
+        }
+
+        var запрос = диалог.СформироватьЗапрос(mailIds) with
+        {
+            ShowPreview = сПредпросмотром,
+            PrintMode = пакетнаяПечать
+                ? (сПредпросмотром ? PrintModes.BatchPreview : PrintModes.BatchDirect)
+                : PrintModes.Selected,
+        };
+
+        if (запрос.TemplateId is not null)
+        {
+            await состав.ПараметрыПечати
+                .SetLastTemplateIdAsync(запрос.TemplateId)
+                .ConfigureAwait(true);
+        }
+
+        if (запрос.Preprinted && диалог.ПодавитьПредупреждениеРазлиновки)
+        {
+            await состав.РежимРазлиновки.SetSuppressedAsync(true).ConfigureAwait(true);
+        }
+
+        return запрос;
+    }
+
+    /// <summary>
+    /// Показывает интерактивный предпросмотр печатного задания (ТЗ §8.6,
+    /// функция 80).
+    /// </summary>
+    /// <param name="запрос">Параметры печати.</param>
+    /// <returns><see langword="false"/>, если оператор отказался от печати.</returns>
+    private async Task<bool> ПоказатьПредпросмотрAsync(PrintRequest запрос)
+    {
+        var состав = _состав;
+
+        if (состав is null)
+        {
+            return false;
+        }
+
+        var сборщик = new PrintPreviewBuilder(
+            состав.ШаблоныПечати,
+            состав.ПоляШаблонов,
+            состав.ДанныеПечати,
+            состав.СлужбаПринтеров,
+            состав.СлужбаПредпросмотра);
+
+        PreviewDocument документ;
+
+        try
+        {
+            документ = await сборщик.ПостроитьAsync(запрос).ConfigureAwait(true);
+        }
+#pragma warning disable CA1031 // Сбой построения предпросмотра не должен прерывать приложение.
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось построить предпросмотр: {ex.Message}",
+                "Печать",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return false;
+        }
+
+        using var окно = new FormPrintPreview(документ);
+
+        return окно.ShowDialog(this) == DialogResult.OK;
+    }
+
+    /// <summary>
+    /// Передаёт печатное задание в спулер (ТЗ §8.6, функция 79).
+    /// </summary>
+    /// <param name="mailIds">Идентификаторы отправлений.</param>
+    /// <param name="запрос">Параметры печати.</param>
+    /// <returns>Итог печатной сессии.</returns>
+    private async Task<PrintResult> ЗапуститьПечатьAsync(IReadOnlyList<long> mailIds, PrintRequest запрос)
+    {
+        var состав = _состав;
+
+        if (состав is null)
+        {
+            return new PrintResult { Status = PrintJobStatus.Aborted };
+        }
+
+        var прогресс = new Progress<PrintProgress>(состояние =>
+        {
+            _состояниеПечати.Text = состояние.Message;
+        });
+
+        try
+        {
+            return запрос.ShowPreview
+                ? await состав.СлужбаПечати
+                    .PrintSelectionPreviewedAsync(mailIds, запрос, CancellationToken.None, прогресс)
+                    .ConfigureAwait(true)
+                : await состав.СлужбаПечати
+                    .PrintSelectionDirectAsync(mailIds, запрос, CancellationToken.None, прогресс)
+                    .ConfigureAwait(true);
+        }
+        finally
+        {
+            _состояниеПечати.Text = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Показывает диалог проверки размера бумаги и блокирующее предупреждение
+    /// о слишком большом конверте (ТЗ §8.6, функции 83 и 85).
+    /// </summary>
+    /// <param name="запрос">Параметры печати.</param>
+    /// <returns>Решение оператора.</returns>
+    private async Task<PaperSizeBlockedDecision> ПоказатьДиалогРазмераAsync(PrintRequest запрос)
+    {
+        var имяПринтера = запрос.PrinterName;
+
+        var форматы = ПолучитьДоступныеФорматы(имяПринтера);
+
+        var (ширинаБланка, высотаБланка) = await ПолучитьРазмерБланкаAsync(запрос).ConfigureAwait(true);
+        var (ширинаНосителя, высотаНосителя) = ПолучитьРазмерНосителя(имяПринтера);
+
+        // ТЗ §8.6, функция 85: блокирующее предупреждение с обеими величинами
+        // (мм) и перечнем доступных форматов принтера.
+        var предупреждение = new OversizeWarning(new OversizeWarningPresenter(форматы), форматы);
+
+        предупреждение.ShowOversizeDialog(
+            new SizeF((float)ширинаБланка, (float)высотаБланка),
+            new SizeF((float)ширинаНосителя, (float)высотаНосителя));
+
+        // ТЗ §8.6, функция 83: выбор действия оператора.
+        using var диалог = new FormPaperSizeBlocked(
+            new SizeF((float)ширинаБланка, (float)высотаБланка),
+            new SizeF((float)ширинаНосителя, (float)высотаНосителя),
+            имяПринтера);
+
+        диалог.ShowDialog(this);
+
+        return диалог.Решение;
+    }
+
+    /// <summary>
+    /// Возвращает перечень форматов носителя, доступных на выбранном принтере.
+    /// </summary>
+    /// <param name="имяПринтера">Имя принтера.</param>
+    /// <returns>Наименования доступных форматов.</returns>
+    private IReadOnlyList<string> ПолучитьДоступныеФорматы(string имяПринтера)
+    {
+        var состав = _состав;
+
+        if (состав is null || string.IsNullOrWhiteSpace(имяПринтера))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return состав.СлужбаПринтеров.GetSupportedPaperSizeNames(имяПринтера);
+        }
+#pragma warning disable CA1031 // Отсутствие сведений о форматах не должно прерывать печать.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    /// <summary>
+    /// Возвращает размер бланка выбранного шаблона, мм.
+    /// </summary>
+    /// <param name="запрос">Параметры печати.</param>
+    /// <returns>Ширина и высота бланка, мм.</returns>
+    private async Task<(decimal Ширина, decimal Высота)> ПолучитьРазмерБланкаAsync(PrintRequest запрос)
+    {
+        var состав = _состав;
+
+        if (состав is null || запрос.TemplateId is null)
+        {
+            return (0m, 0m);
+        }
+
+        var шаблон = await состав.ШаблоныПечати
+            .GetByIdAsync(запрос.TemplateId.Value)
+            .ConfigureAwait(true);
+
+        return шаблон is null ? (0m, 0m) : (шаблон.WidthMm, шаблон.HeightMm);
+    }
+
+    /// <summary>
+    /// Возвращает размер печатной области носителя выбранного принтера, мм.
+    /// </summary>
+    /// <param name="имяПринтера">Имя принтера.</param>
+    /// <returns>Ширина и высота печатной области, мм.</returns>
+    private (decimal Ширина, decimal Высота) ПолучитьРазмерНосителя(string имяПринтера)
+    {
+        var состав = _состав;
+
+        if (состав is null || string.IsNullOrWhiteSpace(имяПринтера))
+        {
+            return (0m, 0m);
+        }
+
+        try
+        {
+            var (ширина, высота) = состав.СлужбаПринтеров.GetPrintableArea(имяПринтера);
+
+            return (ширина, высота);
+        }
+#pragma warning disable CA1031 // Недоступность драйвера не должна прерывать печать.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            return (0m, 0m);
+        }
+    }
+
+    /// <summary>
+    /// Находит последний использованный шаблон печати (ТЗ §8.6, функция 82).
+    /// </summary>
+    /// <param name="шаблоны">Доступные шаблоны.</param>
+    /// <returns>Последний использованный шаблон либо <see langword="null"/>.</returns>
+    private async Task<PrintTemplate?> НайтиПоследнийШаблонAsync(
+        AppServices состав,
+        IReadOnlyList<PrintTemplate> шаблоны)
+    {
+        var идентификатор = await состав.ПараметрыПечати
+            .GetLastTemplateIdAsync()
+            .ConfigureAwait(true);
+
+        if (идентификатор is null)
+        {
+            return null;
+        }
+
+        return шаблоны.FirstOrDefault(шаблон => шаблон.Id == идентификатор.Value);
+    }
+
+    /// <summary>
+    /// Синхронизирует состояние галки меню «Показывать список шаблонов перед
+    /// печатью» с профилем пользователя.
+    /// </summary>
+    /// <param name="значение">Значение опции.</param>
+    private void СинхронизироватьПунктСпискаШаблонов(bool значение)
+    {
+        if (_пунктСпискаШаблонов is null || _пунктСпискаШаблонов.Checked == значение)
+        {
+            return;
+        }
+
+        _пунктСпискаШаблонов.Checked = значение;
+    }
+
+    /// <summary>
+    /// Сохраняет опцию «Показывать список шаблонов перед печатью» в профиле
+    /// пользователя (ТЗ §8.6, функция 82).
+    /// </summary>
+    /// <param name="значение">Значение опции.</param>
+    private async Task СохранитьОпциюСпискаШаблоновAsync(bool значение)
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        await _состав.ПараметрыПечати.SetShowTemplateListAsync(значение).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Открывает системный диалог свойств принтера по умолчанию (ТЗ §8.6,
+    /// функция 78).
+    /// </summary>
+    private void НастройкиПринтера()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var принтер = _состав.СлужбаПринтеров.GetDefaultPrinter();
+
+        if (принтер is null)
+        {
+            MessageBox.Show(
+                this,
+                PrinterManager.NoDefaultPrinterMessage,
+                "Настройки принтера",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        _состав.СлужбаПринтеров.ShowPrinterProperties(принтер.Name);
     }
 
     /// <summary>
@@ -2094,8 +2597,10 @@ public sealed class MainShell : Form
                 ПечатьТекущийКонверт();
                 break;
             case ShellAction.ПечатьВыделенныеСПредпросмотром:
+                ПечатьВыделенные(сПредпросмотром: true);
+                break;
             case ShellAction.ПечатьВыделенныеБезПредпросмотра:
-                ПечатьВыделенные();
+                ПечатьВыделенные(сПредпросмотром: false);
                 break;
             case ShellAction.ОткрытьРедакторБланков:
                 MessageBox.Show(

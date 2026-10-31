@@ -4,11 +4,21 @@ using Picket302.Domain.Common;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.Services;
 using Picket302.Infrastructure.Data;
+using Picket302.Infrastructure.Fonts;
 using Picket302.Infrastructure.Persistence;
 using Picket302.Infrastructure.Registry;
 using Picket302.Infrastructure.Repositories;
 using Picket302.Infrastructure.Storage;
 using Picket302.Infrastructure.Text;
+using Picket302.Printing;
+using Picket302.Printing.Audit;
+using Picket302.Printing.Devices;
+using Picket302.Printing.Engine;
+using Picket302.Printing.Elements;
+using Picket302.Printing.Preview;
+using Picket302.Printing.Rendering;
+using Picket302.Printing.Validation;
+using Picket302.Printing.Warnings;
 
 namespace Picket302.App;
 
@@ -70,6 +80,41 @@ public sealed class AppServices : IAsyncDisposable
         СлужбаНумерации = new RegistrationNumberGenerator(СчётчикиНумерации);
         СлужбаСидов = new DemoDatabaseSeeder(Группы, Контрагенты, ПоляКонтрагентов, Обслуживание, сессия);
         Склонение = new RussianDeclensionEngine();
+
+        ШаблоныПечати = new PrintTemplateRepository(сессия);
+        ПоляШаблонов = new BlankFieldRepository(сессия);
+        ЖурналПечати = new PrintJobRepository(сессия);
+        ДанныеПечати = new PrintDataSource(Письма, Контрагенты);
+        ПараметрыПечати = new PrintOptions(Параметры);
+        ПодсказкаПодачи = new FeedOrientationHint(Параметры);
+        РежимРазлиновки = new PreprintedMode(Параметры);
+        СлужбаПринтеров = new PrinterManager();
+
+        var каталогАудита = Path.GetDirectoryName(Path.GetFullPath(путьБазы))
+            ?? AppContext.BaseDirectory;
+
+        var контрольШрифта = new ZipcodeFontGuard();
+        var измеритель = new GdiTextMeasurer();
+        var рендерер = new EnvelopeRenderer(измеритель);
+
+        СлужбаПечати = new PrintSessionController(
+            ШаблоныПечати,
+            ПоляШаблонов,
+            ЖурналПечати,
+            ДанныеПечати,
+            new PrintAuditWriter(каталогАудита),
+            new SystemDrawingPrintSpooler(),
+            рендерер,
+            new PaperSizeValidator(),
+            new PostIndexRenderer(контрольШрифта),
+            new QrCodeRenderer(),
+            new LogoRenderer());
+
+        СлужбаПредпросмотра = new PrintPreviewEngine(
+            рендерер,
+            new PostIndexRenderer(контрольШрифта),
+            new QrCodeRenderer(),
+            new LogoRenderer());
     }
 
     /// <summary>Путь к файлу базы данных.</summary>
@@ -152,6 +197,40 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>Движок склонения ФИО и адресов.</summary>
     public RussianDeclensionEngine Склонение { get; }
+
+    /// <summary>Репозиторий шаблонов конвертов и бланков.</summary>
+    public IPrintTemplateRepository ШаблоныПечати { get; }
+
+    /// <summary>Репозиторий полей бланка.</summary>
+    public IBlankFieldRepository ПоляШаблонов { get; }
+
+    /// <summary>Неизменяемый реестр сессий печати.</summary>
+    public IPrintJobRepository ЖурналПечати { get; }
+
+    /// <summary>Источник данных отправлений для печати.</summary>
+    public PrintDataSource ДанныеПечати { get; }
+
+    /// <summary>Параметры печати (опция «Показывать список шаблонов перед печатью»).</summary>
+    public PrintOptions ПараметрыПечати { get; }
+
+    /// <summary>Обучающее предупреждение о подаче конвертов узкой стороной (ТЗ §8.5, функция 147).</summary>
+    public FeedOrientationHint ПодсказкаПодачи { get; }
+
+    /// <summary>
+    /// Режим печати на разлинованные (типографские) конверты: предупреждение о
+    /// соответствии ГОСТ Р 51506-99 и флаг «Больше не показывать это сообщение»
+    /// (ТЗ §8.6, функция 89).
+    /// </summary>
+    public PreprintedMode РежимРазлиновки { get; }
+
+    /// <summary>Список принтеров системы.</summary>
+    public PrinterManager СлужбаПринтеров { get; }
+
+    /// <summary>Управление печатными сессиями (F5 / F6 / F7).</summary>
+    public PrintSessionController СлужбаПечати { get; }
+
+    /// <summary>Движок предпросмотра печати.</summary>
+    public PrintPreviewEngine СлужбаПредпросмотра { get; }
 
     /// <summary>
     /// Возвращает путь к базе данных по умолчанию —

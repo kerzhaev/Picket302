@@ -105,4 +105,57 @@ public sealed class TextFitterTests
         Assert.True(
             результат.Lines.Sum(строка => строка.Length) <= поле.MaxChars);
     }
+
+    [Fact]
+    public void Кегли_ПриРазницеНеКратнойПолупункту_МинимальныйКегльПоследний()
+    {
+        var кегли = TextFitter.Кегли(10m, 6.2m).ToList();
+
+        Assert.Equal(6.2m, кегли[^1]);
+        Assert.Equal(10m, кегли[0]);
+
+        // Шаг между соседними кеглями — ровно 0,5 пункта.
+        for (var индекс = 1; индекс < кегли.Count - 1; индекс++)
+        {
+            Assert.Equal(0.5m, кегли[индекс - 1] - кегли[индекс]);
+        }
+    }
+
+    [Fact]
+    public void Кегли_ПриРазницеКратнойПолупункту_МинимальныйКегльНеДублируется()
+    {
+        var кегли = TextFitter.Кегли(10m, 6m).ToList();
+
+        Assert.Equal(6m, кегли[^1]);
+        Assert.Equal(кегли.Count, кегли.Distinct().Count());
+    }
+
+    [Fact]
+    public void FitField_МинимальныйКегльНеКратенПолупункту_ТекстПодбираетсяБезПереполнения()
+    {
+        // Разница между максимальным и минимальным кеглем не кратна 0,5 пункта:
+        // при кегле 6,5 pt высота строки не помещается, а при 6,2 pt — помещается.
+        var поле = Поле(длина: 40m, высота: 2.7m, мин: 6.2m, макс: 10m);
+
+        var результат = new TextFitter(new УсловныйИзмеритель()).FitField(поле, "Иванов Иван Иванович");
+
+        Assert.False(результат.Overflow);
+        Assert.Equal(6.2m, результат.FontSizePt);
+        Assert.Null(результат.Warning);
+    }
+
+    [Fact]
+    public void FitField_Переполнение_ПредупреждениеНазываетПроверенныйМинимальныйКегль()
+    {
+        var поле = Поле(длина: 40m, высота: 2.7m, мин: 6.2m, макс: 10m);
+
+        var результат = new TextFitter(new УсловныйИзмеритель())
+            .FitField(поле, string.Join(' ', Enumerable.Repeat("Иванов Иван Иванович", 20)));
+
+        Assert.True(результат.Overflow);
+        Assert.Equal(6.2m, результат.FontSizePt);
+        Assert.NotNull(результат.Warning);
+        Assert.Contains("минимальном кегле 6.2 pt", результат.Warning!);
+        Assert.Contains("Кому 1", результат.Warning!);
+    }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Picket302.Domain.Entities;
 
 namespace Picket302.Printing.Engine;
@@ -8,9 +9,11 @@ namespace Picket302.Printing.Engine;
 /// </summary>
 /// <remarks>
 /// Кегль уменьшается от максимального к минимальному шагом 0,5 пункта; текст
-/// переносится по словам. Если текст не помещается в границы поля даже при
-/// минимальном кегле, печать не блокируется: выставляется маркер переполнения
-/// для предпросмотра и предупреждение в журнал сессии.
+/// переносится по словам. Минимальный кегль поля проверяется последним
+/// кандидатом всегда — даже если разница между максимальным и минимальным
+/// кеглем не кратна 0,5 пункта. Если текст не помещается в границы поля даже
+/// при минимальном кегле, печать не блокируется: выставляется маркер
+/// переполнения для предпросмотра и предупреждение в журнал сессии.
 /// </remarks>
 public sealed class TextFitter
 {
@@ -78,18 +81,19 @@ public sealed class TextFitter
             }
         }
 
-        var строкиМинимум = РазбитьПоСловам(исходныйТекст, field, field.FontHeightMinPt);
+        var минимальныйКегль = МинимальныйПроверенныйКегль(field);
+
+        var строкиМинимум = РазбитьПоСловам(исходныйТекст, field, минимальныйКегль);
 
         return new FittingResult
         {
-            FontSizePt = field.FontHeightMinPt,
+            FontSizePt = минимальныйКегль,
             Lines = строкиМинимум,
             Overflow = true,
             Truncated = усечён,
             Warning = string.Join(
                 " ",
-                $"Поле «{field.Name}» переполнено: текст не помещается в границы поля даже при " +
-                $"минимальном кегле {field.FontHeightMinPt:0.##}pt.",
+                ПредупреждениеОбПереполнении(field, минимальныйКегль),
                 усечён ? ПредупреждениеОбУсечении(field) : string.Empty).Trim(),
         };
     }
@@ -98,6 +102,11 @@ public sealed class TextFitter
     /// Возвращает последовательность кеглей от максимального к минимальному
     /// шагом 0,5 пункта.
     /// </summary>
+    /// <remarks>
+    /// Минимальный кегль поля проверяется последним кандидатом всегда, даже
+    /// если разница (максимальный − минимальный) не кратна 0,5 пункта: иначе
+    /// помещающийся текст ошибочно считался бы переполненным.
+    /// </remarks>
     /// <param name="maxPt">Максимальный кегль, пунктов.</param>
     /// <param name="minPt">Минимальный кегль, пунктов.</param>
     /// <returns>Последовательность кеглей.</returns>
@@ -115,6 +124,30 @@ public sealed class TextFitter
         {
             yield return maxPt - (шаг * StepPt);
         }
+
+        // Минимальный кегль добавляется последним: при разнице, не кратной
+        // 0,5 пункта, он не достигается кратным шагом.
+        if (maxPt - (шагов * StepPt) > minPt)
+        {
+            yield return minPt;
+        }
+    }
+
+    /// <summary>
+    /// Возвращает минимальный кегль, фактически проверенный при подборе.
+    /// </summary>
+    /// <param name="field">Поле бланка.</param>
+    /// <returns>Последний проверенный кегль, пунктов.</returns>
+    private static decimal МинимальныйПроверенныйКегль(BlankField field)
+    {
+        decimal последний = field.FontHeightMaxPt;
+
+        foreach (var кегль in Кегли(field.FontHeightMaxPt, field.FontHeightMinPt))
+        {
+            последний = кегль;
+        }
+
+        return последний;
     }
 
     private bool Влезает(IReadOnlyList<string> строки, BlankField field, decimal кегль)
@@ -170,4 +203,18 @@ public sealed class TextFitter
 
     private static string ПредупреждениеОбУсечении(BlankField field) =>
         $"Текст поля «{field.Name}» усечён по пределу {field.MaxChars} символов.";
+
+    /// <summary>
+    /// Формирует предупреждение о переполнении поля с указанием минимального
+    /// кегля, при котором текст всё ещё не помещается (ТЗ §8.6, функция 91).
+    /// </summary>
+    /// <param name="field">Поле бланка.</param>
+    /// <param name="минимальныйКегльPt">Проверенный минимальный кегль, пунктов.</param>
+    /// <returns>Текст предупреждения сессии печати.</returns>
+    private static string ПредупреждениеОбПереполнении(BlankField field, decimal минимальныйКегльPt) =>
+        string.Format(
+            CultureInfo.InvariantCulture,
+            "Поле «{0}» переполнено: текст не помещается в границы поля даже при минимальном кегле {1:0.##} pt.",
+            field.Name,
+            минимальныйКегльPt);
 }

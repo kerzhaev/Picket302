@@ -110,7 +110,42 @@ public sealed record PrinterDeviceInfo
         DevModeConstants.DMPAPER_ENV_C4 => "C4",
         DevModeConstants.DMPAPER_ENV_C6 => "C6",
         DevModeConstants.DMPAPER_ENV_C65 => "C65",
+        DevModeConstants.DMPAPER_ENV_DL => "DL",
+        DevModeConstants.DMPAPER_ENV_B4 => "EnvelopeB4",
+        DevModeConstants.DMPAPER_ENV_B5 => "EnvelopeB5",
+        DevModeConstants.DMPAPER_ENV_B6 => "EnvelopeB6",
         DevModeConstants.DMPAPER_USER => "User",
         _ => $"Paper{paperSize}",
     };
+
+    /// <summary>
+    /// Возвращает код формата бумаги DEVMODE по наименованию формата бланка
+    /// (C6, DL, C5, C4, C3, B4, A4, A3, A5).
+    /// </summary>
+    /// <param name="format">Наименование формата бланка.</param>
+    /// <returns>Код DMPAPER либо <see cref="DevModeConstants.DMPAPER_USER"/> для пользовательского формата.</returns>
+    public static short PaperSizeCodeByFormat(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+        {
+            return DevModeConstants.DMPAPER_USER;
+        }
+
+        var код = format.Trim().ToUpperInvariant();
+
+        return код switch
+        {
+            "C3" => DevModeConstants.DMPAPER_ENV_C3,
+            "C4" => DevModeConstants.DMPAPER_ENV_C4,
+            "C5" => DevModeConstants.DMPAPER_ENV_C5,
+            "C6" => DevModeConstants.DMPAPER_ENV_C6,
+            "C65" or "E4" or "E65" => DevModeConstants.DMPAPER_ENV_C65,
+            "DL" => DevModeConstants.DMPAPER_ENV_DL,
+            "B4" => DevModeConstants.DMPAPER_ENV_B4,
+            "A4" => DevModeConstants.DMPAPER_A4,
+            "A3" => DevModeConstants.DMPAPER_A3,
+            "A5" => DevModeConstants.DMPAPER_A5,
+            _ => DevModeConstants.DMPAPER_USER,
+        };
+    }
 }

@@ -153,13 +153,39 @@ public sealed class PostIndexRendererTests
     public void RenderMachineReadableIndex_НехватаетШирины_ПропорциональноУменьшаетШтамп()
     {
         var контекст = new ЗаписывающийКонтекст();
+
+        // Ширина штампа из шести знаков: (6 − 1) × 5,4 мм + 3,7 мм = 30,7 мм.
         var спецификация = new PostIndexSpec { AvailableWidthMm = 16.2m };
 
         new PostIndexRenderer(new ШрифтЕсть())
             .RenderMachineReadableIndex(контекст, "101000", спецификация);
 
+        var ожидаемыйМасштаб = 16.2m / 30.7m;
+
         Assert.Equal(6, контекст.Вызовы.Count);
-        Assert.Equal(3.7f * 0.5f, контекст.Вызовы[0].Ширина, 2);
-        Assert.Equal(5.5f * 0.5f, контекст.Вызовы[0].Высота, 2);
+        Assert.Equal(3.7f * (float)ожидаемыйМасштаб, контекст.Вызовы[0].Ширина, 2);
+        Assert.Equal(5.5f * (float)ожидаемыйМасштаб, контекст.Вызовы[0].Высота, 2);
+    }
+
+    [Fact]
+    public void ВычислитьМасштаб_ШиринаРовноПоШтампу_МасштабЕдиница()
+    {
+        // 30,7 мм — фактическая ширина шестизначного штампа.
+        var спецификация = new PostIndexSpec { AvailableWidthMm = 30.7m };
+
+        Assert.Equal(1m, PostIndexRenderer.ВычислитьМасштаб(спецификация));
+    }
+
+    [Fact]
+    public void ВычислитьМасштаб_МеждународныйИндекс_УчитываетТриЗнака()
+    {
+        // Международный штамп: два промежутка по 5,4 мм и знак 3,7 мм = 14,5 мм.
+        var спецификация = new PostIndexSpec
+        {
+            DigitCount = 3,
+            AvailableWidthMm = 14.5m,
+        };
+
+        Assert.Equal(1m, PostIndexRenderer.ВычислитьМасштаб(спецификация));
     }
 }
