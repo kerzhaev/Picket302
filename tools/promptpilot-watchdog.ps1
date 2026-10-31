@@ -108,7 +108,11 @@ if ($wf.current_stage_id -ne $state.lastStage -or $round -ne $state.lastRound) {
 try {
   $rep2 = Invoke-RestMethod -Uri "$api/api/workflows/$wid/report" -TimeoutSec 15
   $cpEvent = $rep2.events | Where-Object { $_.event_type -eq 'stage.checkpoint' } | Select-Object -Last 1
-  if ($cpEvent -and $cpEvent.payload -and (-not $cpEvent.payload.sha)) {
+  if ($cpEvent -and $cpEvent.payload) {
+    # P16 (K-7 variant): a checkpoint may carry a NON-NULL sha while committing
+    # only incidental files (e.g. docs) - the stage's real src/tests deliverable
+    # stays uncommitted. Detection is therefore NOT "sha is null" but
+    # "checkpoint newer than last commit AND allowed paths still dirty".
     # Compensate ONLY when the checkpoint is newer than the last git commit:
     # otherwise it is already compensated (or the next stage's work is in flight).
     $cpTime = [datetime]$cpEvent.created_at
