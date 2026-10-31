@@ -12,7 +12,8 @@
 'use strict';
 const { spawnSync } = require('child_process');
 
-const CLI = 'C:\\Users\\FIREBAT\\.minimax-code\\releases\\0.5.8\\node_modules\\@minimax-ai\\code\\cli.js';
+const CLI = process.env.PP_WRAPPER_CLI ||
+  'C:\\Users\\FIREBAT\\.minimax-code\\releases\\0.5.8\\node_modules\\@minimax-ai\\code\\cli.js';
 const ITOG_ACCEPT_RE = /^ИТОГ:\s*(ГОТОВО|УЖЕ СДЕЛАНО|НУЖЕН ЧЕЛОВЕК|НЕ СМОГ|ПУСТО)(\s|$)/i;
 const ITOG_ANY_RE = /ИТОГ:\s*(ГОТОВО|УЖЕ СДЕЛАНО|НУЖЕН ЧЕЛОВЕК|НЕ СМОГ|ПУСТО)/gi;
 const RUN_TIMEOUT_MS = 6900 * 1000; // чуть меньше task_timeout воркера (7200с)
@@ -89,6 +90,37 @@ if (!canonical) {
     out += `\nИТОГ: ${itog} — см. отчёт выше.`;
   }
 }
+
+// P14 (К-10): модель кладёт в payload находок прозу-строку, а парсер
+// PromptPilot требует dict (ReviewFindingInput.payload: dict[str, Any]) —
+// ValidationError отбрасывает ВЕСЬ отчёт (инциденты 31.10.2026, раунды 7 и 8).
+// Нормализуем ПОСЛЕДНЮЮ строку AUDIT_FINDINGS_JSON: строковые/пустые payload
+// оборачиваем в {"report": ...}. Невалидный JSON не трогаем.
+function normalizeFindingsPayload(text) {
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const t = lines[i].trim();
+    if (/^AUDIT_FINDINGS_JSON:/.test(t)) {
+      const rawText = t.slice('AUDIT_FINDINGS_JSON:'.length).trim();
+      try {
+        const arr = JSON.parse(rawText);
+        if (Array.isArray(arr)) {
+          const fixed = arr.map(f => {
+            if (f && typeof f === 'object' && !Array.isArray(f) &&
+                (!f.payload || typeof f.payload !== 'object' || Array.isArray(f.payload))) {
+              return Object.assign({}, f, { payload: { report: String(f.payload ?? '') } });
+            }
+            return f;
+          });
+          lines[i] = 'AUDIT_FINDINGS_JSON: ' + JSON.stringify(fixed);
+        }
+      } catch (_) { /* не трогаем: пусть парсер решает */ }
+      break;
+    }
+  }
+  return lines.join('\n');
+}
+out = normalizeFindingsPayload(out);
 
 process.stdout.write(out + '\n');
 process.exit(exitCode < 0 ? 1 : exitCode);
