@@ -47,7 +47,7 @@ public sealed class PaperSizeValidatorTests
 
         Assert.True(результат.IsBlocked);
         Assert.Equal(PrintJobStatus.BlockedSize, результат.Status);
-        Assert.Contains("Конверт слишком большой", результат.ErrorMessage!);
+        Assert.Contains(PaperSizeValidator.BlockedSizeMessage, результат.ErrorMessage!);
     }
 
     [Fact]

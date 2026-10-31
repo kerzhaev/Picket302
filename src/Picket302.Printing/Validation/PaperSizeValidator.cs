@@ -23,7 +23,10 @@ public sealed class PaperSizeValidator
     public const decimal ToleranceMm = 1.0m;
 
     /// <summary>
-    /// Текст блокирующей ошибки (ТЗ §8.6, функции 83 и 85).
+    /// Текст блокирующей ошибки BLOCKED_SIZE (ТЗ §8.6, функции 83 и 85:
+    /// «Конверт слишком большой для выбранного принтера»). Формулировка §6.2
+    /// отличается словом «велик» — расхождение зафиксировано в допущении S4.3
+    /// журнала открытых вопросов.
     /// </summary>
     public const string BlockedSizeMessage = "Конверт слишком большой для выбранного принтера";
 
@@ -43,11 +46,18 @@ public sealed class PaperSizeValidator
 
         if (дельтаШирины > ToleranceMm || дельтаВысоты > ToleranceMm)
         {
+            var предупреждение = new OversizeWarning(availablePaperSizes: printer.AvailablePaperSizes);
+
             return new PaperCheckResult
             {
                 IsBlocked = true,
                 Status = PrintJobStatus.BlockedSize,
-                ErrorMessage = BlockedSizeMessage,
+                ErrorMessage = предупреждение.BuildMessage(
+                    new System.Drawing.SizeF((float)blank.WidthMm, (float)blank.HeightMm),
+                    new System.Drawing.SizeF(
+                        (float)printer.PrintableWidthMm,
+                        (float)printer.PrintableHeightMm),
+                    BlockedSizeMessage),
                 DeltaWidthMm = дельтаШирины,
                 DeltaHeightMm = дельтаВысоты,
                 AvailablePaperSizes = printer.AvailablePaperSizes,
