@@ -84,17 +84,23 @@ public sealed class ComRegistrationTests : IDisposable
             "oleaut32.dll",
             ComRegistration.ReadValue(интерфейс, "ProxyStub32"));
 
-        // Ссылка на библиотеку типов в ветке интерфейса указывает на
-        // собранный файл PrintEnvelopePro.tlb: без неё невозможен экспорт
-        // сведений о типе (ITypeInfo) для клиента.
+        // Ссылка на библиотеку типов в ветке интерфейса содержит GUID
+        // библиотеки (LIBID) — так устроен контракт COM: по LIBID система
+        // находит файл PrintEnvelopePro.tlb в ветке TypeLib\{LIBID}\{версия}.
+        // Без значения TypeLib клиент не получает сведения о типе (ITypeInfo).
         Assert.Equal(
-            _регистрация.TypeLibraryPath,
+            $"{{{ComAutomationIds.TypeLibId}}}",
             ComRegistration.ReadValue(интерфейс, "TypeLib"));
+
+        Assert.Equal(
+            $"{{{ComAutomationIds.TypeLibId}}}",
+            ComRegistration.ReadValue(clsid, "TypeLib"));
 
         Assert.True(
             File.Exists(Path.Combine(AppContext.BaseDirectory, ComRegistration.TypeLibraryFileName)),
             $"Файл библиотеки типов '{ComRegistration.TypeLibraryFileName}' не поставляется вместе с программой.");
 
+        // Путь к файлу библиотеки типов хранится в ветке TypeLib.
         Assert.Equal(
             _регистрация.TypeLibraryPath,
             ComRegistration.ReadValue(библиотека));
@@ -122,7 +128,7 @@ public sealed class ComRegistrationTests : IDisposable
             ComRegistration.ReadValue($@"{версия}\0\win32"));
 
         Assert.Equal(
-            _регистрация.TypeLibraryPath,
+            $"{{{ComAutomationIds.TypeLibId}}}",
             ComRegistration.ReadValue(интерфейс, "TypeLib"));
     }
 

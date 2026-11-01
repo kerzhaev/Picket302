@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -7,6 +8,7 @@ using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
+using Picket302.Domain.ValueObjects;
 
 namespace Picket302.Application.Import;
 
@@ -49,6 +51,7 @@ public sealed class ImportSession
     public const int МаксимальнаяДлинаЗначения = ImportValidator.МаксимальнаяДлинаЗначения;
 
     private static readonly DelimitedTextReader Читатель = new();
+    private static readonly RtfTableReader ЧитательRtf = new();
     private static readonly CsvProfileService СервисПрофилей = new();
     private static readonly ImportFieldMapper Маппер = new();
 
@@ -182,7 +185,7 @@ public sealed class ImportSession
         if (string.IsNullOrEmpty(формат))
         {
             return Result<ImportSession>.Failure(
-                $"Формат файла «{Path.GetExtension(filePath)}» не поддерживается. Используйте CSV, XLSX или HTML.");
+                $"Формат файла «{Path.GetExtension(filePath)}» не поддерживается. Используйте CSV, XLSX, HTML или RTF.");
         }
 
         DelimitedTextTable таблица;
@@ -209,6 +212,17 @@ public sealed class ImportSession
                 }
 
                 таблица = результатHtml.Value!;
+                break;
+
+            case "RTF":
+                var результатRtf = ПрочитатьДокументRtf(filePath, options);
+
+                if (!результатRtf.IsSuccess)
+                {
+                    return Result<ImportSession>.Failure(результатRtf.Error!);
+                }
+
+                таблица = результатRtf.Value!;
                 break;
 
             default:
@@ -261,7 +275,9 @@ public sealed class ImportSession
         foreach (var строка in таблица.Rows)
         {
             var черновик = ПостроитьЧерновик(строка, привязки, дополнительные, options, адреса);
-            черновик.GroupId = options.GroupId;
+
+            // Группа из файла имеет приоритет над категорией, выбранной оператором.
+            черновик.GroupId ??= options.GroupId;
             черновик.Source = $"Импорт {формат} от {моментИмпорта:dd.MM.yyyy} из {имяФайла}";
 
             var запись = new ImportRecord
@@ -518,7 +534,7 @@ public sealed class ImportSession
     /// Определяет формат файла по расширению и содержимому.
     /// </summary>
     /// <param name="filePath">Путь к файлу.</param>
-    /// <returns>Имя формата («CSV», «XLSX», «HTML», «XML») либо пустая строка.</returns>
+    /// <returns>Имя формата («CSV», «XLSX», «HTML», «RTF», «XML») либо пустая строка.</returns>
     private static string ОпределитьФормат(string filePath)
     {
         var расширение = Path.GetExtension(filePath).ToLowerInvariant();
@@ -535,6 +551,8 @@ public sealed class ImportSession
             case ".htm":
             case ".html":
                 return "HTML";
+            case ".rtf":
+                return "RTF";
             case ".xml":
                 return "XML";
         }
@@ -544,6 +562,11 @@ public sealed class ImportSession
         if (начало.StartsWith("PK", StringComparison.Ordinal))
         {
             return "XLSX";
+        }
+
+        if (начало.StartsWith("{\\rtf", StringComparison.OrdinalIgnoreCase))
+        {
+            return "RTF";
         }
 
         if (начало.Contains("<table", StringComparison.OrdinalIgnoreCase)
@@ -691,6 +714,81 @@ public sealed class ImportSession
         }
 
         return Result<DelimitedTextTable>.Success(таблица);
+    }
+
+    /// <summary>
+    /// Читает документ RTF как источник данных: таблица RTF либо строки из
+    /// абзацев документа, если таблицы в нём нет (ТЗ §8.5, функция 71).
+    /// </summary>
+    /// <param name="filePath">Путь к файлу.</param>
+    /// <param name="options">Параметры запуска мастера импорта.</param>
+    /// <returns>Разобранная таблица либо текст ошибки.</returns>
+    private static Result<DelimitedTextTable> ПрочитатьДокументRtf(string filePath, ImportStartOptions options)
+    {
+        try
+        {
+            using var поток = File.OpenRead(filePath);
+
+            var таблица = ЧитательRtf.Read(
+                поток,
+                options.HasHeaderRow,
+                Math.Max(1, options.StartRow));
+
+            if (таблица.Rows.Count == 0 && таблица.Headers.Count == 0)
+            {
+                return Result<DelimitedTextTable>.Failure(
+                    "Файл RTF не удалось разобрать: в файле не найдено ни таблицы, ни абзацев с текстом. Сохраните данные как CSV и повторите импорт.");
+            }
+
+            return Result<DelimitedTextTable>.Success(ПроверитьДлинуЗначений(таблица));
+        }
+        catch (IOException ex)
+        {
+            return Result<DelimitedTextTable>.Failure($"Файл импорта не удалось прочитать: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Проверяет предельную длину значения в строках файла RTF: значение
+    /// длиннее 255 символов помечает строку как ошибочную, чтобы усечение
+    /// не осталось молчаливым (ТЗ §9.7, п. 4).
+    /// </summary>
+    /// <param name="таблица">Разобранная таблица файла.</param>
+    /// <returns>Таблица с проверенными строками.</returns>
+    private static DelimitedTextTable ПроверитьДлинуЗначений(DelimitedTextTable таблица)
+    {
+        var строки = new List<DelimitedTextRow>();
+
+        foreach (var строка in таблица.Rows)
+        {
+            var превышение = -1;
+
+            for (var индекс = 0; индекс < строка.Cells.Count; индекс++)
+            {
+                var значение = строка.Cells[индекс];
+
+                if (значение is not null && значение.Length > МаксимальнаяДлинаЗначения)
+                {
+                    превышение = индекс;
+                    break;
+                }
+            }
+
+            if (превышение < 0)
+            {
+                строки.Add(строка);
+                continue;
+            }
+
+            var сообщение =
+                $"Строка {строка.RowNumber}: значение столбца {превышение + 1} длиннее {МаксимальнаяДлинаЗначения} символов.";
+
+            var ошибка = строка.Error is null ? сообщение : $"{строка.Error} {сообщение}";
+
+            строки.Add(строка with { HasError = true, Error = ошибка });
+        }
+
+        return new DelimitedTextTable(таблица.Headers, строки);
     }
 
     /// <summary>
@@ -915,6 +1013,35 @@ public sealed class ImportSession
                     }
 
                     break;
+
+                case ImportExtraField.Kpp:
+                    if (string.IsNullOrWhiteSpace(черновик.Kpp))
+                    {
+                        черновик.Kpp = значение.Trim();
+                    }
+
+                    break;
+
+                case ImportExtraField.Ogrn:
+                    if (string.IsNullOrWhiteSpace(черновик.Ogrn))
+                    {
+                        черновик.Ogrn = значение.Trim();
+                    }
+
+                    break;
+
+                case ImportExtraField.IsVip:
+                    черновик.IsVip |= РазобратьПризнак(значение);
+                    break;
+
+                case ImportExtraField.Group:
+                    if (черновик.GroupId is null
+                        && long.TryParse(значение.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var группа))
+                    {
+                        черновик.GroupId = группа;
+                    }
+
+                    break;
             }
         }
 
@@ -961,7 +1088,56 @@ public sealed class ImportSession
                 true);
         }
 
+        // Текстовый снимок адреса (индекс и шесть строк, разделённых переводом
+        // строки) восстанавливается без эвристик: так импорт собственной
+        // выгрузки сохраняет строки адреса (ТЗ §3.1.19: «поле *_raw служит
+        // только для round-trip импорта»).
+        var снимок = РазобратьСнимокАдреса(текст);
+
+        if (снимок is not null)
+        {
+            return снимок;
+        }
+
         return адреса.RecognizeDetailed(текст);
+    }
+
+    /// <summary>
+    /// Восстанавливает адрес из текстового снимка: индекс и шесть строк,
+    /// разделённых переводом строки.
+    /// </summary>
+    /// <param name="текст">Исходное значение столбца адреса.</param>
+    /// <returns>
+    /// Результат восстановления адреса либо <see langword="null"/>, если
+    /// значение не является снимком адреса.
+    /// </returns>
+    private static AddressRecognitionResult? РазобратьСнимокАдреса(string текст)
+    {
+        if (текст.Split('\n').Length != 7)
+        {
+            return null;
+        }
+
+        var разбор = Address.Parse(текст);
+
+        if (!разбор.IsSuccess)
+        {
+            return null;
+        }
+
+        var адрес = разбор.Value;
+
+        return new AddressRecognitionResult(
+            адрес.Zip,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            адрес.Lines.ToArray(),
+            false);
     }
 
     /// <summary>
@@ -1002,6 +1178,18 @@ public sealed class ImportSession
         }
 
         return (телефон, почта, примечание);
+    }
+
+    /// <summary>
+    /// Разбирает признак «избранный адрес» из значения столбца.
+    /// </summary>
+    /// <param name="значение">Исходное значение столбца.</param>
+    /// <returns><see langword="true"/>, если признак установлен.</returns>
+    private static bool РазобратьПризнак(string значение)
+    {
+        var текст = значение.Trim().ToLowerInvariant();
+
+        return текст is "да" or "да*" or "истина" or "true" or "1" or "vip" or "избранное";
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
+using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure.Repositories;
 using Picket302.Tests.Infrastructure;
 using Xunit;
@@ -279,5 +280,108 @@ public sealed class DemoAndCategoriesTests
         });
 
         Assert.True(результат.IsFailure);
+    }
+
+    /// <summary>
+    /// Функция 8: закрытая группа (запрет добавления и удаления записей).
+    /// </summary>
+    [Fact]
+    public async Task CategoryTreeService_ЗакрытаяКатегория_НеПринимаетНовыеЗаписи()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var контрагенты = new CounterpartyRepository(база.Session);
+        var группы = new GroupRepository(база.Session);
+        var служба = new CategoryTreeService(группы, контрагенты, база.UnitOfWork);
+
+        var категория = await служба.CreateCategoryAsync("Закрытая категория");
+        Assert.True(категория.IsSuccess);
+
+        await группы.UpdateAsync(new Group
+        {
+            Id = категория.Value.Id,
+            Name = категория.Value.Name,
+            ParentId = null,
+            IsDefault = false,
+            IsClosed = true,
+            SortOrder = 0,
+        });
+
+        var контрагент = new Counterparty
+        {
+            Name = "ООО «Ромашка»",
+            Type = CounterpartyType.LegalEntity,
+            Inn = "7707083893",
+            IsActive = true,
+            PostalAddress = Address.Create(
+                "101000",
+                ["ООО «Ромашка»", "Управление делами", "ул. Тверская, 12", string.Empty, "г. Москва", string.Empty]).Value,
+        };
+
+        await контрагенты.AddAsync(контрагент);
+
+        var результат = await служба.MoveCounterpartyAsync(контрагент.Id, категория.Value.Id);
+
+        Assert.True(результат.IsFailure);
+        Assert.Contains("закрыта", результат.Error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Функция 154: переименование категории.
+    /// </summary>
+    [Fact]
+    public async Task CategoryTreeService_Переименование_МеняетНаименование()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var контрагенты = new CounterpartyRepository(база.Session);
+        var группы = new GroupRepository(база.Session);
+        var служба = new CategoryTreeService(группы, контрагенты, база.UnitOfWork);
+
+        var категория = await служба.CreateCategoryAsync("Поставщики");
+        Assert.True(категория.IsSuccess);
+
+        var результат = await служба.RenameCategoryAsync(категория.Value.Id, "  Основные поставщики  ");
+
+        Assert.True(результат.IsSuccess);
+        Assert.Equal("Основные поставщики", результат.Value.Name);
+
+        var сохранённая = await группы.GetByIdAsync(категория.Value.Id);
+
+        Assert.NotNull(сохранённая);
+        Assert.Equal("Основные поставщики", сохранённая!.Name);
+    }
+
+    [Fact]
+    public async Task CategoryTreeService_ПереименованиеВДубликат_Отклоняется()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var контрагенты = new CounterpartyRepository(база.Session);
+        var группы = new GroupRepository(база.Session);
+        var служба = new CategoryTreeService(группы, контрагенты, база.UnitOfWork);
+
+        await служба.CreateCategoryAsync("Поставщики");
+        var вторая = await служба.CreateCategoryAsync("Получатели");
+        Assert.True(вторая.IsSuccess);
+
+        var результат = await служба.RenameCategoryAsync(вторая.Value.Id, "поставщики");
+
+        Assert.True(результат.IsFailure);
+        Assert.Contains("уже существует", результат.Error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CategoryTreeService_ПустоеНаименование_Отклоняется()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var контрагенты = new CounterpartyRepository(база.Session);
+        var группы = new GroupRepository(база.Session);
+        var служба = new CategoryTreeService(группы, контрагенты, база.UnitOfWork);
+
+        var категория = await служба.CreateCategoryAsync("Поставщики");
+        Assert.True(категория.IsSuccess);
+
+        var результат = await служба.RenameCategoryAsync(категория.Value.Id, "   ");
+
+        Assert.True(результат.IsFailure);
+        Assert.Contains("не задано", результат.Error!, StringComparison.OrdinalIgnoreCase);
     }
 }

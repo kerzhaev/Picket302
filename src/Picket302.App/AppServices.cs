@@ -1,6 +1,7 @@
 using Picket302.Application.Services;
 using Picket302.Application.Setup;
 using Picket302.Domain.Common;
+using Picket302.Domain.Licensing;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.Services;
 using Picket302.Infrastructure.Data;
@@ -57,26 +58,50 @@ public sealed class AppServices : IAsyncDisposable
         Папки = new FolderRepository(сессия);
         Обслуживание = new DatabaseMaintenanceRepository(сессия);
 
-        НастройкиОтображения = new UiSettingsStorage(new JsonUiSettingsStore());
+        ХранилищеНастроек = new JsonUiSettingsStore();
+        НастройкиОтображения = new UiSettingsStorage(ХранилищеНастроек);
         СчётчикиНумерации = new ParameterRegistrationNumberStore(сессия);
+
+        // Журнал приложения с независимыми каналами (ТЗ §10.3; §8.11,
+        // функция 111). Каталог журналов — <AppData>\Picket302\logs.
+        Журнал = new LogHub(LogHub.ПутьЖурналовПоУмолчанию());
+
+        // Лицензирование (ТЗ §8.10, функции 119–126): автомат состояний
+        // вычисляется при старте, проверка ведётся в одной точке.
+        Машина = new MachineIdentity(сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+        ХранилищеЛицензии = new LicenseStore(
+            LicenseStore.ПутьФайлаПоУмолчанию(),
+            null,
+            Машина,
+            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+        СчётчикиИспользования = DatabaseUsageCounter.Создать(сессия);
+        АвтоматЛицензии = new LicenseStateMachine(
+            ХранилищеЛицензии,
+            null,
+            null,
+            () => СчётчикиИспользования?.Invoke() ?? new СнимокИспользования(0, 0));
+        ВоротаЛицензии = new LicenseStateMachineGate(АвтоматЛицензии);
+        МенеджерЛицензии = new LicenseManager(ХранилищеЛицензии, АвтоматЛицензии);
+        АктивацияЛицензии = new ActivationService(ХранилищеЛицензии, АвтоматЛицензии);
 
         var реестрОтправителя = new WindowsCurrentSenderRegistryStore();
         var параметрыОтправителя = new ParameterCurrentSenderStore(сессия);
         ТекущийОтправитель = new CurrentSenderContext(
             new CompositeCurrentSenderStore(реестрОтправителя, параметрыОтправителя));
 
-        СлужбаКонтрагентов = new CounterpartyService(Контрагенты, сессия);
+        СлужбаКонтрагентов = new CounterpartyService(Контрагенты, сессия, ВоротаЛицензии);
         СлужбаГрупп = new GroupService(Группы, сессия);
         СлужбаПисем = new MailService(
             Письма,
             Контрагенты,
             new PrintHistoryRepository(сессия),
-            сессия);
-        СлужбаРассылок = new DistributionService(Рассылки, Письма, Контрагенты, сессия);
+            сессия,
+            ВоротаЛицензии);
+        СлужбаРассылок = new DistributionService(Рассылки, Письма, Контрагенты, сессия, ВоротаЛицензии);
         СлужбаАдресов = new AddressParserService();
         СлужбаПолей = new CustomFieldManager(ПоляКонтрагентов, сессия);
         СлужбаКаскада = new CascadeAddressUpdater(Письма);
-        СлужбаПакетногоРедактирования = new BatchEditService(Контрагенты, сессия);
+        СлужбаПакетногоРедактирования = new BatchEditService(Контрагенты, сессия, Параметры);
         СлужбаМенеджера = new CounterpartyManager(Контрагенты, сессия);
         СлужбаКатегорий = new CategoryTreeService(Группы, Контрагенты, сессия);
         СлужбаАгентов = new AgentService(Контрагенты, сессия);
@@ -100,6 +125,12 @@ public sealed class AppServices : IAsyncDisposable
         var измеритель = new GdiTextMeasurer();
         var рендерер = new EnvelopeRenderer(измеритель);
 
+        // Кэш сгенерированных QR-кодов хранится в таблице qr_cache: без
+        // репозитория сформированные коды оставались бы только в памяти
+        // и таблица не наполнялась (ТЗ §3.1.8).
+        var кэшКодов = new QrCacheRepository(сессия);
+        var выводКодов = new QrCodeRenderer(кэшКодов);
+
         СлужбаПечати = new PrintSessionController(
             ШаблоныПечати,
             ПоляШаблонов,
@@ -110,18 +141,19 @@ public sealed class AppServices : IAsyncDisposable
             рендерер,
             new PaperSizeValidator(),
             new PostIndexRenderer(контрольШрифта),
-            new QrCodeRenderer(),
-            new LogoRenderer());
+            выводКодов,
+            new LogoRenderer(),
+            printHistory: new PrintHistoryRecorder(СлужбаПисем),
+            licenseGate: ВоротаЛицензии);
 
         СлужбаПредпросмотра = new PrintPreviewEngine(
             рендерер,
             new PostIndexRenderer(контрольШрифта),
-            new QrCodeRenderer(),
+            выводКодов,
             new LogoRenderer());
 
         // Журнал приложения с независимыми каналами (ТЗ §10.3; §8.11,
         // функция 111). Каталог журналов — <AppData>\Picket302\logs.
-        Журнал = new LogHub(LogHub.ПутьЖурналовПоУмолчанию());
 
         // Реквизиты подключения к базе и справочник серверов (ТЗ §8.8,
         // функции 101 и 102; §8.11, функция 127).
@@ -133,28 +165,12 @@ public sealed class AppServices : IAsyncDisposable
         МенеджерЯзыка = new LanguageManager(
             null,
             сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
-
-        // Лицензирование (ТЗ §8.10, функции 119–126): автомат состояний
-        // вычисляется при старте, проверка ведётся в одной точке.
-        Машина = new MachineIdentity(сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
-        ХранилищеЛицензии = new LicenseStore(
-            LicenseStore.ПутьФайлаПоУмолчанию(),
-            null,
-            Машина,
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
-        АвтоматЛицензии = new LicenseStateMachine(
-            ХранилищеЛицензии,
-            null,
-            null,
-            () => СчётчикиИспользования?.Invoke() ?? new СнимокИспользования(0, 0));
-        МенеджерЛицензии = new LicenseManager(ХранилищеЛицензии, АвтоматЛицензии);
-        АктивацияЛицензии = new ActivationService(ХранилищеЛицензии, АвтоматЛицензии);
     }
 
     /// <summary>
     /// Счётчик объёма данных для проверки лимитов пробного периода
-    /// (ТЗ §8.10, функция 119). Заполняется главной формой после подключения
-    /// к базе данных.
+    /// (ТЗ §8.10, функция 119). По умолчанию считает контрагентов и
+    /// созданные документы по базе данных.
     /// </summary>
     public Func<СнимокИспользования>? СчётчикиИспользования { get; set; }
 
@@ -190,6 +206,12 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>Хранилище настроек отображения.</summary>
     public UiSettingsStorage НастройкиОтображения { get; }
+
+    /// <summary>
+    /// Хранилище настроек интерфейса: используется для сохранённых
+    /// пользовательских фильтров адресной книги (ТЗ §8.1, функция 9).
+    /// </summary>
+    public IUiSettingsStore ХранилищеНастроек { get; }
 
     /// <summary>Хранилище счётчика регистрационных номеров.</summary>
     public IRegistrationNumberStore СчётчикиНумерации { get; }
@@ -307,6 +329,12 @@ public sealed class AppServices : IAsyncDisposable
     /// Автомат состояний лицензии (ТЗ §8.10, функция 119).
     /// </summary>
     public LicenseStateMachine АвтоматЛицензии { get; }
+
+    /// <summary>
+    /// Ворота лицензии: единая проверка ограничений пробного периода при
+    /// создании записей и печати партий (ТЗ §8.10, функция 119).
+    /// </summary>
+    public ILicenseGate ВоротаЛицензии { get; }
 
     /// <summary>
     /// Менеджер лицензии: статус, снятие ключа, несколько управляющих

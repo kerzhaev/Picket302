@@ -1,6 +1,7 @@
 using Picket302.Domain;
 using Picket302.Domain.Common;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Licensing;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.Rules;
 using Picket302.Domain.ValueObjects;
@@ -14,6 +15,8 @@ namespace Picket302.Application.Services;
 /// Служба контролирует жизненный цикл отправления и формирует снимки адресов
 /// для журнала напечатанных конвертов: последующие изменения карточек
 /// контрагентов не изменяют исторические записи (ТЗ §3.1.19: «Правило снимков»).
+/// Создание отправления дополнительно ограничивается воротами лицензии
+/// (ТЗ §8.10, функция 119).
 /// </remarks>
 public sealed class MailService
 {
@@ -21,17 +24,20 @@ public sealed class MailService
     private readonly ICounterpartyRepository _контрагенты;
     private readonly IPrintHistoryRepository _журнал;
     private readonly IUnitOfWork _единицаРаботы;
+    private readonly ILicenseGate? _ворота;
 
     /// <summary>Создаёт службу почтовых отправлений.</summary>
     /// <param name="письма">Репозиторий отправлений.</param>
     /// <param name="контрагенты">Репозиторий контрагентов.</param>
     /// <param name="журнал">Репозиторий журнала напечатанных конвертов.</param>
     /// <param name="единицаРаботы">Единица работы над базой данных.</param>
+    /// <param name="ворота">Ворота лицензии; при отсутствии проверка не выполняется.</param>
     public MailService(
         IMailRepository письма,
         ICounterpartyRepository контрагенты,
         IPrintHistoryRepository журнал,
-        IUnitOfWork единицаРаботы)
+        IUnitOfWork единицаРаботы,
+        ILicenseGate? ворота = null)
     {
         ArgumentNullException.ThrowIfNull(письма);
         ArgumentNullException.ThrowIfNull(контрагенты);
@@ -42,6 +48,7 @@ public sealed class MailService
         _контрагенты = контрагенты;
         _журнал = журнал;
         _единицаРаботы = единицаРаботы;
+        _ворота = ворота;
     }
 
     /// <summary>
@@ -53,6 +60,13 @@ public sealed class MailService
     public async Task<Result<Mail>> CreateAsync(Mail mail, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mail);
+
+        var разрешение = _ворота?.Проверить(LicenseOperation.СозданиеЗаписей);
+
+        if (разрешение is { Разрешено: false })
+        {
+            return Result<Mail>.Failure(разрешение.Сообщение);
+        }
 
         if (mail.CopyCount < Mail.MinimumCopyCount)
         {

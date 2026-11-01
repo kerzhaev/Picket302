@@ -21,9 +21,6 @@ namespace Picket302.ComAutomation;
 /// </remarks>
 internal static class Program
 {
-    /// <summary>Имя файла журнала запуска сервера.</summary>
-    private const string LogFileName = "com-automation.log";
-
     /// <summary>
     /// Запускает COM-сервер автоматизации либо выполняет регистрацию.
     /// </summary>
@@ -80,27 +77,5 @@ internal static class Program
         return false;
     }
 
-    private static void ЗаписатьВЖурнал(string сообщение)
-    {
-        try
-        {
-            var каталог = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Picket302");
-
-            Directory.CreateDirectory(каталог);
-
-            var путь = Path.Combine(каталог, LogFileName);
-
-            File.AppendAllText(
-                путь,
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {сообщение}{Environment.NewLine}",
-                new UTF8Encoding(false));
-        }
-        catch (Exception)
-        {
-            // Журнал — вспомогательный канал: сбой записи не должен влиять
-            // на работу сервера.
-        }
-    }
+    private static void ЗаписатьВЖурнал(string сообщение) => AutomationServerLog.Write(сообщение);
 }

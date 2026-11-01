@@ -2,6 +2,7 @@ using Picket302.Domain;
 using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Licensing;
 using Picket302.Domain.Repositories;
 
 namespace Picket302.Application.Services;
@@ -30,17 +31,20 @@ public sealed class DistributionService
     private readonly IMailRepository _письма;
     private readonly ICounterpartyRepository _контрагенты;
     private readonly IUnitOfWork _единицаРаботы;
+    private readonly ILicenseGate? _ворота;
 
     /// <summary>Создаёт службу рассылок.</summary>
     /// <param name="рассылки">Репозиторий рассылок.</param>
     /// <param name="письма">Репозиторий почтовых отправлений.</param>
     /// <param name="контрагенты">Репозиторий контрагентов.</param>
     /// <param name="единицаРаботы">Единица работы над базой данных.</param>
+    /// <param name="ворота">Ворота лицензии; при отсутствии проверка не выполняется.</param>
     public DistributionService(
         IDistributionRepository рассылки,
         IMailRepository письма,
         ICounterpartyRepository контрагенты,
-        IUnitOfWork единицаРаботы)
+        IUnitOfWork единицаРаботы,
+        ILicenseGate? ворота = null)
     {
         ArgumentNullException.ThrowIfNull(рассылки);
         ArgumentNullException.ThrowIfNull(письма);
@@ -51,6 +55,7 @@ public sealed class DistributionService
         _письма = письма;
         _контрагенты = контрагенты;
         _единицаРаботы = единицаРаботы;
+        _ворота = ворота;
     }
 
     /// <summary>
@@ -70,6 +75,13 @@ public sealed class DistributionService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
+
+        var разрешение = _ворота?.Проверить(LicenseOperation.СозданиеЗаписей);
+
+        if (разрешение is { Разрешено: false })
+        {
+            return Result<Distribution>.Failure(разрешение.Сообщение);
+        }
 
         if (plan.CounterpartyIds.Count == 0)
         {
@@ -212,6 +224,13 @@ public sealed class DistributionService
         long distributionId,
         CancellationToken cancellationToken = default)
     {
+        var разрешение = _ворота?.Проверить(LicenseOperation.СозданиеЗаписей);
+
+        if (разрешение is { Разрешено: false })
+        {
+            return Result<ClonedDistribution>.Failure(разрешение.Сообщение);
+        }
+
         var исходная = await _рассылки.GetByIdAsync(distributionId, cancellationToken)
             .ConfigureAwait(false);
 

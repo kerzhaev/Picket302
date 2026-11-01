@@ -67,12 +67,63 @@ internal sealed class SqliteNullableDateTimeHandler : SqlMapper.TypeHandler<Date
 }
 
 /// <summary>
+/// Обработчик типа <see cref="decimal"/> для SQLite: колонки с аффинностью
+/// NUMERIC хранят целые значения как INTEGER, а дробные — как REAL, поэтому
+/// тип значения в одной и той же колонке меняется от строки к строке.
+/// </summary>
+internal sealed class SqliteDecimalHandler : SqlMapper.TypeHandler<decimal>
+{
+    /// <inheritdoc />
+    public override void SetValue(IDbDataParameter parameter, decimal value)
+    {
+        ArgumentNullException.ThrowIfNull(parameter);
+
+        parameter.Value = value;
+    }
+
+    /// <inheritdoc />
+    public override decimal Parse(object? value) => value switch
+    {
+        null or DBNull => 0m,
+        decimal число => число,
+        double число => Convert.ToDecimal(число, CultureInfo.InvariantCulture),
+        float число => Convert.ToDecimal(число, CultureInfo.InvariantCulture),
+        long число => число,
+        int число => число,
+        short число => число,
+        byte число => число,
+        string текст => decimal.Parse(текст, NumberStyles.Any, CultureInfo.InvariantCulture),
+        _ => Convert.ToDecimal(value, CultureInfo.InvariantCulture),
+    };
+}
+
+/// <summary>
+/// Обработчик типа <see cref="decimal"/>? для SQLite.
+/// </summary>
+internal sealed class SqliteNullableDecimalHandler : SqlMapper.TypeHandler<decimal?>
+{
+    private readonly SqliteDecimalHandler _вложенный = new();
+
+    /// <inheritdoc />
+    public override void SetValue(IDbDataParameter parameter, decimal? value)
+    {
+        ArgumentNullException.ThrowIfNull(parameter);
+
+        parameter.Value = value.HasValue ? value.Value : DBNull.Value;
+    }
+
+    /// <inheritdoc />
+    public override decimal? Parse(object? value)
+        => value is null or DBNull ? null : _вложенный.Parse(value);
+}
+
+/// <summary>
 /// Общая настройка слоя доступа к данным (Dapper).
 /// </summary>
 /// <remarks>
 /// Настройки применяются перед первым обращением к Dapper: сопоставление
 /// колонок <c>snake_case</c> со свойствами сущностей и обработчики типов даты
-/// для SQLite. Настройка идемпотентна.
+/// и денежных величин для SQLite. Настройка идемпотентна.
 /// </remarks>
 internal static class DapperConfiguration
 {
@@ -80,8 +131,8 @@ internal static class DapperConfiguration
     private static bool _настроено;
 
     /// <summary>
-    /// Применяет настройки Dapper: сопоставление имён колонок с подчёркиваниями
-    /// и обработчики типов даты.
+    /// Применяет настройки Dapper: сопоставление имён колонок с подчёркиваниями,
+    /// обработчики типов даты и денежных величин.
     /// </summary>
     public static void Применить()
     {
@@ -96,6 +147,8 @@ internal static class DapperConfiguration
             DefaultTypeMap.MatchNamesWithUnderscores = true;
             SqlMapper.AddTypeHandler<DateTime>(new SqliteDateTimeHandler());
             SqlMapper.AddTypeHandler<DateTime?>(new SqliteNullableDateTimeHandler());
+            SqlMapper.AddTypeHandler<decimal>(new SqliteDecimalHandler());
+            SqlMapper.AddTypeHandler<decimal?>(new SqliteNullableDecimalHandler());
         }
     }
 }

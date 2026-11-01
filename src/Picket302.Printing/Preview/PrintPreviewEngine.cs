@@ -19,7 +19,12 @@ public sealed record PreviewField(string Name, string Kind, RectangleF Bounds, s
 /// Документ предпросмотра печати (ТЗ §8.6, функция 80:
 /// <c>Printing.Preview.PrintPreviewEngine.RenderPreview</c>).
 /// </summary>
-public sealed record PreviewDocument
+/// <remarks>
+/// Документ владеет GDI-ресурсами страниц (метафайлов), поэтому освобождается
+/// через <see cref="Dispose"/>; иначе дескрипторы GDI накапливаются при
+/// каждом открытии окна предпросмотра.
+/// </remarks>
+public sealed record PreviewDocument : IDisposable
 {
     /// <summary>Страницы предпросмотра в векторном виде (метафайлы).</summary>
     public IReadOnlyList<Metafile> Pages { get; init; } = Array.Empty<Metafile>();
@@ -44,6 +49,19 @@ public sealed record PreviewDocument
 
     /// <summary>Признак блокирующего несоответствия: предпросмотр недоступен.</summary>
     public bool IsBlocked { get; init; }
+
+    /// <summary>
+    /// Освобождает GDI-ресурсы страниц предпросмотра.
+    /// </summary>
+    public void Dispose()
+    {
+        foreach (var страница in Pages)
+        {
+            страница.Dispose();
+        }
+
+        GC.SuppressFinalize(this);
+    }
 }
 
 /// <summary>

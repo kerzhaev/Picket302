@@ -1,5 +1,6 @@
 using Dapper;
 using Picket302.Domain.Common;
+using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.ValueObjects;
@@ -25,6 +26,78 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
         """;
 
     private readonly ISqliteSession _сессия;
+
+    /// <summary>
+    /// Белый список выражений сортировки: ключ колонки адресной книги — выражение
+    /// SQL (ТЗ §8.1, функция 9: «сортировка по любой колонке»).
+    /// </summary>
+    /// <remarks>
+    /// Ключ выбирается пользователем (клик по заголовку столбца), поэтому в
+    /// запрос подставляется только выражение из этого перечня: произвольный
+    /// текст в SQL не попадает. Ключи «main_*» — вычисляемые проекции основного
+    /// адреса записи (тип адреса задан в <c>address_main_type</c>).
+    /// </remarks>
+    private static readonly Dictionary<string, string> ВыраженияСортировки =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["name"] = "name",
+            ["shortname"] = "short_name",
+            ["inn"] = "inn",
+            ["kpp"] = "kpp",
+            ["phone"] = "phone",
+            ["email"] = "email",
+            ["type"] = "type",
+            ["vip"] = "is_vip",
+            ["is_vip"] = "is_vip",
+            ["group"] = "COALESCE((SELECT g.name FROM groups g WHERE g.id = counterparties.group_id), '')",
+            ["group_name"] = "COALESCE((SELECT g.name FROM groups g WHERE g.id = counterparties.group_id), '')",
+            ["group_id"] = "group_id",
+            ["zip"] = "post_zip",
+            ["post_zip"] = "post_zip",
+            ["city"] = "post_str5",
+            ["post_str5"] = "post_str5",
+            ["street"] = "post_str2",
+            ["post_str2"] = "post_str2",
+            ["post_str1"] = "post_str1",
+            ["main_zip"] =
+                "CASE address_main_type WHEN 0 THEN legal_zip WHEN 2 THEN fact_zip ELSE post_zip END",
+            ["main_city"] =
+                "CASE address_main_type WHEN 0 THEN legal_str5 WHEN 2 THEN fact_str5 ELSE post_str5 END",
+            ["main_street"] =
+                "CASE address_main_type WHEN 0 THEN legal_str2 WHEN 2 THEN fact_str2 ELSE post_str2 END",
+            ["copies"] = "1 + 0",
+            ["created_at"] = "created_at",
+            ["updated_at"] = "updated_at",
+        };
+
+    /// <summary>
+    /// Белый список колонок отбора слоя запроса: имя поля условия — колонка
+    /// таблицы контрагентов. Неизвестное поле условием не является.
+    /// </summary>
+    private static readonly Dictionary<string, string> КолонкиОтбора =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["name"] = "name",
+            ["shortname"] = "short_name",
+            ["inn"] = "inn",
+            ["kpp"] = "kpp",
+            ["phone"] = "phone",
+            ["email"] = "email",
+            ["group_id"] = "group_id",
+            ["zip"] = "post_zip",
+            ["post_zip"] = "post_zip",
+            ["post_str1"] = "post_str1",
+            ["post_str2"] = "post_str2",
+            ["street"] = "post_str2",
+            ["post_str5"] = "post_str5",
+            ["city"] = "post_str5",
+            ["main_zip"] =
+                "CASE address_main_type WHEN 0 THEN legal_zip WHEN 2 THEN fact_zip ELSE post_zip END",
+            ["main_city"] =
+                "CASE address_main_type WHEN 0 THEN legal_str5 WHEN 2 THEN fact_str5 ELSE post_str5 END",
+            ["main_street"] =
+                "CASE address_main_type WHEN 0 THEN legal_str2 WHEN 2 THEN fact_str2 ELSE post_str2 END",
+        };
 
     /// <summary>Создаёт репозиторий контрагентов.</summary>
     /// <param name="сессия">Сессия базы данных.</param>
@@ -199,9 +272,17 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
                 условия.Add("is_active = @IsActive");
                 параметры.Add("IsActive", filter.IsActive.Value);
             }
+
+            // Условия слоя запроса (ТЗ §8.1, функция 9) дополняют структурные
+            // условия отбора: оба набора объединяются по «И».
+            ДобавитьУсловияСлояЗапроса(условия, параметры, filter.Criteria);
         }
 
         var где = условия.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", условия);
+
+        // Порядок сортировки вычисляется до обращения к базе: неизвестная
+        // колонка отвергается, запрос не выполняется.
+        var порядок = ПорядокСортировки(filter);
 
         var всего = await _сессия.ExecuteScalarAsync<long>(
             $"SELECT COUNT(*) FROM counterparties{где};",
@@ -217,7 +298,7 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
         параметры.Add("Offset", нормализованный.Offset);
 
         var строки = await _сессия.QueryAsync<CounterpartyRow>(
-            $"SELECT * FROM counterparties{где} ORDER BY id LIMIT @Limit OFFSET @Offset;",
+            $"SELECT * FROM counterparties{где} {порядок} LIMIT @Limit OFFSET @Offset;",
             параметры,
             cancellationToken).ConfigureAwait(false);
 
@@ -352,6 +433,133 @@ public sealed class CounterpartyRepository : ICounterpartyRepository
              """,
             параметры,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Добавляет к набору условий отбора условия слоя запроса
+    /// (ТЗ §8.1, функция 9: «Фильтры и сортировка по любой колонке»).
+    /// </summary>
+    /// <param name="условия">Набор условий отбора.</param>
+    /// <param name="параметры">Набор параметров команды.</param>
+    /// <param name="критерии">Критерии слоя запроса; могут отсутствовать.</param>
+    private static void ДобавитьУсловияСлояЗапроса(
+        List<string> условия,
+        DynamicParameters параметры,
+        FilterCriteria? критерии)
+    {
+        if (критерии is null)
+        {
+            return;
+        }
+
+        // Встроенный фильтр «Избранное».
+        if (критерии.OnlyFavorites)
+        {
+            условия.Add("is_vip = 1");
+        }
+
+        // Пользовательский фильтр по группе (категории).
+        if (критерии.GroupId is not null)
+        {
+            условия.Add("group_id = @CriteriaGroupId");
+            параметры.Add("CriteriaGroupId", критерии.GroupId.Value);
+        }
+
+        var номер = 0;
+        foreach (var условие in критерии.Conditions)
+        {
+            ДобавитьУсловие(условия, параметры, условие, номер);
+            номер++;
+        }
+    }
+
+    /// <summary>
+    /// Добавляет одно условие отбора слоя запроса. Поле условия сопоставляется
+    /// с колонкой по белому списку; неизвестное поле условием не является.
+    /// </summary>
+    /// <param name="условия">Набор условий отбора.</param>
+    /// <param name="параметры">Набор параметров команды.</param>
+    /// <param name="условие">Условие отбора.</param>
+    /// <param name="номер">Порядковый номер условия — для имени параметра.</param>
+    private static void ДобавитьУсловие(
+        List<string> условия,
+        DynamicParameters параметры,
+        FilterCriteria.Condition условие,
+        int номер)
+    {
+        var значение = условие.Value;
+
+        if (string.IsNullOrEmpty(значение))
+        {
+            return;
+        }
+
+        if (!КолонкиОтбора.TryGetValue(условие.Field.Trim(), out var колонка))
+        {
+            return;
+        }
+
+        var имяПараметра = $"Cond{номер}";
+
+        switch (условие.Operator)
+        {
+            case FilterOperator.Equals:
+                условия.Add($"{колонка} = @{имяПараметра}");
+                параметры.Add(имяПараметра, значение);
+                break;
+
+            case FilterOperator.NotContains:
+                условия.Add($"({колонка} IS NULL OR {колонка} NOT LIKE @{имяПараметра})");
+                параметры.Add(имяПараметра, $"%{значение}%");
+                break;
+
+            case FilterOperator.GreaterThan:
+                условия.Add($"{колонка} > @{имяПараметра}");
+                параметры.Add(имяПараметра, значение);
+                break;
+
+            case FilterOperator.LessThan:
+                условия.Add($"{колонка} < @{имяПараметра}");
+                параметры.Add(имяПараметра, значение);
+                break;
+
+            default:
+                условия.Add($"{колонка} LIKE @{имяПараметра}");
+                параметры.Add(имяПараметра, $"%{значение}%");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Формирует предложение ORDER BY по колонке адресной книги.
+    /// </summary>
+    /// <param name="filter">Условия отбора и сортировки.</param>
+    /// <returns>Предложение ORDER BY.</returns>
+    /// <exception cref="ArgumentException">
+    /// Выбрасывается, если колонка сортировки не входит в белый список.
+    /// </exception>
+    private static string ПорядокСортировки(CounterpartyFilter? filter)
+    {
+        var критерии = filter?.Criteria;
+        var колонка = критерии?.SortColumn ?? filter?.SortColumn;
+
+        if (string.IsNullOrWhiteSpace(колонка))
+        {
+            return "ORDER BY id ASC";
+        }
+
+        var поУбыванию = критерии?.SortColumn is not null
+            ? критерии.SortDescending
+            : filter!.SortDescending;
+
+        if (!ВыраженияСортировки.TryGetValue(колонка.Trim(), out var выражение))
+        {
+            throw new ArgumentException(
+                $"Колонка сортировки «{колонка}» не поддерживается.",
+                nameof(CounterpartyFilter.SortColumn));
+        }
+
+        return $"ORDER BY {выражение} {(поУбыванию ? "DESC" : "ASC")}, id ASC";
     }
 
     /// <summary>

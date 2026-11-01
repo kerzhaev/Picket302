@@ -76,6 +76,7 @@ public sealed class FormGridAppearance : Form
         SelectedColor = _выделение,
         HintColor = _подсказка,
         ZebraEnabled = _зебра.Checked,
+        HeadersVisible = _показыватьЗаголовки.Checked,
         FontSize = (float)_кегль.Value,
         RowHeight = (int)_высотаСтроки.Value,
     };
@@ -110,8 +111,11 @@ public sealed class FormGridAppearance : Form
         _выделение = результат.Appearance.SelectedColor;
         _подсказка = результат.Appearance.HintColor;
         _зебра.Checked = результат.Appearance.ZebraEnabled;
+        _показыватьЗаголовки.Checked = результат.Appearance.HeadersVisible;
         _кегль.Value = (decimal)результат.Appearance.FontSize;
         _высотаСтроки.Value = результат.Appearance.RowHeight;
+
+        СброшеноКУмолчаниям = true;
 
         _предупреждение.Text = результат.Message;
 
@@ -119,6 +123,13 @@ public sealed class FormGridAppearance : Form
 
         return результат;
     }
+
+    /// <summary>
+    /// Признак того, что оператор выполнил сброс к умолчаниям: оболочка
+    /// дополнительно сбрасывает состояние столбцов таблиц (ТЗ §8.11,
+    /// функция 131: «сброс к умолчаниям»).
+    /// </summary>
+    public bool СброшеноКУмолчаниям { get; private set; }
 
     /// <summary>
     /// Строит элементы формы.
@@ -294,6 +305,7 @@ public sealed class FormGridAppearance : Form
         _кегль.Value = (decimal)оформление.FontSize;
         _высотаСтроки.Value = оформление.RowHeight;
         _зебра.Checked = оформление.ZebraEnabled;
+        _показыватьЗаголовки.Checked = оформление.HeadersVisible;
     }
 
     /// <summary>

@@ -1,8 +1,10 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using Picket302.Domain.Postal;
 using Picket302.Domain.Serialization;
 using Picket302.Printing.Editor;
+using Picket302.Printing.Templates;
 
 namespace Picket302.App.UI.Forms;
 
@@ -244,11 +246,73 @@ public sealed class FormBlankEditor : Form
 
         объект.DropDownItems.Add(удалить);
 
+        // Разметка бланка: пресет «стандартная разметка» и режим «без
+        // стандартной разметки» (ТЗ §8.11, функция 145).
+        var макет = new ToolStripMenuItem("Макет");
+        var стандартная = new ToolStripMenuItem("Стандартная разметка");
+        var безРазметки = new ToolStripMenuItem("Без стандартной разметки (поля вручную)");
+
+        стандартная.Click += (_, _) => ПрименитьРазметку(StandardLayoutMode.Standard);
+        безРазметки.Click += (_, _) => ПрименитьРазметку(StandardLayoutMode.None);
+
+        макет.DropDownItems.Add(стандартная);
+        макет.DropDownItems.Add(безРазметки);
+
         меню.Items.Add(файл);
         меню.Items.Add(вид);
         меню.Items.Add(объект);
+        меню.Items.Add(макет);
         MainMenuStrip = меню;
         Controls.Add(меню);
+    }
+
+    /// <summary>
+    /// Применяет к макету режим разметки: пресет «стандартная разметка» либо
+    /// режим «без стандартной разметки» (ТЗ §8.11, функция 145).
+    /// </summary>
+    /// <param name="режим">Режим разметки.</param>
+    /// <returns>Итог применения пресета; при отсутствии макета — <see langword="null"/>.</returns>
+    public StandardLayoutResult? ПрименитьРазметку(StandardLayoutMode режим)
+    {
+        if (_контроллер.Blank is not { } бланк)
+        {
+            return null;
+        }
+
+        var формат = ОпределитьФормат(бланк);
+        var страна = string.IsNullOrWhiteSpace(бланк.Country) ? EnvelopeFormatCatalog.DefaultCountryCode : бланк.Country;
+
+        var итог = new StandardLayoutApplier().Применить(бланк, формат, страна, режим);
+
+        ОбновитьЭкран();
+
+        if (итог.Предупреждение is { } предупреждение)
+        {
+            MessageBox.Show(this, предупреждение, "Разметка бланка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        return итог;
+    }
+
+    /// <summary>
+    /// Определяет обозначение формата конверта по имени макета: пресет
+    /// разметки выбирается по формату (ТЗ §8.11, функция 145).
+    /// </summary>
+    /// <param name="бланк">Макет бланка.</param>
+    /// <returns>Обозначение формата либо «C6».</returns>
+    private static string ОпределитьФормат(CustomBlank бланк)
+    {
+        var имя = бланк.Name ?? string.Empty;
+
+        foreach (var формат in new[] { "DL/О", "DL", "C6/О", "C6", "C5", "C4" })
+        {
+            if (имя.Contains(формат, StringComparison.OrdinalIgnoreCase))
+            {
+                return формат;
+            }
+        }
+
+        return "C6";
     }
 
     private BlankTool ПалитраИнструмент() => _палитра.SelectedIndex switch

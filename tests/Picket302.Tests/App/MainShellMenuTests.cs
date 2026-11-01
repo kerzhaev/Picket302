@@ -47,4 +47,26 @@ public sealed class MainShellMenuTests
         Assert.Equal("Tahoma", окно.Font.Name);
         Assert.Equal(8f, окно.Font.Size);
     }
+
+    /// <summary>
+    /// Пункт «Вид» содержит настройку вида таблиц и настройку таблицы
+    /// (ТЗ §8.11, функция 131: «Настройка вида таблиц»; §7.6).
+    /// </summary>
+    [Fact]
+    public void MainShell_ПунктВид_СодержитНастройкиВидаТаблицИТаблицы()
+    {
+        using var окно = new MainShell();
+
+        var вид = окно.MainMenuStrip!.Items
+            .Cast<ToolStripMenuItem>()
+            .Single(пункт => пункт.Text == "Вид");
+
+        var пункты = вид.DropDownItems
+            .Cast<ToolStripItem>()
+            .Select(пункт => пункт.Text)
+            .ToArray();
+
+        Assert.Contains("Настройка вида таблиц…", пункты);
+        Assert.Contains("Настройка таблицы…", пункты);
+    }
 }

@@ -1,5 +1,6 @@
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Licensing;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.ValueObjects;
 
@@ -57,6 +58,7 @@ public sealed class ImportMergeService
 {
     private readonly ICounterpartyRepository _репозиторий;
     private readonly ICounterpartyFieldRepository? _поля;
+    private readonly ILicenseGate? _ворота;
 
     /// <summary>
     /// Создаёт службу слияния.
@@ -75,12 +77,18 @@ public sealed class ImportMergeService
     /// Репозиторий пользовательских полей; используется при слиянии полей
     /// таблицы <c>counterparty_fields</c>.
     /// </param>
+    /// <param name="ворота">
+    /// Ворота лицензии; при наличии импорт в режиме trial с истёкшим сроком
+    /// либо исчерпанным лимитом объёма не выполняется (ТЗ §8.10, функция 119).
+    /// </param>
     public ImportMergeService(
         ICounterpartyRepository repository,
-        ICounterpartyFieldRepository? fieldRepository)
+        ICounterpartyFieldRepository? fieldRepository,
+        ILicenseGate? ворота = null)
     {
         _репозиторий = repository ?? throw new ArgumentNullException(nameof(repository));
         _поля = fieldRepository;
+        _ворота = ворота;
     }
 
     /// <summary>
@@ -120,6 +128,13 @@ public sealed class ImportMergeService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(batch);
+
+        var разрешение = _ворота?.Проверить(LicenseOperation.СозданиеЗаписей);
+
+        if (разрешение is { Разрешено: false })
+        {
+            throw new LicenseLimitExceededException(разрешение.Сообщение);
+        }
 
         var результаты = new List<ImportMergeOutcome>();
 

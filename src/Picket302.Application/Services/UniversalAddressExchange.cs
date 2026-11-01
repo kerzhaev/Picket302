@@ -180,6 +180,55 @@ public sealed class UniversalAddressExchange
     }
 
     /// <summary>
+    /// Импортирует адресный список из документа RTF согласно профилю
+    /// сопоставления (ТЗ §8.5, функция 71: «Импорт и экспорт адресных списков
+    /// в форматах TXT/CSV/HTML/RTF/XLS/XLSX»).
+    /// </summary>
+    /// <param name="input">Поток с содержимым документа RTF.</param>
+    /// <param name="profile">Профиль сопоставления столбцов.</param>
+    /// <returns>Черновики контрагентов, подготовленные к проверке оператором.</returns>
+    /// <exception cref="AddressExchangeImportException">
+    /// Структура файла повреждена: число столбцов строки не совпадает с
+    /// ожидаемым. Текст ошибки содержит номер строки.
+    /// </exception>
+    public IReadOnlyList<CounterpartyDraft> ImportRtf(Stream input, CsvProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(profile);
+
+        var таблица = new RtfTableReader().Read(
+            input,
+            profile.HasHeaderRow,
+            Math.Max(1, profile.FirstDataRow));
+
+        return СобратьЧерновики(таблица, profile);
+    }
+
+    /// <summary>
+    /// Импортирует адресный список из текста документа RTF согласно профилю
+    /// сопоставления (ТЗ §8.5, функция 71).
+    /// </summary>
+    /// <param name="rtf">Текст документа RTF.</param>
+    /// <param name="profile">Профиль сопоставления столбцов.</param>
+    /// <returns>Черновики контрагентов, подготовленные к проверке оператором.</returns>
+    /// <exception cref="AddressExchangeImportException">
+    /// Структура файла повреждена: число столбцов строки не совпадает с
+    /// ожидаемым. Текст ошибки содержит номер строки.
+    /// </exception>
+    public IReadOnlyList<CounterpartyDraft> ImportRtf(string rtf, CsvProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(rtf);
+        ArgumentNullException.ThrowIfNull(profile);
+
+        var таблица = new RtfTableReader().Read(
+            rtf,
+            profile.HasHeaderRow,
+            Math.Max(1, profile.FirstDataRow));
+
+        return СобратьЧерновики(таблица, profile);
+    }
+
+    /// <summary>
     /// Собирает таблицу выгрузки по списку контрагентов.
     /// </summary>
     /// <param name="data">Выгружаемые контрагенты.</param>

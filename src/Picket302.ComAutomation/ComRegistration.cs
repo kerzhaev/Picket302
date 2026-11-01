@@ -136,8 +136,19 @@ public sealed class ComRegistration
 
             // Ссылка на библиотеку типов: без неё невозможен экспорт сведений
             // о типе (ITypeInfo) для интерфейса, а значит и работа клиента
-            // через IDispatch с ранним связыванием.
-            интерфейс?.SetValue("TypeLib", _typeLibraryPath, RegistryValueKind.String);
+            // через IDispatch с ранним связыванием. Значение — идентификатор
+            // библиотеки типов (GUID), а не путь к файлу: путь хранится в
+            // ветке TypeLib.
+            интерфейс?.SetValue("TypeLib", FormatGuid(ComAutomationIds.TypeLibId), RegistryValueKind.String);
+        }
+
+        using (var класс = Registry.CurrentUser.CreateSubKey(
+                   $@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}",
+                   writable: true))
+        {
+            // Библиотека типов класса: нужна клиенту для получения сведений
+            // о типах (IProvideClassInfo) и для позднего связывания.
+            класс?.SetValue("TypeLib", FormatGuid(ComAutomationIds.TypeLibId), RegistryValueKind.String);
         }
 
         using (var версия = Registry.CurrentUser.CreateSubKey(
@@ -194,7 +205,9 @@ public sealed class ComRegistration
                    $@"{_classesRoot}\Interface\{FormatGuid(ComAutomationIds.InterfaceId)}",
                    writable: true))
         {
-            интерфейс?.SetValue("TypeLib", _typeLibraryPath, RegistryValueKind.String);
+            // Значение TypeLib — идентификатор библиотеки типов; путь к
+            // файлу хранится в ветке TypeLib\{GUID}\{версия}\0\win64.
+            интерфейс?.SetValue("TypeLib", FormatGuid(ComAutomationIds.TypeLibId), RegistryValueKind.String);
         }
     }
 

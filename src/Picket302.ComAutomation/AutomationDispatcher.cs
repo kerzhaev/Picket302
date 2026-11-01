@@ -671,6 +671,10 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
 
         if (!File.Exists(_databasePath))
         {
+            AutomationServerLog.Write(
+                $"База данных не найдена: путь={_databasePath}, пользователь={Environment.UserName}, " +
+                $"профиль={Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)}");
+
             return false;
         }
 
@@ -689,9 +693,13 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
                 .ApplyAsync(session.Connection, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch
+        catch (Exception ошибка)
         {
+            AutomationServerLog.Write(
+                $"Не удалось открыть базу данных {_databasePath}: {ошибка.GetType().Name}: {ошибка.Message}");
+
             await session.DisposeAsync().ConfigureAwait(false);
+
             return false;
         }
 
@@ -1489,18 +1497,30 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
             var контрольШрифта = new Picket302.Infrastructure.Fonts.ZipcodeFontGuard();
             var рендерер = new EnvelopeRenderer(new GdiTextMeasurer());
 
+            // История печати конвертов (ТЗ §3.1.7, §8.4, функция 64): снимок
+            // адресов фиксируется при каждом физическом выводе, в том числе
+            // в маршруте COM-автоматизации.
+            var письма = new MailRepository(session);
+            var контрагенты = new CounterpartyRepository(session);
+            var службаПисем = new MailService(
+                письма,
+                контрагенты,
+                new PrintHistoryRepository(session),
+                session);
+
             var контроллер = new PrintSessionController(
                 new PrintTemplateRepository(session),
                 new BlankFieldRepository(session),
                 new PrintJobRepository(session),
-                new PrintDataSource(new MailRepository(session), new CounterpartyRepository(session)),
+                new PrintDataSource(письма, контрагенты),
                 new PrintAuditWriter(каталог),
                 new SystemDrawingPrintSpooler(),
                 рендерер,
                 new PaperSizeValidator(),
                 new PostIndexRenderer(контрольШрифта),
                 new QrCodeRenderer(),
-                new LogoRenderer());
+                new LogoRenderer(),
+                printHistory: new PrintHistoryRecorder(службаПисем));
 
             _printing = контроллер;
 

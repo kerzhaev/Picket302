@@ -9,6 +9,7 @@ using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Email;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Licensing;
 using Picket302.Domain.Services;
 using Picket302.Infrastructure.Export;
 using Picket302.Infrastructure.Integration;
@@ -81,7 +82,14 @@ public sealed class MainShell : Form
     private readonly PictureBox _превью = new();
 
     private readonly DataGridView _таблицаОтправителей = new();
+    private readonly TextBox _поискОтправителя = new();
     private readonly DataGridView _таблицаПолучателей = new();
+
+    /// <summary>
+    /// Индекс столбца адресной книги, над которым открыто контекстное меню
+    /// (ТЗ §8.11, функция 131: «скрытие колонок»).
+    /// </summary>
+    private int _индексСтолбцаПодКурсором = -1;
     private readonly DataGridView _таблицаБланков = new();
     private readonly DataGridView _таблицаРассылок = new();
     private readonly DataGridView _таблицаОтправленных = new();
@@ -98,6 +106,36 @@ public sealed class MainShell : Form
     private readonly ToolStripMenuItem _пунктОбъединить = new("Объединить в рассылку");
     private readonly ToolStripMenuItem _пунктПереместить = new("Переместить в категорию");
     private readonly ToolStripMenuItem _пунктПометитьОтправителем = new("Пометить как отправителя");
+
+    /// <summary>
+    /// Идентификатор таблицы адресной книги в настройках вида таблиц
+    /// (ТЗ §8.11, функция 131).
+    /// </summary>
+    private const string ИдентификаторТаблицыПолучателей = "addressBook";
+
+    /// <summary>
+    /// Контроллер сортировки адресной книги по любой колонке
+    /// (ТЗ §8.1, функция 9).
+    /// </summary>
+    private readonly AddressBookSortController _сортировкаПолучателей = new();
+
+    /// <summary>
+    /// Контроллер настроек вида таблиц: цвета, заголовки столбцов, скрытие
+    /// столбцов, «полосатая таблица», сброс к умолчаниям (ТЗ §8.11, функция 131).
+    /// </summary>
+    private GridViewSettingsController? _настройкиВидаТаблиц;
+
+    /// <summary>
+    /// Служба сохранённых пользовательских фильтров адресной книги
+    /// (ТЗ §8.1, функция 9).
+    /// </summary>
+    private SavedFilterService? _сохранённыеФильтры;
+
+    /// <summary>
+    /// Условия применённого сохранённого фильтра; <see langword="null"/> —
+    /// сохранённый фильтр не применён.
+    /// </summary>
+    private Picket302.Domain.Contracts.FilterCriteria? _применённыйФильтр;
 
     /// <summary>
     /// Пункт меню «Печать» с галкой «Показывать список шаблонов перед
@@ -145,6 +183,12 @@ public sealed class MainShell : Form
     private readonly Label _состояниеПечати = new();
 
     /// <summary>
+    /// Метка срока пробного периода в строке состояния (ТЗ §8.10, функция 119:
+    /// «индикатор остатка дней»).
+    /// </summary>
+    private readonly Label _лицензия = new();
+
+    /// <summary>
     /// Признак готовности окна к работе: база данных открыта и данные загружены.
     /// </summary>
     public bool Инициализировано => _инициализировано;
@@ -183,6 +227,201 @@ public sealed class MainShell : Form
     public Label СчётчикБаза => _состояниеБазы;
 
     /// <summary>
+    /// Надпись срока пробного периода: осталось дней (ТЗ §8.10, функция 119).
+    /// </summary>
+    public Label ИндикаторЛицензии => _лицензия;
+
+    /// <summary>
+    /// Формирует действующие условия отбора и сортировки адресной книги:
+    /// сортировка по выбранной колонке и условия применённого сохранённого
+    /// фильтра (ТЗ §8.1, функция 9).
+    /// </summary>
+    /// <returns>Условия отбора и сортировки.</returns>
+    private Picket302.Domain.Contracts.FilterCriteria ТекущиеКритерииФильтра()
+    {
+        var критерии = _сортировкаПолучателей.ПостроитьКритерии();
+
+        if (_применённыйФильтр is not { } фильтр)
+        {
+            return критерии;
+        }
+
+        критерии.Conditions.AddRange(фильтр.Conditions);
+        критерии.OnlyFavorites = критерии.OnlyFavorites || фильтр.OnlyFavorites;
+        критерии.GroupId ??= фильтр.GroupId;
+
+        if (критерии.SortColumn is null && фильтр.SortColumn is not null)
+        {
+            критерии.SortColumn = фильтр.SortColumn;
+            критерии.SortDescending = фильтр.SortDescending;
+        }
+
+        return критерии;
+    }
+
+    /// <summary>
+    /// Сохраняет текущие условия отбора и сортировки под именем оператора
+    /// (ТЗ §8.1, функция 9: «сохранённые пользовательские фильтры»).
+    /// </summary>
+    private async void СохранитьФильтр()
+    {
+        if (_сохранённыеФильтры is null)
+        {
+            return;
+        }
+
+        var имя = ВвестиИмяФильтра("Сохранить фильтр под именем:");
+
+        if (string.IsNullOrWhiteSpace(имя))
+        {
+            return;
+        }
+
+        await _сохранённыеФильтры
+            .СохранитьAsync(имя, ТекущиеКритерииФильтра())
+            .ConfigureAwait(true);
+
+        MessageBox.Show(
+            this,
+            $"Фильтр «{имя.Trim()}» сохранён.",
+            "Фильтры адресной книги",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    /// <summary>
+    /// Применяет сохранённый фильтр адресной книги (ТЗ §8.1, функция 9).
+    /// </summary>
+    private async void ПрименитьФильтр()
+    {
+        if (_сохранённыеФильтры is null)
+        {
+            return;
+        }
+
+        var фильтры = await _сохранённыеФильтры.ПолучитьСписокAsync().ConfigureAwait(true);
+
+        if (фильтры.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Сохранённые фильтры отсутствуют.",
+                "Фильтры адресной книги",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        var имена = фильтры.Select(фильтр => фильтр.Name).ToArray();
+        var выбранное = ВыбратьИзСписка("Применить фильтр:", имена);
+
+        if (выбранное is null)
+        {
+            return;
+        }
+
+        _применённыйФильтр = await _сохранённыеФильтры
+            .ПолучитьКритерииAsync(выбранное)
+            .ConfigureAwait(true);
+
+        if (_состав is not null)
+        {
+            await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Удаляет сохранённый фильтр адресной книги (ТЗ §8.1, функция 9).
+    /// </summary>
+    private async void УдалитьФильтр()
+    {
+        if (_сохранённыеФильтры is null)
+        {
+            return;
+        }
+
+        var фильтры = await _сохранённыеФильтры.ПолучитьСписокAsync().ConfigureAwait(true);
+
+        if (фильтры.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Сохранённые фильтры отсутствуют.",
+                "Фильтры адресной книги",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        var имена = фильтры.Select(фильтр => фильтр.Name).ToArray();
+        var выбранное = ВыбратьИзСписка("Удалить фильтр:", имена);
+
+        if (выбранное is null)
+        {
+            return;
+        }
+
+        await _сохранённыеФильтры.УдалитьAsync(выбранное).ConfigureAwait(true);
+
+        if (_применённыйФильтр is not null)
+        {
+            var оставшийся = await _сохранённыеФильтры
+                .ПолучитьКритерииAsync(выбранное)
+                .ConfigureAwait(true);
+
+            if (оставшийся is null)
+            {
+                _применённыйФильтр = null;
+            }
+        }
+
+        if (_состав is not null)
+        {
+            await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Сбрасывает сортировку адресной книги (ТЗ §8.1, функция 9).
+    /// </summary>
+    private async void СброситьСортировку()
+    {
+        _сортировкаПолучателей.Сбросить();
+
+        if (_состав is not null)
+        {
+            await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Запрашивает у оператора имя фильтра (ТЗ §8.1, функция 9).
+    /// </summary>
+    /// <param name="заголовок">Текст приглашения.</param>
+    /// <returns>Введённое имя либо <see langword="null"/>.</returns>
+    private static string? ВвестиИмяФильтра(string заголовок)
+    {
+        using var форма = new FormFilterName(заголовок);
+
+        return форма.ShowDialog() == DialogResult.OK ? форма.Имя : null;
+    }
+
+    /// <summary>
+    /// Предлагает оператору выбрать значение из списка (ТЗ §8.1, функция 9).
+    /// </summary>
+    /// <param name="заголовок">Текст приглашения.</param>
+    /// <param name="значения">Доступные значения.</param>
+    /// <returns>Выбранное значение либо <see langword="null"/>.</returns>
+    private static string? ВыбратьИзСписка(string заголовок, IReadOnlyList<string> значения)
+    {
+        using var форма = new FormValuePicker(заголовок, значения);
+
+        return форма.ShowDialog() == DialogResult.OK ? форма.ВыбранноеЗначение : null;
+    }
+
+    /// <summary>
     /// Инициализирует окно: открывает базу данных, применяет оформление и
     /// загружает данные.
     /// </summary>
@@ -206,6 +445,30 @@ public sealed class MainShell : Form
         GridAppearanceManager.Применить(_таблицаРассылок, _оформление);
         GridAppearanceManager.Применить(_таблицаОтправленных, _оформление);
 
+        // Сортировка по любой колонке адресной книги и настройки вида таблицы:
+        // цвета, заголовки столбцов, скрытие столбцов, «полосатая таблица»
+        // (ТЗ §8.1, функция 9; §8.11, функция 131).
+        _сортировкаПолучателей.Подключить(_таблицаПолучателей);
+        _сортировкаПолучателей.СортировкаИзменена += async (_, _) =>
+        {
+            if (_состав is not null)
+            {
+                await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+            }
+        };
+
+        _настройкиВидаТаблиц = new GridViewSettingsController(активный.НастройкиОтображения);
+
+        // Чтение настроек и изменение таблицы разнесены по шагам: элементы
+        // таблицы изменяются в потоке интерфейса (ТЗ §8.11, функция 131).
+        var настройкиТаблицы = await _настройкиВидаТаблиц
+            .ЗагрузитьAsync(ИдентификаторТаблицыПолучателей, cancellationToken)
+            .ConfigureAwait(true);
+
+        _оформление = _настройкиВидаТаблиц.Применить(_таблицаПолучателей, настройкиТаблицы);
+
+        _сохранённыеФильтры = new SavedFilterService(активный.ХранилищеНастроек);
+
         await ЗагрузитьОтправителейAsync(активный, cancellationToken).ConfigureAwait(true);
         await ЗагрузитьПолучателейAsync(активный, cancellationToken).ConfigureAwait(true);
         await ЗагрузитьКатегорииAsync(активный, cancellationToken).ConfigureAwait(true);
@@ -216,6 +479,7 @@ public sealed class MainShell : Form
 
         _инициализировано = true;
         ОбновитьСтрокуСостояния(активный);
+        ОбновитьИндикаторЛицензии(активный);
     }
 
     /// <summary>
@@ -247,6 +511,17 @@ public sealed class MainShell : Form
         var вид = new ToolStripMenuItem("Вид");
         вид.DropDownItems.Add("Настройка вида таблиц…", null, (_, _) => НастроитьОформление());
         вид.DropDownItems.Add("Настройка таблицы…", null, (_, _) => НастроитьТаблицу());
+        вид.DropDownItems.Add(new ToolStripSeparator());
+
+        // Фильтры и сортировка адресной книги (ТЗ §8.1, функция 9).
+        var фильтры = new ToolStripMenuItem("Фильтры");
+        фильтры.DropDownItems.Add("Сохранить фильтр…", null, (_, _) => СохранитьФильтр());
+        фильтры.DropDownItems.Add("Применить фильтр…", null, (_, _) => ПрименитьФильтр());
+        фильтры.DropDownItems.Add("Удалить фильтр…", null, (_, _) => УдалитьФильтр());
+        фильтры.DropDownItems.Add(new ToolStripSeparator());
+        фильтры.DropDownItems.Add("Сбросить сортировку", null, (_, _) => СброситьСортировку());
+
+        вид.DropDownItems.Add(фильтры);
         вид.DropDownItems.Add(new ToolStripSeparator());
         вид.DropDownItems.Add("Обновить", null, (_, _) => ОбновитьВсе());
 
@@ -501,11 +776,73 @@ public sealed class MainShell : Form
         _таблицаОтправителей.Columns[1].Width = 220;
         _таблицаОтправителей.SelectionChanged += (_, _) => ОбновитьВыделенное();
 
+        // Выбор отправителя по первым буквам наименования
+        // (ТЗ §8.1, функция 16).
+        var меткаПоиска = new Label
+        {
+            Text = "Быстрый выбор:",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Height = 16,
+            Font = new Font("Tahoma", 8f),
+        };
+
+        _поискОтправителя.Dock = DockStyle.Top;
+        _поискОтправителя.Height = 20;
+        _поискОтправителя.TextChanged += (_, _) => ВыбратьОтправителяПоПрефиксу();
+
         панель.Controls.Add(_таблицаОтправителей);
+        панель.Controls.Add(_поискОтправителя);
+        панель.Controls.Add(меткаПоиска);
         панель.Controls.Add(кнопки);
         панель.Controls.Add(заголовок);
 
         return панель;
+    }
+
+    /// <summary>
+    /// Выбирает отправителя по первым буквам наименования и назначает его
+    /// текущим (ТЗ §8.1, функция 16: «выбор отправителя по первым буквам»).
+    /// </summary>
+    private async void ВыбратьОтправителяПоПрефиксу()
+    {
+        if (_состав is null || !_инициализировано)
+        {
+            return;
+        }
+
+        var префикс = _поискОтправителя.Text;
+
+        if (string.IsNullOrWhiteSpace(префикс))
+        {
+            return;
+        }
+
+        var отправители = _таблицаОтправителей.Rows
+            .Cast<DataGridViewRow>()
+            .Where(строка => строка.Tag is long)
+            .Select(строка => ((long)строка.Tag!, (строка.Cells[1].Value as string) ?? string.Empty))
+            .ToList();
+
+        var найденный = SenderQuickSelect.FindByPrefix(отправители, префикс);
+
+        if (найденный is null)
+        {
+            return;
+        }
+
+        foreach (DataGridViewRow строка in _таблицаОтправителей.Rows)
+        {
+            if (строка.Tag is long идентификатор && идентификатор == найденный.Value)
+            {
+                строка.Selected = true;
+                _состав.ТекущийОтправитель.SetGlobalSender(идентификатор);
+
+                await ЗагрузитьОтправителейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+
+                break;
+            }
+        }
     }
 
     /// <summary>
@@ -573,6 +910,7 @@ public sealed class MainShell : Form
         _таблицаПолучателей.Columns[4].Width = 110;
         _таблицаПолучателей.Columns[5].Width = 45;
         _таблицаПолучателей.Columns[6].Width = 110;
+        _таблицаПолучателей.MouseDown += ОбработатьНажатиеЗаголовка;
         _таблицаПолучателей.SelectionChanged += (_, _) => ОбновитьВыделенное();
         _таблицаПолучателей.CellDoubleClick += (_, _) => ИзменитьПолучателя();
         _таблицаПолучателей.KeyDown += ОбработатьНаборВТаблице;
@@ -780,6 +1118,7 @@ public sealed class MainShell : Form
         Настроить(_копий, "Копий: 0", 330);
         Настроить(_состояниеБазы, "База: не подключена", 460);
         Настроить(_состояниеПечати, string.Empty, 620);
+        Настроить(_лицензия, string.Empty, 780);
 
         _строкаСостояния.Controls.Add(_всего);
         _строкаСостояния.Controls.Add(_выбрано);
@@ -787,6 +1126,7 @@ public sealed class MainShell : Form
         _строкаСостояния.Controls.Add(_копий);
         _строкаСостояния.Controls.Add(_состояниеБазы);
         _строкаСостояния.Controls.Add(_состояниеПечати);
+        _строкаСостояния.Controls.Add(_лицензия);
     }
 
     /// <summary>
@@ -1439,7 +1779,8 @@ public sealed class MainShell : Form
         var фильтр = new Picket302.Domain.Repositories.CounterpartyFilter(
             NameFragment: string.IsNullOrWhiteSpace(_поиск.ПрямойНабор) ? null : _поиск.ПрямойНабор,
             IsVip: _поиск.ТолькоИзбранное ? true : null,
-            GroupId: _поиск.Группа);
+            GroupId: _поиск.Группа,
+            Criteria: ТекущиеКритерииФильтра());
 
         var страница = await состав.Контрагенты
             .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 500), фильтр, cancellationToken)
@@ -1673,6 +2014,54 @@ public sealed class MainShell : Form
         }
 
         _состояниеБазы.Text = $"База: {Path.GetFileName(состав.ПутьБазы)}";
+    }
+
+    /// <summary>
+    /// Обновляет индикатор срока пробного периода в строке состояния
+    /// (ТЗ §8.10, функция 119: «индикатор остатка дней»).
+    /// </summary>
+    /// <param name="состав">Состав приложения.</param>
+    public void ОбновитьИндикаторЛицензии(AppServices состав)
+    {
+        ArgumentNullException.ThrowIfNull(состав);
+
+        var статус = состав.ВоротаЛицензии.ТекущийСтатус;
+
+        _лицензия.Text = статус.State switch
+        {
+            LicenseState.Licensed => "Лицензия: бессрочная",
+            LicenseState.Trial => $"Пробный период: осталось дней {статус.DaysRemaining}",
+            _ => "Пробный период закончился",
+        };
+    }
+
+    /// <summary>
+    /// Показывает NAG-окно пробного периода при старте приложения и при
+    /// истечении срока (ТЗ §8.10, функция 119: «NAG-экран при старте в
+    /// trial-режиме», «Осталось дней: 0»).
+    /// </summary>
+    /// <param name="состав">Состав приложения.</param>
+    /// <returns><see langword="true"/>, если NAG-окно было показано.</returns>
+    public bool ПоказатьNagЛицензии(AppServices состав)
+    {
+        ArgumentNullException.ThrowIfNull(состав);
+
+        var статус = состав.ВоротаЛицензии.ТекущийСтатус;
+
+        if (статус.State == LicenseState.Licensed)
+        {
+            return false;
+        }
+
+        using var форма = new FormLicenseNag(статус);
+        форма.ShowDialog(this);
+
+        if (форма.ВыбранноеДействие == FormLicenseNag.КнопкаВводаКлюча)
+        {
+            ОткрытьРегистрацию();
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -2282,6 +2671,28 @@ public sealed class MainShell : Form
         }
 
         var поле = списокПолей.SelectedItem as string;
+
+        // ТЗ §8.1, функция 18: массовая правка требует предварительного
+        // подтверждения, если затронуто больше порога (по умолчанию 10 записей).
+        var порог = await _состав.СлужбаПакетногоРедактирования
+            .GetConfirmationThresholdAsync()
+            .ConfigureAwait(true);
+
+        if (BatchEditService.ТребуетсяПодтверждение(_выбранныеПолучатели.Count, порог))
+        {
+            var подтверждение = MessageBox.Show(
+                this,
+                $"Изменить поле «{поле}» у {_выбранныеПолучатели.Count} записей?",
+                "Пакетное редактирование",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (подтверждение != DialogResult.Yes)
+            {
+                return;
+            }
+        }
+
         var результат = await _состав.СлужбаПакетногоРедактирования
             .BatchUpdateFieldAsync(_выбранныеПолучатели, поле!, значение.Text)
             .ConfigureAwait(true);
@@ -2363,9 +2774,38 @@ public sealed class MainShell : Form
         GridAppearanceManager.Применить(_таблицаРассылок, _оформление);
         GridAppearanceManager.Применить(_таблицаОтправленных, _оформление);
 
+        // Переключатель заголовков столбцов действует на все таблицы
+        // программы (ТЗ §8.11, функция 131).
+        _таблицаОтправителей.ColumnHeadersVisible = _оформление.HeadersVisible;
+        _таблицаПолучателей.ColumnHeadersVisible = _оформление.HeadersVisible;
+        _таблицаБланков.ColumnHeadersVisible = _оформление.HeadersVisible;
+        _таблицаРассылок.ColumnHeadersVisible = _оформление.HeadersVisible;
+        _таблицаОтправленных.ColumnHeadersVisible = _оформление.HeadersVisible;
+
         if (_состав is not null)
         {
             await _состав.НастройкиОтображения.SaveAppearanceAsync(_оформление).ConfigureAwait(true);
+        }
+
+        if (форма.СброшеноКУмолчаниям)
+        {
+            // Сброс к умолчаниям возвращает и состояние столбцов
+            // (ТЗ §8.11, функция 131: «сброс к умолчаниям»).
+            if (_настройкиВидаТаблиц is not null)
+            {
+                await _настройкиВидаТаблиц
+                    .СброситьКУмолчаниямAsync(_таблицаПолучателей, ИдентификаторТаблицыПолучателей, CancellationToken.None)
+                    .ConfigureAwait(true);
+            }
+
+            return;
+        }
+
+        if (_настройкиВидаТаблиц is not null)
+        {
+            await _настройкиВидаТаблиц
+                .СохранитьAsync(_таблицаПолучателей, ИдентификаторТаблицыПолучателей, CancellationToken.None)
+                .ConfigureAwait(true);
         }
     }
 
@@ -2379,34 +2819,107 @@ public sealed class MainShell : Form
             return;
         }
 
-        var идентификатор = $"{_вкладки.SelectedIndex}.{nameof(_таблицаПолучателей)}";
-
-        var сохранённая = await _состав.НастройкиОтображения
-            .LoadGridConfigurationAsync(идентификатор)
-            .ConfigureAwait(true);
-
-        if (сохранённая is null)
+        // Сохраняется фактическое состояние столбцов адресной книги:
+        // видимость, подписи и ширина (ТЗ §8.11, функция 131; §7.6).
+        if (_настройкиВидаТаблиц is not null)
         {
-            MessageBox.Show(
-                this,
-                "Для этой таблицы ещё нет сохранённой конфигурации.",
-                "Настройка таблицы",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            await _настройкиВидаТаблиц
+                .СохранитьAsync(_таблицаПолучателей, ИдентификаторТаблицыПолучателей, CancellationToken.None)
+                .ConfigureAwait(true);
+        }
+
+        MessageBox.Show(
+            this,
+            "Настройка таблицы сохранена: видимость, подписи и ширина столбцов.",
+            "Настройка таблицы",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    /// <summary>
+    /// Обрабатывает нажатие правой кнопки мыши по заголовку столбца
+    /// адресной книги: показывает контекстное меню столбцов (ТЗ §8.11,
+    /// функция 131: «скрытие колонок»).
+    /// </summary>
+    /// <param name="отправитель">Таблица адресной книги.</param>
+    /// <param name="аргументы">Аргументы нажатия.</param>
+    private void ОбработатьНажатиеЗаголовка(object? отправитель, MouseEventArgs аргументы)
+    {
+        if (аргументы.Button != MouseButtons.Right)
+        {
             return;
         }
 
-        var конфигурация = new GridConfigDto(
-            сохранённая.GridId,
-            сохранённая.Columns.Select(колонка => new GridColumnConfig(
-                колонка.Name,
-                колонка.Caption,
-                колонка.Width,
-                колонка.Visible,
-                колонка.SortOrder)).ToList());
+        var попадание = _таблицаПолучателей.HitTest(аргументы.X, аргументы.Y);
 
-        await _состав.НастройкиОтображения
-            .SaveGridConfigurationAsync(идентификатор, конфигурация)
+        if (попадание.ColumnIndex < 0)
+        {
+            return;
+        }
+
+        _индексСтолбцаПодКурсором = попадание.ColumnIndex;
+
+        var меню = МенюСтолбцовАдреснойКниги();
+        меню.Show(_таблицаПолучателей, аргументы.Location);
+    }
+
+    /// <summary>
+    /// Строит контекстное меню заголовков столбцов адресной книги:
+    /// скрытие столбца и возврат всех столбцов (ТЗ §8.11, функция 131:
+    /// «скрытие колонок»).
+    /// </summary>
+    /// <returns>Контекстное меню заголовков столбцов.</returns>
+    private ContextMenuStrip МенюСтолбцовАдреснойКниги()
+    {
+        var меню = new ContextMenuStrip { Font = new Font("Tahoma", 8f) };
+
+        var скрыть = new ToolStripMenuItem("Скрыть столбец")
+        {
+            Enabled = _индексСтолбцаПодКурсором >= 0,
+        };
+        скрыть.Click += (_, _) => СкрытьСтолбецАдреснойКниги();
+
+        var показать = new ToolStripMenuItem("Показать все столбцы");
+        показать.Click += (_, _) => ПоказатьВсеСтолбцыАдреснойКниги();
+
+        меню.Items.Add(скрыть);
+        меню.Items.Add(показать);
+
+        return меню;
+    }
+
+    /// <summary>
+    /// Скрывает столбец адресной книги, над которым открыто контекстное меню,
+    /// и сохраняет новое состояние столбцов.
+    /// </summary>
+    private async void СкрытьСтолбецАдреснойКниги()
+    {
+        if (_настройкиВидаТаблиц is null)
+        {
+            return;
+        }
+
+        await _настройкиВидаТаблиц
+            .СкрытьСтолбецAsync(
+                _таблицаПолучателей,
+                ИдентификаторТаблицыПолучателей,
+                _индексСтолбцаПодКурсором,
+                CancellationToken.None)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Возвращает все столбцы адресной книги и сохраняет новое состояние.
+    /// </summary>
+    private async void ПоказатьВсеСтолбцыАдреснойКниги()
+    {
+        if (_настройкиВидаТаблиц is null)
+        {
+            return;
+        }
+
+        await _настройкиВидаТаблиц
+            .ПоказатьВсеСтолбцыAsync(_таблицаПолучателей, ИдентификаторТаблицыПолучателей, CancellationToken.None)
             .ConfigureAwait(true);
     }
 
@@ -2426,6 +2939,56 @@ public sealed class MainShell : Form
         await ЗагрузитьРассылкиAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         await ЗагрузитьПапкиAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Запрашивает у оператора параметры отправления в карточке отправления
+    /// (ТЗ §8.1, функции 23 и 32).
+    /// </summary>
+    /// <returns>
+    /// Выбранные значения либо <see langword="null"/>, если оператор отказался
+    /// от печати.
+    /// </returns>
+    private MailCardValues? ЗапроситьПараметрыОтправления()
+    {
+        using var карточка = new FormMailEdit();
+
+        if (карточка.ShowDialog(this) != DialogResult.OK)
+        {
+            return null;
+        }
+
+        return new MailCardValues(
+            карточка.Категория,
+            карточка.ВидУведомления,
+            карточка.НужноУведомление,
+            карточка.ФорматКонверта,
+            карточка.ЧислоКопий);
+    }
+
+    /// <summary>
+    /// Переносит выбранные параметры карточки в отправление.
+    /// </summary>
+    /// <param name="письмо">Карточка отправления.</param>
+    /// <param name="значения">Выбранные значения.</param>
+    private static void ПрименитьПараметрыОтправления(
+        Picket302.Domain.Entities.Mail письмо,
+        MailCardValues значения)
+    {
+        ArgumentNullException.ThrowIfNull(письмо);
+        ArgumentNullException.ThrowIfNull(значения);
+
+        письмо.MailCategory = значения.Категория;
+        письмо.NoticeType = значения.ВидУведомления == Picket302.Domain.Entities.NotificationType.None
+            ? null
+            : значения.ВидУведомления.Ключ();
+        письмо.NeedNotification = значения.НужноУведомление;
+        письмо.CopyCount = значения.ЧислоКопий;
+
+        if (!string.IsNullOrWhiteSpace(значения.ФорматКонверта))
+        {
+            письмо.EnvelopeType = значения.ФорматКонверта;
+        }
     }
 
     /// <summary>
@@ -2485,6 +3048,17 @@ public sealed class MainShell : Form
             .GenerateNextOutgoingNumberAsync()
             .ConfigureAwait(true);
 
+        // Карточка отправления: категория и вид уведомления выбираются
+        // оператором до сохранения (ТЗ §8.1, функции 23 и 32).
+        var параметры = ЗапроситьПараметрыОтправления();
+
+        if (параметры is null)
+        {
+            return;
+        }
+
+        ПрименитьПараметрыОтправления(письмо, параметры);
+
         var результат = await _состав.СлужбаПисем.CreateAsync(письмо).ConfigureAwait(true);
 
         if (результат.IsFailure)
@@ -2529,6 +3103,16 @@ public sealed class MainShell : Form
         var создано = 0;
         var идентификаторы = new List<long>();
 
+        // Карточка отправления запрашивается один раз для всей партии:
+        // категория и вид уведомления применяются ко всем отправлениям
+        // (ТЗ §8.1, функции 23 и 32).
+        var параметры = ЗапроситьПараметрыОтправления();
+
+        if (параметры is null)
+        {
+            return;
+        }
+
         foreach (var идентификатор in _выбранныеПолучатели)
         {
             var контрагент = await _состав.Контрагенты.GetByIdAsync(идентификатор).ConfigureAwait(true);
@@ -2555,6 +3139,8 @@ public sealed class MainShell : Form
             письмо.OutgoingNumber = await _состав.СлужбаНумерации
                 .GenerateNextOutgoingNumberAsync()
                 .ConfigureAwait(true);
+
+            ПрименитьПараметрыОтправления(письмо, параметры);
 
             var результат = await _состав.СлужбаПисем.CreateAsync(письмо).ConfigureAwait(true);
 
@@ -2813,9 +3399,11 @@ public sealed class MainShell : Form
             return false;
         }
 
-        using var окно = new FormPrintPreview(документ);
-
-        return окно.ShowDialog(this) == DialogResult.OK;
+        using (документ)
+        using (var окно = new FormPrintPreview(документ))
+        {
+            return окно.ShowDialog(this) == DialogResult.OK;
+        }
     }
 
     /// <summary>
@@ -3073,6 +3661,14 @@ public sealed class MainShell : Form
         if (!_инициализировано)
         {
             await ИнициализироватьAsync().ConfigureAwait(true);
+        }
+
+        // NAG-экран пробного периода показывается при старте приложения
+        // (ТЗ §8.10, функция 119). В тестах окно не отображается, поэтому
+        // диалог не блокирует автоматические проверки.
+        if (_состав is not null)
+        {
+            ПоказатьNagЛицензии(_состав);
         }
     }
 

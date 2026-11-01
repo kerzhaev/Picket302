@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Licensing;
 using Picket302.Domain.Postal;
 using Picket302.Domain.Repositories;
 using Picket302.Printing.Audit;
@@ -41,6 +42,8 @@ public sealed class PrintSessionController
     private readonly PrinterManager? _принтеры;
     private readonly IPrinterProfileRepository? _профили;
     private readonly EnvelopeFormatCatalog? _форматы;
+    private readonly IPrintHistoryRecorder? _историяПечати;
+    private readonly ILicenseGate? _ворота;
 
     /// <summary>
     /// Создаёт контроллер печатных сессий.
@@ -59,6 +62,7 @@ public sealed class PrintSessionController
     /// <param name="printers">Менеджер принтеров (реальные метрики DEVMODE).</param>
     /// <param name="printerProfiles">Хранилище калибровочных профилей принтеров.</param>
     /// <param name="formats">Справочник форматов конвертов.</param>
+    /// <param name="licenseGate">Ворота лицензии: ограничивают печать партий в режиме trial (ТЗ §8.10, функция 119).</param>
     public PrintSessionController(
         IPrintTemplateRepository templates,
         IBlankFieldRepository fields,
@@ -73,7 +77,9 @@ public sealed class PrintSessionController
         LogoRenderer? logo = null,
         PrinterManager? printers = null,
         IPrinterProfileRepository? printerProfiles = null,
-        EnvelopeFormatCatalog? formats = null)
+        EnvelopeFormatCatalog? formats = null,
+        IPrintHistoryRecorder? printHistory = null,
+        ILicenseGate? licenseGate = null)
     {
         ArgumentNullException.ThrowIfNull(templates);
         ArgumentNullException.ThrowIfNull(fields);
@@ -98,6 +104,8 @@ public sealed class PrintSessionController
         _принтеры = printers;
         _профили = printerProfiles;
         _форматы = formats;
+        _историяПечати = printHistory;
+        _ворота = licenseGate;
     }
 
     /// <summary>Текст ошибки при пустом выделении (ТЗ §8.6, функция 79).</summary>
@@ -195,6 +203,26 @@ public sealed class PrintSessionController
                 Status = PrintJobStatus.Failed,
                 ErrorMessage = EmptySelectionMessage,
             };
+        }
+
+        // Печать партий в режиме trial ограничивается лимитами лицензии
+        // (ТЗ §8.10, функция 119): при истёкшем сроке или исчерпанном лимите
+        // объёма партия не печатается, оператор получает понятное сообщение
+        // с числом оставшихся дней. Одиночная печать (F5) и пробная печать
+        // остаются доступными.
+        if (request.PrintMode is PrintModes.BatchPreview or PrintModes.BatchDirect)
+        {
+            var разрешение = _ворота?.Проверить(LicenseOperation.ПечатьПартий);
+
+            if (разрешение is { Разрешено: false })
+            {
+                return new PrintResult
+                {
+                    IsSuccess = false,
+                    Status = PrintJobStatus.Failed,
+                    ErrorMessage = разрешение.Сообщение,
+                };
+            }
         }
 
         progress?.Report(new PrintProgress(
@@ -455,6 +483,35 @@ public sealed class PrintSessionController
             if (_qr is not null)
             {
                 await _qr.СохранитьКэшAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // История печати конвертов (ТЗ §3.1.7, §8.4, функция 64): снимок
+            // адресов получателя и отправителя фиксируется для каждого
+            // физически выведенного конверта. Пробная печать (print_mode = test)
+            // учётной записи не создаёт (ТЗ §8.10, функция 143).
+            if (статус == PrintJobStatus.Success && !request.IsTest && _историяПечати is not null)
+            {
+                try
+                {
+                    await _историяПечати
+                        .RecordAsync(
+                            request.MailIds,
+                            плановыйИдентификатор,
+                            контекст.TemplateName,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+#pragma warning disable CA1031 // Сбой записи истории печати фиксируется в журнале сессии печати.
+                catch (Exception исключение)
+#pragma warning restore CA1031
+                {
+                    статус = PrintJobStatus.Failed;
+                    ошибка = $"Не удалось записать историю печати: {исключение.Message}";
+                }
             }
 
             return await ЗаписатьИтогAsync(

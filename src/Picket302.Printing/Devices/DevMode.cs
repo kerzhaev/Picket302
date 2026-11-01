@@ -231,8 +231,9 @@ public static class DevModeConstants
 
     /// <summary>
     /// Константа <c>DC_PAPERSIZE</c> функции <c>DeviceCapabilitiesW</c>:
-    /// размер текущего формата носителя в сотых долях миллиметра
-    /// (wingdi.h: <c>#define DC_PAPERSIZE 3</c>).
+    /// размеры поддерживаемых форматов носителя в десятых долях миллиметра;
+    /// драйвер возвращает массив структур POINT (wingdi.h:
+    /// <c>#define DC_PAPERSIZE 3</c>).
     /// </summary>
     public const int DC_PAPERSIZE = 3;
 

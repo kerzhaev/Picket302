@@ -8,7 +8,8 @@ namespace Picket302.Domain.Contracts;
 /// Три независимых настраиваемых цвета: фокус (<see cref="FocusColor"/>),
 /// выделение (<see cref="SelectedColor"/>) и подсказка (<see cref="HintColor"/>).
 /// Значения по умолчанию — 4227327, 6205183 и 3723516 соответственно.
-/// «Зебра» (чередование строк) выключается глобально.
+/// «Зебра» (чередование строк) выключается глобально; заголовки столбцов
+/// отображаются (<see cref="HeadersVisible"/>).
 /// </remarks>
 public sealed record GridAppearance
 {
@@ -38,6 +39,16 @@ public sealed record GridAppearance
 
     /// <summary>Признак включённой «зелбры» — чередования строк.</summary>
     public bool ZebraEnabled { get; init; }
+
+    /// <summary>
+    /// Признак отображения заголовков столбцов — переключатель заголовков
+    /// (ТЗ §8.11, функция 131: «заголовки столбцов»).
+    /// </summary>
+    /// <remarks>
+    /// В файле настроек, сохранённом до появления переключателя, поле
+    /// отсутствует — тогда действует значение по умолчанию (заголовки видны).
+    /// </remarks>
+    public bool HeadersVisible { get; init; } = true;
 
     /// <summary>Кегль шрифта таблиц.</summary>
     public float FontSize { get; init; } = DefaultFontSize;

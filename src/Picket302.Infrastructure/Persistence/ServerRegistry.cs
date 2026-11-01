@@ -61,6 +61,9 @@ public enum TopologyRole
 
     /// <summary>Роль определить не удалось.</summary>
     Unknown = 3,
+
+    /// <summary>Машина — сервер общей БД, клиенты подключены.</summary>
+    ServerWithClients = 4,
 }
 
 /// <summary>
@@ -374,6 +377,130 @@ public sealed class ServerRegistry
             имяСервера,
             сообщение,
             несовпадение);
+    }
+
+    /// <summary>
+    /// Определяет роль текущей машины по реквизитам подключения (ТЗ §8.11,
+    /// функция 127: «Диагностика сообщает роль текущей машины и состояние
+    /// связи»; поддерживаются конфигурации «сервер с общей БД + N клиентов»,
+    /// «клиент без сервера (локальная SQLite)», «сервер без клиентов
+    /// (головной офис)»).
+    /// </summary>
+    /// <param name="подключение">Реквизиты текущего подключения.</param>
+    /// <param name="подключённыхКлиентов">Число клиентов, подключённых к общей БД.</param>
+    /// <param name="схемаКлиента">Версия схемы на клиенте.</param>
+    /// <param name="схемаСервера">Версия схемы на сервере.</param>
+    /// <returns>Состояние топологии.</returns>
+    /// <exception cref="ArgumentNullException">Реквизиты подключения не заданы.</exception>
+    public TopologyInfo DiagnoseTopology(
+        ConnectionDescriptor подключение,
+        int подключённыхКлиентов,
+        string? схемаКлиента = null,
+        string? схемаСервера = null)
+    {
+        ArgumentNullException.ThrowIfNull(подключение);
+
+        var серверы = ListServers();
+
+        if (ЭтоЛокальныйУзел(подключение.Server))
+        {
+            // Машина размещает общую БД: сервер с клиентами либо сервер
+            // без клиентов (головной офис) (ТЗ §8.11, функция 127).
+            var имяСервера = серверы.FirstOrDefault(запись => ЭтоЛокальныйУзел(запись.Host))?.Name
+                ?? подключение.Server;
+
+            var роль = подключённыхКлиентов > 0
+                ? TopologyRole.ServerWithClients
+                : TopologyRole.ServerWithoutClients;
+
+            var сообщение = подключённыхКлиентов > 0
+                ? $"Сервер общей БД «{имяСервера}»: подключено клиентов — {подключённыхКлиентов}."
+                : $"Сервер общей БД «{имяСервера}»: клиенты не подключены (головной офис).";
+
+            return new TopologyInfo(роль, true, имяСервера, сообщение, null);
+        }
+
+        if (подключение.IsLocal)
+        {
+            // Клиент без сервера БД: локальная SQLite (ТЗ §9.5).
+            var сообщение = серверы.Count > 0
+                ? $"Локальный режим: подключение к файлу базы данных. В справочнике указано серверов: {серверы.Count}."
+                : "Локальный режим: подключение к файлу базы данных.";
+
+            return new TopologyInfo(TopologyRole.LocalOnly, false, null, сообщение, null);
+        }
+
+        // Клиент общей БД: сервер указан один раз, логин и пароль берутся
+        // из защищённого файла подключения (ТЗ §9.5).
+        var сервер = серверы.FirstOrDefault(запись =>
+            string.Equals(запись.Host, подключение.Server, StringComparison.OrdinalIgnoreCase));
+
+        var имя = сервер?.Name ?? подключение.Server;
+
+        var проверка = сервер is null
+            ? new ConnectionCheckResult(false, "Сервер не найден в справочнике servers.ini.", 0)
+            : CheckServer(сервер);
+
+        var несовпадение = СравнитьСхемы(схемаКлиента, схемаСервера);
+
+        var текст = проверка.IsSuccess
+            ? $"Клиент общей БД: сервер «{имя}» доступен."
+            : $"Клиент общей БД: сервер «{имя}» недоступен. {проверка.Error}";
+
+        if (несовпадение is not null)
+        {
+            текст += " " + несовпадение;
+        }
+
+        return new TopologyInfo(
+            TopologyRole.ClientWithServer,
+            проверка.IsSuccess,
+            имя,
+            текст,
+            несовпадение);
+    }
+
+    /// <summary>
+    /// Определяет, указывает ли адрес на текущую машину: сервер общей БД
+    /// размещается на этом же компьютере (ТЗ §8.11, функция 127).
+    /// </summary>
+    /// <param name="узел">Проверяемый узел.</param>
+    /// <returns><see langword="true"/>, если узел — текущая машина.</returns>
+    private static bool ЭтоЛокальныйУзел(string узел)
+    {
+        if (string.IsNullOrWhiteSpace(узел))
+        {
+            return false;
+        }
+
+        if (string.Equals(узел, "localhost", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(узел, "127.0.0.1", StringComparison.Ordinal)
+            || string.Equals(узел, "::1", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (string.Equals(узел, Environment.MachineName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        try
+        {
+            foreach (var адрес in System.Net.Dns.GetHostAddresses(System.Net.Dns.GetHostName()))
+            {
+                if (string.Equals(адрес.ToString(), узел, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (System.Net.Sockets.SocketException)
+        {
+            // Не удалось определить адреса машины — считаем узел удалённым.
+        }
+
+        return false;
     }
 
     /// <summary>

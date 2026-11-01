@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Picket302.Domain.Contracts;
+using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
 
 namespace Picket302.Infrastructure.Storage;
@@ -113,6 +114,63 @@ public sealed class JsonUiSettingsStore : IUiSettingsStore
         }
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SavedFilter>> LoadSavedFiltersAsync(CancellationToken cancellationToken = default)
+    {
+        var конфигурации = await ПрочитатьAsync(cancellationToken).ConfigureAwait(false);
+
+        return конфигурации.SavedFilters.Values.ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task SaveSavedFilterAsync(SavedFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentException.ThrowIfNullOrWhiteSpace(filter.Name);
+
+        await _блокировка.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var конфигурации = await ПрочитатьAsync(cancellationToken).ConfigureAwait(false);
+
+            // Имя фильтра уникально в пределах набора: фильтр с тем же именем
+            // обновляется, а не добавляется вторым.
+            конфигурации.SavedFilters[filter.Name] = filter;
+
+            await ЗаписатьAsync(конфигурации, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _блокировка.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteSavedFilterAsync(string name, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        await _блокировка.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var конфигурации = await ПрочитатьAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!конфигурации.SavedFilters.Remove(name))
+            {
+                return false;
+            }
+
+            await ЗаписатьAsync(конфигурации, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            _блокировка.Release();
+        }
+    }
+
     /// <summary>
     /// Читает содержимое файла настроек; повреждённый файл заменяется дефолтным.
     /// </summary>
@@ -167,7 +225,8 @@ public sealed class JsonUiSettingsStore : IUiSettingsStore
     }
 
     /// <summary>
-    /// Содержимое файла настроек: конфигурации таблиц и оформление.
+    /// Содержимое файла настроек: конфигурации таблиц, оформление и сохранённые
+    /// пользовательские фильтры.
     /// </summary>
     private sealed class Содержимое
     {
@@ -176,5 +235,12 @@ public sealed class JsonUiSettingsStore : IUiSettingsStore
 
         /// <summary>Оформление таблиц.</summary>
         public GridAppearance? Appearance { get; set; }
+
+        /// <summary>
+        /// Сохранённые пользовательские фильтры по именам (ТЗ §8.1, функция 9).
+        /// В файле настроек, сохранённом до появления фильтров, раздел
+        /// отсутствует — тогда набор пуст.
+        /// </summary>
+        public Dictionary<string, SavedFilter> SavedFilters { get; set; } = [];
     }
 }

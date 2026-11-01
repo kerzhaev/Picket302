@@ -340,7 +340,8 @@ public class PrinterManager
     /// Размер печатной области определяется по контексту устройства драйвера
     /// (<c>GetDeviceCaps(HORZRES, VERTRES)</c> с пересчётом через
     /// <c>LOGPIXELSX/LOGPIXELSY</c>); при недоступности контекста
-    /// используется <c>DeviceCapabilitiesW(DC_PAPERSIZE)</c>.
+    /// используются настройки принтера .NET и резервный запрос
+    /// <c>DeviceCapabilitiesW(DC_PAPERSIZE)</c>.
     /// </remarks>
     public (decimal Width, decimal Height) GetPrintableArea(string printerName)
     {
@@ -356,16 +357,81 @@ public class PrinterManager
     }
 
     /// <summary>
-    /// Возвращает размер носителя текущего формата, мм
-    /// (<c>DeviceCapabilitiesW(DC_PAPERSIZE)</c>).
+    /// Возвращает размер носителя текущего формата, мм.
     /// </summary>
     /// <param name="printerName">Имя принтера.</param>
     /// <returns>Ширина и высота носителя, мм.</returns>
+    /// <remarks>
+    /// <para>Размер берётся из настроек принтера .NET: <c>PaperSize.Width</c> и
+    /// <c>PaperSize.Height</c> заданы в <b>сотых долях дюйма</b>, поэтому
+    /// перевод выполняется множителем <see cref="ДюймВМиллиметры"/>.</para>
+    /// <para>Резервный запрос к драйверу — <c>DeviceCapabilitiesW(DC_PAPERSIZE)</c> —
+    /// возвращает массив структур <c>POINT</c> с размерами в <b>десятых долях
+    /// миллиметра</b>.</para>
+    /// </remarks>
     public (decimal Width, decimal Height) PaperSizeFromDriver(string printerName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(printerName);
 
-        var буфер = Marshal.AllocHGlobal(sizeof(short) * 2);
+        var изНастроек = PaperSizeFromPrinterSettings(printerName);
+
+        if (изНастроек.Width > 0m && изНастроек.Height > 0m)
+        {
+            return изНастроек;
+        }
+
+        return PaperSizeFromDeviceCapabilities(printerName);
+    }
+
+    /// <summary>
+    /// Читает текущий формат носителя из настроек принтера .NET.
+    /// </summary>
+    /// <param name="printerName">Имя принтера.</param>
+    /// <returns>Размер носителя, мм; нули, если принтер недоступен.</returns>
+    private static (decimal Width, decimal Height) PaperSizeFromPrinterSettings(string printerName)
+    {
+        try
+        {
+            var настройки = new PrinterSettings { PrinterName = printerName };
+
+            if (!настройки.IsValid)
+            {
+                return (0m, 0m);
+            }
+
+            var формат = настройки.DefaultPageSettings.PaperSize;
+
+            if (формат.Width <= 0 || формат.Height <= 0)
+            {
+                return (0m, 0m);
+            }
+
+            return (
+                формат.Width * ДюймВМиллиметры,
+                формат.Height * ДюймВМиллиметры);
+        }
+        catch (Exception ошибка) when (ошибка is System.Drawing.Printing.InvalidPrinterException
+            or ArgumentException
+            or System.ComponentModel.Win32Exception)
+        {
+            // Принтер мог быть удалён между перечислением и запросом.
+            return (0m, 0m);
+        }
+    }
+
+    /// <summary>
+    /// Запрашивает у драйвера размеры форматов носителя
+    /// (<c>DeviceCapabilitiesW(DC_PAPERSIZE)</c>).
+    /// </summary>
+    /// <param name="printerName">Имя принтера.</param>
+    /// <returns>Размер носителя, мм; нули, если драйвер не ответил.</returns>
+    /// <remarks>
+    /// Драйвер возвращает массив структур <c>POINT</c>; размеры заданы в
+    /// десятых долях миллиметра. Берётся первая точка массива.
+    /// </remarks>
+    private static (decimal Width, decimal Height) PaperSizeFromDeviceCapabilities(string printerName)
+    {
+        var буфер = Marshal.AllocHGlobal(sizeof(int) * 2);
 
         try
         {
@@ -381,10 +447,22 @@ public class PrinterManager
                 return (0m, 0m);
             }
 
-            var ширина = Marshal.ReadInt16(буфер, 0) / 100m;
-            var высота = Marshal.ReadInt16(буфер, 2) / 100m;
+            // POINT: два 32-разрядных значения — ширина и высота.
+            var ширина = PrintUnits.TenthsOfMmToMm(Marshal.ReadInt32(буфер, 0));
+            var высота = PrintUnits.TenthsOfMmToMm(Marshal.ReadInt32(буфер, sizeof(int)));
+
+            if (ширина <= 0m || высота <= 0m)
+            {
+                return (0m, 0m);
+            }
 
             return (ширина, высота);
+        }
+        catch (Exception ошибка) when (ошибка is DllNotFoundException
+            or EntryPointNotFoundException
+            or System.ComponentModel.Win32Exception)
+        {
+            return (0m, 0m);
         }
         finally
         {

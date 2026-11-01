@@ -35,7 +35,23 @@ public sealed class Mail
     public string? EnvelopeType { get; set; }
 
     /// <summary>Вид уведомления: ф.119, 112эп.</summary>
-    public string? NoticeType { get; set; }
+    public string? NoticeType
+    {
+        get => _noticeType;
+        set
+        {
+            _noticeType = value;
+            NotificationType = NotificationTypeMapper.Разобрать(value);
+        }
+    }
+
+    private string? _noticeType;
+
+    /// <summary>
+    /// Вид уведомления о вручении (ТЗ §8.1, функция 32: «Выбор вида уведомления
+    /// о вручении»).
+    /// </summary>
+    public NotificationType NotificationType { get; private set; } = NotificationType.None;
 
     /// <summary>Количество экземпляров; не меньше единицы.</summary>
     public int CopyCount { get; set; } = MinimumCopyCount;
@@ -125,6 +141,34 @@ public sealed class Mail
         }
 
         MailCategory = category;
+    }
+
+    /// <summary>
+    /// Выбирает вид уведомления о вручении (ТЗ §8.1, функция 32: «Выбор вида
+    /// уведомления о вручении»).
+    /// </summary>
+    /// <param name="type">
+    /// Вид уведомления: ф.119 (РФ), национальная форма либо совмещённый перевод
+    /// ф.112эп. Значение <see cref="NotificationType.None"/> означает, что
+    /// уведомление не требуется.
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Выбрано неизвестное значение вида уведомления.
+    /// </exception>
+    public void SelectNotificationForm(NotificationType type)
+    {
+        if (!Enum.IsDefined(type))
+        {
+            throw new ArgumentOutOfRangeException(nameof(type), type, "Неизвестный вид уведомления.");
+        }
+
+        NotificationType = type;
+
+        // Флаг «нужно уведомление» ставится автоматически: уведомление требуется
+        // для всех выбранных форм, кроме явного «не требуется».
+        NeedNotification = type != NotificationType.None;
+
+        NoticeType = type.Ключ();
     }
 
     /// <summary>

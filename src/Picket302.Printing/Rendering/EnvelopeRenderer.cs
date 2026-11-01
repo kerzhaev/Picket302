@@ -71,7 +71,18 @@ public sealed class EnvelopeRenderer
 
             switch (поле.Kind)
             {
-                case BlankFieldKind.PostIndex when postIndex is not null:
+                case BlankFieldKind.PostIndex:
+                    if (postIndex is null)
+                    {
+                        // Почтовый индекс нельзя выводить обычным шрифтом:
+                        // адресат не сможет прочитать его машинно (ТЗ §7,
+                        // критерий 2 «Заказ»).
+                        предупреждения.Add(
+                            "Почтовый индекс не выведен: недоступен отрисовщик кодового штампа");
+
+                        break;
+                    }
+
                     postIndex.RenderMachineReadableIndex(context, значение, new PostIndexSpec
                     {
                         LineWidthMm = job.IndexLineWidthMm,
@@ -85,7 +96,15 @@ public sealed class EnvelopeRenderer
 
                     break;
 
-                case BlankFieldKind.Qr when qrCode is not null:
+                case BlankFieldKind.Qr:
+                    if (qrCode is null)
+                    {
+                        предупреждения.Add(
+                            "QR-код не выведен: недоступен отрисовщик QR-кода");
+
+                        break;
+                    }
+
                     qrCode.RenderQr(
                         context,
                         значение,
@@ -99,7 +118,20 @@ public sealed class EnvelopeRenderer
 
                     break;
 
-                case BlankFieldKind.Picture when logo is not null && job.WithLogo && логотипБайты is not null:
+                case BlankFieldKind.Picture:
+                    if (!job.WithLogo)
+                    {
+                        break;
+                    }
+
+                    if (logo is null || логотипБайты is null)
+                    {
+                        предупреждения.Add(
+                            "Логотип не выведен: файл логотипа недоступен");
+
+                        break;
+                    }
+
                     var предупреждениеЛоготипа = logo.DrawLogo(
                         context,
                         логотипБайты,

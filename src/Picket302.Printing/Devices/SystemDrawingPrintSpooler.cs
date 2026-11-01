@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Picket302.Domain.Entities;
 using Picket302.Printing.Engine;
 using Picket302.Printing.Elements;
+using Picket302.Printing.Metrics;
 using Picket302.Printing.Rendering;
 
 namespace Picket302.Printing.Devices;
@@ -42,10 +43,14 @@ public sealed class SystemDrawingPrintSpooler : IPrintSpooler
 
         if (!string.IsNullOrWhiteSpace(context.PaperSizeName))
         {
+            // PaperSize принимает размеры в сотых долях дюйма, а контекст
+            // печати хранит миллиметры (ТЗ §6.1). Без перевода бланк C6
+            // (114 x 162 мм) уходил бы в спулер как 114 x 162 сотых дюйма
+            // (28,9 x 41,1 мм).
             параметрыСтраницы.PaperSize = new PaperSize(
                 context.PaperSizeName,
-                (int)Math.Round(context.PaperWidthMm),
-                (int)Math.Round(context.PaperHeightMm));
+                PrintUnits.MmToHundredthsOfInch(context.PaperWidthMm),
+                PrintUnits.MmToHundredthsOfInch(context.PaperHeightMm));
         }
 
         параметрыСтраницы.Landscape = context.Orientation == TemplateOrientation.Landscape;

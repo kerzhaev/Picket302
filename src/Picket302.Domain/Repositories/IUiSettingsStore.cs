@@ -1,4 +1,5 @@
 using Picket302.Domain.Contracts;
+using Picket302.Domain.Entities;
 
 namespace Picket302.Domain.Repositories;
 
@@ -36,4 +37,27 @@ public interface IUiSettingsStore
     /// <param name="appearance">Сохраняемое оформление.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
     Task SaveAppearanceAsync(GridAppearance appearance, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Читает сохранённые пользовательские фильтры (ТЗ §8.1, функция 9:
+    /// «сохранённые пользовательские фильтры»).
+    /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Список сохранённых фильтров; при отсутствии — пустой список.</returns>
+    Task<IReadOnlyList<SavedFilter>> LoadSavedFiltersAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Сохраняет пользовательский фильтр; фильтр с таким же именем обновляется.
+    /// </summary>
+    /// <param name="filter">Сохраняемый фильтр.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    Task SaveSavedFilterAsync(SavedFilter filter, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Удаляет пользовательский фильтр по имени.
+    /// </summary>
+    /// <param name="name">Имя удаляемого фильтра.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns><see langword="true"/>, если фильтр был удалён.</returns>
+    Task<bool> DeleteSavedFilterAsync(string name, CancellationToken cancellationToken = default);
 }

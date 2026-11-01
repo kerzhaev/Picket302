@@ -1,4 +1,5 @@
 using Picket302.Domain.Common;
+using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 
 namespace Picket302.Domain.Repositories;
@@ -16,6 +17,16 @@ namespace Picket302.Domain.Repositories;
 /// Включать мягко удалённые записи в выборку. По умолчанию исключаются
 /// (ТЗ §3.1.19: «Правило мягкого удаления»).
 /// </param>
+/// <param name="Criteria">
+/// Критерии слоя запроса: дополнительные условия отбора и сортировка
+/// (ТЗ §8.1, функция 9: «Фильтры и сортировка по любой колонке»).
+/// </param>
+/// <param name="SortColumn">
+/// Ключ колонки сортировки из белого списка адресной книги («vip», «main_zip»,
+/// «main_city», «main_street», «name», «group» и другие). Неизвестный ключ
+/// отвергается репозиторием — произвольный текст в запрос не попадает.
+/// </param>
+/// <param name="SortDescending">Признак сортировки по убыванию.</param>
 public sealed record CounterpartyFilter(
     string? NameFragment = null,
     string? Inn = null,
@@ -23,7 +34,10 @@ public sealed record CounterpartyFilter(
     bool? IsVip = null,
     bool? IsSender = null,
     bool? IsActive = null,
-    bool IncludeDeleted = false);
+    bool IncludeDeleted = false,
+    FilterCriteria? Criteria = null,
+    string? SortColumn = null,
+    bool SortDescending = false);
 
 /// <summary>
 /// Репозиторий контрагентов (ТЗ §3.1.1, таблица <c>counterparties</c>).

@@ -1,6 +1,7 @@
 using Picket302.Domain;
 using Picket302.Domain.Common;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Licensing;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.Rules;
 
@@ -12,23 +13,31 @@ namespace Picket302.Application.Services;
 /// <remarks>
 /// Служба проверяет реквизиты карточки перед сохранением (ИНН/УНП, КПП, БИК) и
 /// обеспечивает мягкое удаление: удалённая запись исключается из рабочих
-/// выборок (ТЗ §3.1.19).
+/// выборок (ТЗ §3.1.19). Создание новых карточек дополнительно ограничивается
+/// воротами лицензии: в режиме trial с истёкшим сроком или исчерпанным
+/// лимитом объёма запись не создаётся (ТЗ §8.10, функция 119).
 /// </remarks>
 public sealed class CounterpartyService
 {
     private readonly ICounterpartyRepository _контрагенты;
     private readonly IUnitOfWork _единицаРаботы;
+    private readonly ILicenseGate? _ворота;
 
     /// <summary>Создаёт службу адресной книги.</summary>
     /// <param name="контрагенты">Репозиторий контрагентов.</param>
     /// <param name="единицаРаботы">Единица работы над базой данных.</param>
-    public CounterpartyService(ICounterpartyRepository контрагенты, IUnitOfWork единицаРаботы)
+    /// <param name="ворота">Ворота лицензии; при отсутствии проверка не выполняется.</param>
+    public CounterpartyService(
+        ICounterpartyRepository контрагенты,
+        IUnitOfWork единицаРаботы,
+        ILicenseGate? ворота = null)
     {
         ArgumentNullException.ThrowIfNull(контрагенты);
         ArgumentNullException.ThrowIfNull(единицаРаботы);
 
         _контрагенты = контрагенты;
         _единицаРаботы = единицаРаботы;
+        _ворота = ворота;
     }
 
     /// <summary>
@@ -43,6 +52,16 @@ public sealed class CounterpartyService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(counterparty);
+
+        if (counterparty.Id == 0)
+        {
+            var разрешение = _ворота?.Проверить(LicenseOperation.СозданиеЗаписей);
+
+            if (разрешение is { Разрешено: false })
+            {
+                return Result<Counterparty>.Failure(разрешение.Сообщение);
+            }
+        }
 
         var проверка = Проверить(counterparty);
 

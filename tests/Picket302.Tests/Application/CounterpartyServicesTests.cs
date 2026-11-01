@@ -137,6 +137,63 @@ public sealed class CounterpartyServicesTests
     }
 
     [Fact]
+    public async Task BatchEditService_ПорогПодтверждения_ПоУмолчаниюРавен10()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var контрагенты = new CounterpartyRepository(база.Session);
+        var параметры = new ParameterRepository(база.Session);
+        var служба = new BatchEditService(контрагенты, база.UnitOfWork, параметры);
+
+        Assert.Equal(10, BatchEditService.ПорогПодтвержденияПоУмолчанию);
+        Assert.Equal(10, await служба.GetConfirmationThresholdAsync());
+    }
+
+    [Fact]
+    public void BatchEditService_Подтверждение_ТребуетсяТолькоПриЗатронутыхСвышеПорога()
+    {
+        // ТЗ §8.1, функция 18: правка подтверждается, если затронуто больше N строк.
+        Assert.False(BatchEditService.ТребуетсяПодтверждение(9, 10));
+        Assert.False(BatchEditService.ТребуетсяПодтверждение(10, 10));
+        Assert.True(BatchEditService.ТребуетсяПодтверждение(11, 10));
+    }
+
+    [Fact]
+    public async Task BatchEditService_ПорогПодтверждения_НастраиваетсяИзПрофиля()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var контрагенты = new CounterpartyRepository(база.Session);
+        var параметры = new ParameterRepository(база.Session);
+        await параметры.AddAsync(new Parameter
+        {
+            Name = BatchEditService.ПорогПодтвержденияKey,
+            Value = "3",
+        });
+
+        var служба = new BatchEditService(контрагенты, база.UnitOfWork, параметры);
+
+        Assert.Equal(3, await служба.GetConfirmationThresholdAsync());
+        Assert.False(await служба.ТребуетсяПодтверждениеAsync(3));
+        Assert.True(await служба.ТребуетсяПодтверждениеAsync(4));
+    }
+
+    [Fact]
+    public async Task BatchEditService_НекорректныйПорог_ВозвращаетЗначениеПоУмолчанию()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var контрагенты = new CounterpartyRepository(база.Session);
+        var параметры = new ParameterRepository(база.Session);
+        await параметры.AddAsync(new Parameter
+        {
+            Name = BatchEditService.ПорогПодтвержденияKey,
+            Value = "не число",
+        });
+
+        var служба = new BatchEditService(контрагенты, база.UnitOfWork, параметры);
+
+        Assert.Equal(BatchEditService.ПорогПодтвержденияПоУмолчанию, await служба.GetConfirmationThresholdAsync());
+    }
+
+    [Fact]
     public async Task CounterpartyManager_МягкоеУдаление_ЗаписьИсключаетсяИзРабочейВыборки()
     {
         await using var база = await SqliteTestDatabase.CreateAsync();

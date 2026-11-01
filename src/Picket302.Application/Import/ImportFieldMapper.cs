@@ -25,6 +25,18 @@ public enum ImportExtraField
 
     /// <summary>Электронная почта.</summary>
     Email = 3,
+
+    /// <summary>КПП юридического лица.</summary>
+    Kpp = 4,
+
+    /// <summary>ОГРН (либо ОГРНИП).</summary>
+    Ogrn = 5,
+
+    /// <summary>Признак «избранный адрес».</summary>
+    IsVip = 6,
+
+    /// <summary>Идентификатор категории (группы) адресной книги.</summary>
+    Group = 7,
 }
 
 /// <summary>
@@ -337,6 +349,16 @@ public sealed class ImportFieldMapper
         ["электронная почта"] = ImportExtraField.Email,
         ["email"] = ImportExtraField.Email,
         ["e mail"] = ImportExtraField.Email,
+        ["e-mail"] = ImportExtraField.Email,
         ["почта"] = ImportExtraField.Email,
+        ["кпп"] = ImportExtraField.Kpp,
+        ["огрн"] = ImportExtraField.Ogrn,
+        ["огрнип"] = ImportExtraField.Ogrn,
+        ["избранное"] = ImportExtraField.IsVip,
+        ["избранный"] = ImportExtraField.IsVip,
+        ["избранный адрес"] = ImportExtraField.IsVip,
+        ["vip"] = ImportExtraField.IsVip,
+        ["группа"] = ImportExtraField.Group,
+        ["категория"] = ImportExtraField.Group,
     };
 }
