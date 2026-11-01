@@ -723,3 +723,36 @@ liveness процесса, не активность — «нулевой CPU N 
 task #1020 → gate → ревью заново на GLM Flash). Цена: ~1 ч бюджета ревью + ручная зачистка. При
 повторном зависании — заменить ревьюера на minimax-m31 (проверен на S6-масштабе? нет — проверить) или
 уменьшать ревью-контекст.
+
+---
+
+## P21. Резюм со «стража удалений» сломан детерминистически: устаревшая строка после `_touch` → вечный «workflow changed concurrently»
+
+**Симптом.** 01.11.2026 17:57 — гейт S8 поднял `gate.human_required` (страж удалений: этап удалил
+tracked-файл `TempEnumProbe.cs`). Любой resume (API/CLI/прямой вызов `workflows.human_input`)
+падает с `WorkflowConflictError: workflow changed concurrently` — воспроизводится 100%, миссия
+неотвязно висит в awaiting_human. Отладка в транзакции: `_touch('gate.deletions_approved')`
+успешен (200→201), следующий `_transition → QUEUED` получает 0 строк (WHERE state_version=200
+при строке уже 201) → откат всей транзакции → цикл вечен.
+
+**Причина.** Ветке F1a (workflows.py:2117–2130) не хватает перечитывания строки после побочной
+мутации: `_maybe_approve_deletion_guard` (строка 2120) внутри делает `_touch` (ver 200→201), но
+внешняя переменная `workflow` остаётся с ver 200, и `_transition` (строка 2126) матчит 0 строк.
+В ревизионной ветке перечитывание ЕСТЬ (строка 2107: `workflow = _workflow_row(conn, workflow_id)`),
+в F1a — забыто.
+
+**Файлы.** `promptpilot/workflows.py:2117–2130` (ветка F1a human_input), эталон — строка 2107.
+
+**Совместимость.** Однострочный фикс: после `_maybe_approve_deletion_guard(...)` добавить
+`workflow = _workflow_row(conn, workflow_id)` перед `_transition`. Альтернатива — использовать
+возвращаемое значение guard'а. Регресс: остальные ветки не трогаются.
+
+**Тесты.** (1) gate.human_required по удалению → human-input resume → QUEUED + human.resumed
+(сейчас: конфликт); (2) повторный флаг тех же удалений не возникает (deletion approvals записаны);
+(3) ревизионная ветка не сломана.
+
+**Обход супервизора (реализован).** Воспроизведена intends-последовательность F1a в одной
+immediate-транзакции штатными функциями модуля (`record_deletion_approvals` → `_touch
+gate.deletions_approved` → round→pending → **перечитывание** → `_transition QUEUED human.resumed`)
+→ advance_workflow. Mission: awaiting_human → executing (ver 203), executor переdispatched.
+Решение по существу удаления — О.5 в OPEN_QUESTIONS_LOG (TempEnumProbe.cs — временный щуп S4).
