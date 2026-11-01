@@ -122,7 +122,20 @@ public sealed class AmountInWordsTests
     [Fact]
     public void НеизвестныйСловарь_Отклонение()
     {
-        Assert.ThrowsAny<Exception>(() => _пропись.ToWords(10m, "Kzt"));
+        // Словарь без файла — отклонение (файл не найден).
+        Assert.ThrowsAny<Exception>(() => _пропись.ToWords(10m, "Xxx"));
+    }
+
+    [Fact]
+    public void ПустойШаблонКазахстана_СуммаЦифрамиСПредупреждением()
+    {
+        // Казахстан поставляется пустым шаблоном (ТЗ §10.8, ф.151);
+        // неполный словарь — сумма цифрами + предупреждение (ТЗ §8.11, ф.150).
+        var сумма = _пропись.ToWords(10m, "Kzt");
+
+        Assert.Contains("10", сумма, StringComparison.Ordinal);
+        Assert.Contains(_пропись.Warnings, предупреждение =>
+            предупреждение.Contains("неполон", StringComparison.Ordinal));
     }
 
     [Fact]

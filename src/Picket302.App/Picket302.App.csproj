@@ -20,6 +20,14 @@
     <ProjectReference Include="..\Picket302.Printing\Picket302.Printing.csproj" />
   </ItemGroup>
 
+  <!-- Шаблон письма по умолчанию и стили редактора писем поставляются файлами
+       рядом с программой (ТЗ §8.7, функция 97: «Шаблон письма по умолчанию и
+       стили … хранятся файлами рядом с программой и редактируются»). -->
+  <ItemGroup>
+    <None Update="UI\Editors\emailedit\*.html" CopyToOutputDirectory="PreserveNewest" Link="emailedit\%(Filename)%(Extension)" />
+    <None Update="UI\Editors\emailedit\*.css" CopyToOutputDirectory="PreserveNewest" Link="emailedit\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <!-- COM-сервер автоматизации поставляется рядом с оболочкой: при регистрации
        в ветку LocalServer32 записывается путь к исполняемому файлу сервера,
        а не оболочки (ТЗ §8.9, функция 114; §9.1 «ProgID PEPro.Application»).

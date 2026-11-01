@@ -158,14 +158,15 @@ public sealed class MigrationTests
         Assert.All(миграции, миграция => Assert.False(string.IsNullOrWhiteSpace(миграция.Sql)));
 
         // Первая миграция создаёт схему, последующие — её наполняют либо
-        // изменяют (добавление колонок и ограничений).
+        // изменяют (новые таблицы, колонки и ограничения).
         Assert.Contains("CREATE TABLE counterparties", миграции[0].Sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("CREATE TABLE schema_version", миграции[0].Sql, StringComparison.OrdinalIgnoreCase);
         Assert.All(миграции.Skip(1), миграция =>
         {
             Assert.True(
                 миграция.Sql.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase)
-                    || миграция.Sql.Contains("ALTER TABLE", StringComparison.OrdinalIgnoreCase),
+                    || миграция.Sql.Contains("ALTER TABLE", StringComparison.OrdinalIgnoreCase)
+                    || миграция.Sql.Contains("CREATE TABLE", StringComparison.OrdinalIgnoreCase),
                 $"Миграция {миграция.Version} не содержит ни наполнения, ни изменения схемы.");
         });
     }
