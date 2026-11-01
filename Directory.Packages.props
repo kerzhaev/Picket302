@@ -19,6 +19,20 @@
     <PackageVersion Include="System.Drawing.Common" Version="8.0.33" />
   </ItemGroup>
 
+  <ItemGroup Label="Журналирование">
+    <!-- Структурированный журнал с независимыми каналами и ротацией по размеру и дню
+         (§10.3, §8.11, функция 111). -->
+    <PackageVersion Include="Serilog" Version="3.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Миграция с исходных баз">
+    <!-- Импорт базы предшественника из MySQL (§8.9, функция 117): чисто управляемый драйвер. -->
+    <PackageVersion Include="MySqlConnector" Version="2.6.2" />
+    <!-- Импорт базы предшественника из Access .mdb через ODBC (§8.9, функция 118). -->
+    <PackageVersion Include="System.Data.Odbc" Version="8.0.1" />
+  </ItemGroup>
+
   <ItemGroup Label="Тесты">
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />

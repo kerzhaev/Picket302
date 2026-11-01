@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Служебный проект сборки библиотеки типов COM-сервера (ТЗ §9.3,
+       функция 114: «Includes-версия типилиба 2.2»).
+
+       Проект НЕ входит в Picket302.sln и не влияет на сборку программы.
+       Он нужен только для генерации бинарного файла PrintEnvelopePro.tlb
+       утилитой RegAsm из .NET Framework: RegAsm читает COM-метаданные
+       сборки .NET Framework и строит по ним настоящую библиотеку типов.
+
+       В проект подключается ИСТИННЫЙ файл интерфейса
+       src/Picket302.ComAutomation/IPEProApplication.cs, поэтому состав
+       и DISPID методов библиотеки типов не могут разойтись с
+       поставляемым контрактом. -->
+
+  <PropertyGroup>
+    <!-- Имя библиотеки типов и её идентификатор берутся из EVIDENCE:
+         библиотека PrintEnvelopePro, GUID 22BC298D-DF0E-3C29-B589-7A50D3A8B871.
+         Версия сборки 2.2.0.0 даёт библиотеке типов версию 2.2 —
+         «Includes-версия типилиба 2.2» (ТЗ §9.3, функция 114). -->
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>PrintEnvelopePro</AssemblyName>
+    <RootNamespace>Picket302.ComAutomation.Typelib</RootNamespace>
+    <AssemblyVersion>2.2.0.0</AssemblyVersion>
+    <FileVersion>2.2.0.0</FileVersion>
+    <Version>2.2</Version>
+    <AssemblyTitle>PrintEnvelopePro</AssemblyTitle>
+    <Product>Picket302</Product>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <SignAssembly>false</SignAssembly>
+    <!-- Служебный проект не входит в решение и собирается отдельно:
+         управление версиями пакетов и общие параметры решения не применяются. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Picket302.ComAutomation\IPEProApplication.cs" Link="IPEProApplication.cs" />
+    <Compile Include="Coclass.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,170 @@
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Title>Picket302 — пример вызова COM-сервера автоматизации из Excel</Title>
+  <Author>Picket302</Author>
+  <Description>Пример модуля VBA для вызова PEPro.Application (ТЗ §8.9, функция 115).</Description>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Top"/>
+   <Font ss:FontName="Calibri" ss:Size="11"/>
+  </Style>
+  <Style ss:ID="Title">
+   <Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1"/>
+  </Style>
+  <Style ss:ID="Code">
+   <Font ss:FontName="Consolas" ss:Size="11"/>
+  </Style>
+  <Style ss:ID="Comment">
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Italic="1"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Пример">
+  <Table ss:ExpandedColumnCount="2" ss:ExpandedRowCount="35" x:FullColumns="1" x:FullRows="1">
+   <Column ss:Width="380"/>
+   <Column ss:Width="330"/>
+   <Row>
+    <Cell ss:StyleID="Title" ss:MergeAcross="1"><Data ss:Type="String">Picket302 — вызов COM-сервера автоматизации из Excel</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Comment" ss:MergeAcross="1"><Data ss:Type="String">Подготовка: 1) зарегистрируйте сервер командой Picket302.ComAutomation.exe --register; 2) в Excel нажмите ALT+F11, затем File -&gt; Import File... и выберите файл Scripts\ExcelCallExample.bas; 3) запустите макрос PrintEnvelopeFromRegistry , PrintEnvelopeSample ili PrintRegisterToFile (F5).</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Comment" ss:MergeAcross="1"><Data ss:Type="String">Код модуля VBA (тот же, что в Scripts\ExcelCallExample.bas):</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">Option Explicit</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Явное объявление переменных.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">Private Const REG_KEY As String = "HKCU\Software\Picket302\PrintEnvelope"</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Ветка реестра с настройками печати конверта.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">Public Sub PrintEnvelopeFromRegistry()</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Печать конверта по настройкам из реестра.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    Dim App As Object</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Позднее связывание с COM-сервером.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    Set App = CreateObject("PEPro.Application")</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">ProgID локального COM-сервера автоматизации.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    App.OpenDummyFormToSetAsForeground</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Перехват фокуса перед печатью (ТЗ §9.2, метод 10).</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    App.PrintEnvelope ReadSetting("FromName"), ReadSetting("FromAddr"), ReadSetting("FromIndex"), _</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Печать конверта: отправитель и получатель по шести параметрам.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">        ReadSetting("ToName"), ReadSetting("ToAddr"), ReadSetting("ToIndex")</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Отсутствующий параметр реестра даёт пустую строку.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    App.CloseDummyFormAndSetAsForeground "EXCEL.EXE"</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Возврат фокуса вызывающему процессу (ТЗ §9.2, метод 11).</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    MsgBox "Код результата: " &amp; App.GetWarningType()</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Код результата последней операции (ТЗ §9.2, таблица 9.2).</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    Set App = Nothing</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Освобождение COM-объекта.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">End Sub</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">Private Function ReadSetting(Name As String) As String</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Отказоустойчивое чтение реестра.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    Dim Shell As Object</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    On Error Resume Next</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Ошибка чтения не прерывает сценарий.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    Set Shell = CreateObject("WScript.Shell")</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    ReadSetting = CStr(Shell.RegRead(REG_KEY &amp; "\" &amp; Name))</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Пустое значение при отсутствии параметра.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    If Err.Number &lt;&gt; 0 Then ReadSetting = "": Err.Clear</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Отсутствующий параметр = пустая строка, не исключение.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">    On Error GoTo 0</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Code"><Data ss:Type="String">End Function</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String"></Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Title" ss:MergeAcross="1"><Data ss:Type="String">Коды результата GetWarningType (ТЗ §9.2, таблица 9.2)</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Default"><Data ss:Type="String">0 — успех</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Печать реестра или получение списка шаблонов завершилось без ошибок.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Default"><Data ss:Type="String">1 — база данных не загружена</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Вызовите SafeLoadDatabase перед операциями с базой.</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Default"><Data ss:Type="String">2 — ошибка чтения XML</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">XML не соответствует контракту обмена (ТЗ §9.4).</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Default"><Data ss:Type="String">3 — ошибка подготовки документа</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Документ не удалось сформировать (нет принтера, нет данных).</Data></Cell>
+   </Row>
+   <Row>
+    <Cell ss:StyleID="Default"><Data ss:Type="String">4 — файл шаблона не найден</Data></Cell>
+    <Cell ss:StyleID="Comment"><Data ss:Type="String">Шаблон печати не задан или недоступен.</Data></Cell>
+   </Row>
+    <Row>
+   <Cell ss:StyleID="Code"><Data ss:Type="String">Public Sub PrintRegisterToFile()</Data></Cell>
+   <Cell ss:StyleID="Comment"><Data ss:Type="String">Печать почтового реестра из XML без показа формы с сохранением результата по указанному пути (метод 21 контракта).</Data></Cell>
+  </Row>
+  <Row>
+   <Cell ss:StyleID="Code"><Data ss:Type="String">    xml = BuildRegisterXml()</Data></Cell>
+   <Cell ss:StyleID="Comment"><Data ss:Type="String">Данные реестра в формате RegistersData.</Data></Cell>
+  </Row>
+  <Row>
+   <Cell ss:StyleID="Code"><Data ss:Type="String">    App.PrintFromXmlRegistersWithoutForm xml, templateName, resultPath</Data></Cell>
+   <Cell ss:StyleID="Comment"><Data ss:Type="String">Вызов PrintFromXmlRegistersWithoutForm: XML, имя шаблона реестра, путь итогового файла.</Data></Cell>
+  </Row>
+  <Row>
+   <Cell ss:StyleID="Code"><Data ss:Type="String">    warning = App.GetWarningType</Data></Cell>
+   <Cell ss:StyleID="Comment"><Data ss:Type="String">Код результата операции: 0 — успех, 1 — нет БД, 2 — ошибка XML, 3 — ошибка документа, 4 — нет шаблона.</Data></Cell>
+  </Row>
+  <Row>
+   <Cell ss:StyleID="Code"><Data ss:Type="String">Private Function BuildRegisterXml() As String</Data></Cell>
+   <Cell ss:StyleID="Comment"><Data ss:Type="String">Формирование данных реестра в формате RegistersData.</Data></Cell>
+  </Row>
+  <Row>
+   <Cell ss:StyleID="Code"><Data ss:Type="String">End Function</Data></Cell>
+   <Cell ss:StyleID="Comment"><Data ss:Type="String">Конец функции формирования данных реестра.</Data></Cell>
+  </Row>
+  </Table>
+ </Worksheet>
+</Workbook>

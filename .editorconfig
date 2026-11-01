@@ -58,5 +58,34 @@ dotnet_diagnostic.CA1305.severity = warning
 [src/Picket302.App/**.cs]
 dotnet_diagnostic.CA2007.severity = none
 
+# Сценарии оболочки (обработчики команд меню, диалоги выгрузки и импорта)
+# перехватывают любые исключения: сбой отдельной операции показывается
+# сообщением и не должен приводить к закрытию программы.
+dotnet_diagnostic.CA1031.severity = none
+
 [tests/**.cs]
 dotnet_diagnostic.CA2007.severity = none
+
+# Тестовые заглушки среды автоматизации перехватывают любые исключения:
+# проверяется код результата операции, а не вид исключения.
+dotnet_diagnostic.CA1031.severity = none
+
+# COM-сервер автоматизации — слой границы вызова: любое исключение переводится
+# в код результата по таблице 9.2 ТЗ и не должно пробрасываться наружу и ронять
+# процесс вызывающей стороны (ТЗ §9.2). Перехват обобщённого типа здесь —
+# часть контракта сценария.
+[src/Picket302.ComAutomation/**.cs]
+dotnet_diagnostic.CA1031.severity = none
+
+# Сценарии мастера импорта и шаблонов документов: отказ отдельной записи
+# фиксируется предупреждением, обработка продолжается (ТЗ §8.12, шаг 4;
+# §8.5, функция 65 — «битый тег — пропуск тега без падения»). Перехват
+# обобщённого типа обеспечивает именно такое поведение.
+[src/Picket302.Application/Services/ArbitraryDocumentEngine.cs]
+dotnet_diagnostic.CA1031.severity = none
+
+[src/Picket302.Application/Services/DocumentBatchGenerator.cs]
+dotnet_diagnostic.CA1031.severity = none
+
+[src/Picket302.Application/Templating/DocumentTemplateAnalyzer.cs]
+dotnet_diagnostic.CA1031.severity = none
