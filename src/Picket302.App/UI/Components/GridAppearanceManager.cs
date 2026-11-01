@@ -21,6 +21,92 @@ namespace Picket302.App.UI.Components;
 public static class GridAppearanceManager
 {
     /// <summary>
+    /// Область сброса оформления (ТЗ §8.11, функция 131:
+    /// <c>public void ResetToDefaults(Scope scope) // Grid | MainForm</c>).
+    /// </summary>
+    public enum GridAppearanceScope
+    {
+        /// <summary>Сброс оформления отдельной таблицы.</summary>
+        Grid = 0,
+
+        /// <summary>Сброс оформления главной формы; требует перезапуска.</summary>
+        MainForm = 1,
+    }
+
+    /// <summary>
+    /// Результат сброса оформления (ТЗ §8.11, функция 131: сброс главной формы
+    /// требует перезапуска — предупреждение выводится явно).
+    /// </summary>
+    /// <param name="Appearance">Оформление после сброса.</param>
+    /// <param name="RequiresRestart">
+    /// Признак того, что для применения сброса требуется перезапуск главной формы.
+    /// </param>
+    /// <param name="Message">Предупреждение для оператора.</param>
+    public sealed record GridResetResult(
+        GridAppearance Appearance,
+        bool RequiresRestart,
+        string Message);
+
+    /// <summary>Таблицы, к которым применяется оформление единообразно.</summary>
+    private static readonly List<DataGridView> ЗарегистрированныеТаблицы = [];
+
+    /// <summary>
+    /// Регистрирует таблицу, к которой применяется оформление.
+    /// </summary>
+    /// <param name="таблица">Регистрируемая таблица.</param>
+    public static void Register(DataGridView таблица)
+    {
+        ArgumentNullException.ThrowIfNull(таблица);
+
+        if (!ЗарегистрированныеТаблицы.Contains(таблица))
+        {
+            ЗарегистрированныеТаблицы.Add(таблица);
+        }
+    }
+
+    /// <summary>
+    /// Применяет оформление ко всем таблицам программы единообразно
+    /// (ТЗ §8.11, функция 131: <c>public void ApplyAppearance(GridAppearance appearance)</c>).
+    /// </summary>
+    /// <param name="appearance">Оформление.</param>
+    public static void ApplyAppearance(GridAppearance appearance)
+    {
+        ArgumentNullException.ThrowIfNull(appearance);
+
+        foreach (var таблица in ЗарегистрированныеТаблицы.ToArray())
+        {
+            if (таблица.IsDisposed)
+            {
+                ЗарегистрированныеТаблицы.Remove(таблица);
+                continue;
+            }
+
+            Применить(таблица, appearance);
+        }
+    }
+
+    /// <summary>
+    /// Сбрасывает оформление к значениям по умолчанию (ТЗ §8.11, функция 131:
+    /// <c>public void ResetToDefaults(Scope scope) // Grid | MainForm</c>).
+    /// </summary>
+    /// <param name="scope">Область сброса.</param>
+    /// <returns>Оформление после сброса и предупреждение о перезапуске.</returns>
+    public static GridResetResult ResetToDefaults(GridAppearanceScope scope)
+    {
+        var требуетсяПерезапуск = scope == GridAppearanceScope.MainForm;
+
+        var сообщение = требуетсяПерезапуск
+            ? "Сброс оформления главной формы вступит в силу после перезапуска программы."
+            : "Оформление таблицы сброшено к значениям по умолчанию.";
+
+        var оформление = GridAppearance.Default;
+
+        ApplyAppearance(оформление);
+
+        return new GridResetResult(оформление, требуетсяПерезапуск, сообщение);
+    }
+
+    /// <summary>
     /// Применяет оформление к таблице.
     /// </summary>
     /// <param name="таблица">Таблица, к которой применяется оформление.</param>

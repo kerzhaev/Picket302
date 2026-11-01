@@ -5,6 +5,9 @@ using Picket302.Domain.Repositories;
 using Picket302.Domain.Services;
 using Picket302.Infrastructure.Data;
 using Picket302.Infrastructure.Fonts;
+using Picket302.Infrastructure.Licensing;
+using Picket302.Infrastructure.Localization;
+using Picket302.Infrastructure.Logging;
 using Picket302.Infrastructure.Persistence;
 using Picket302.Infrastructure.Registry;
 using Picket302.Infrastructure.Repositories;
@@ -115,7 +118,45 @@ public sealed class AppServices : IAsyncDisposable
             new PostIndexRenderer(контрольШрифта),
             new QrCodeRenderer(),
             new LogoRenderer());
+
+        // Журнал приложения с независимыми каналами (ТЗ §10.3; §8.11,
+        // функция 111). Каталог журналов — <AppData>\Picket302\logs.
+        Журнал = new LogHub(LogHub.ПутьЖурналовПоУмолчанию());
+
+        // Реквизиты подключения к базе и справочник серверов (ТЗ §8.8,
+        // функции 101 и 102; §8.11, функция 127).
+        МенеджерПодключения = new ConnectionManager();
+        РеестрСерверов = new ServerRegistry();
+
+        // Менеджер локализации: переключение языка без перезапуска (ТЗ §8.11,
+        // функция 112). Проблемы локализации попадают в журнал ошибок.
+        МенеджерЯзыка = new LanguageManager(
+            null,
+            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+
+        // Лицензирование (ТЗ §8.10, функции 119–126): автомат состояний
+        // вычисляется при старте, проверка ведётся в одной точке.
+        Машина = new MachineIdentity(сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+        ХранилищеЛицензии = new LicenseStore(
+            LicenseStore.ПутьФайлаПоУмолчанию(),
+            null,
+            Машина,
+            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+        АвтоматЛицензии = new LicenseStateMachine(
+            ХранилищеЛицензии,
+            null,
+            null,
+            () => СчётчикиИспользования?.Invoke() ?? new СнимокИспользования(0, 0));
+        МенеджерЛицензии = new LicenseManager(ХранилищеЛицензии, АвтоматЛицензии);
+        АктивацияЛицензии = new ActivationService(ХранилищеЛицензии, АвтоматЛицензии);
     }
+
+    /// <summary>
+    /// Счётчик объёма данных для проверки лимитов пробного периода
+    /// (ТЗ §8.10, функция 119). Заполняется главной формой после подключения
+    /// к базе данных.
+    /// </summary>
+    public Func<СнимокИспользования>? СчётчикиИспользования { get; set; }
 
     /// <summary>Путь к файлу базы данных.</summary>
     public string ПутьБазы { get; }
@@ -231,6 +272,52 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>Движок предпросмотра печати.</summary>
     public PrintPreviewEngine СлужбаПредпросмотра { get; }
+
+    /// <summary>
+    /// Журнал приложения с независимыми каналами (ТЗ §10.3; §8.11, функция 111).
+    /// </summary>
+    public LogHub Журнал { get; }
+
+    /// <summary>
+    /// Менеджер подключения к базе данных (ТЗ §8.8, функция 102).
+    /// </summary>
+    public ConnectionManager МенеджерПодключения { get; }
+
+    /// <summary>
+    /// Справочник серверов БД (ТЗ §8.8, функция 101; §8.11, функция 127).
+    /// </summary>
+    public ServerRegistry РеестрСерверов { get; }
+
+    /// <summary>
+    /// Менеджер локализации интерфейса (ТЗ §8.11, функция 112).
+    /// </summary>
+    public LanguageManager МенеджерЯзыка { get; }
+
+    /// <summary>
+    /// Вычислитель идентификатора оборудования (ТЗ §8.10, функция 120).
+    /// </summary>
+    public MachineIdentity Машина { get; }
+
+    /// <summary>
+    /// Хранилище данных лицензии (ТЗ §8.10, функция 123).
+    /// </summary>
+    public LicenseStore ХранилищеЛицензии { get; }
+
+    /// <summary>
+    /// Автомат состояний лицензии (ТЗ §8.10, функция 119).
+    /// </summary>
+    public LicenseStateMachine АвтоматЛицензии { get; }
+
+    /// <summary>
+    /// Менеджер лицензии: статус, снятие ключа, несколько управляющих
+    /// (ТЗ §8.10, функция 123).
+    /// </summary>
+    public LicenseManager МенеджерЛицензии { get; }
+
+    /// <summary>
+    /// Служба активации лицензии: онлайн и офлайн (ТЗ §8.10, функция 122).
+    /// </summary>
+    public ActivationService АктивацияЛицензии { get; }
 
     /// <summary>
     /// Возвращает путь к базе данных по умолчанию —

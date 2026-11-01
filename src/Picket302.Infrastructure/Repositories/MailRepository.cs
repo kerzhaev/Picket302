@@ -1,6 +1,7 @@
 using Dapper;
 using Picket302.Domain.Common;
 using Picket302.Domain.Entities;
+using ПочтовоеОтправление = Picket302.Domain.Entities.Mail;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure.Data.Rows;
@@ -33,7 +34,7 @@ public sealed class MailRepository : IMailRepository
     }
 
     /// <inheritdoc />
-    public async Task<long> AddAsync(Mail mail, CancellationToken cancellationToken = default)
+    public async Task<long> AddAsync(ПочтовоеОтправление mail, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mail);
 
@@ -60,7 +61,7 @@ public sealed class MailRepository : IMailRepository
     }
 
     /// <inheritdoc />
-    public async Task<Mail?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+    public async Task<ПочтовоеОтправление?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
         var строка = await _сессия.QueryFirstOrDefaultAsync<MailRow>(
             "SELECT * FROM mails WHERE id = @Id;",
@@ -71,7 +72,7 @@ public sealed class MailRepository : IMailRepository
     }
 
     /// <inheritdoc />
-    public async Task<int> UpdateAsync(Mail mail, CancellationToken cancellationToken = default)
+    public async Task<int> UpdateAsync(ПочтовоеОтправление mail, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mail);
 
@@ -109,7 +110,7 @@ public sealed class MailRepository : IMailRepository
     }
 
     /// <inheritdoc />
-    public async Task<Page<Mail>> GetPagedAsync(
+    public async Task<Page<ПочтовоеОтправление>> GetPagedAsync(
         PageRequest request,
         MailFilter? filter = null,
         CancellationToken cancellationToken = default)
@@ -174,7 +175,7 @@ public sealed class MailRepository : IMailRepository
 
         if (всего == 0)
         {
-            return Page<Mail>.Empty(нормализованный);
+            return Page<ПочтовоеОтправление>.Empty(нормализованный);
         }
 
         параметры.Add("Limit", нормализованный.Limit);
@@ -187,11 +188,11 @@ public sealed class MailRepository : IMailRepository
 
         var элементы = строки.Select(строка => строка.ToEntity()).ToList();
 
-        return new Page<Mail>(элементы, нормализованный.Offset, нормализованный.Limit, всего);
+        return new Page<ПочтовоеОтправление>(элементы, нормализованный.Offset, нормализованный.Limit, всего);
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<Mail>> GetByCounterpartyAsync(
+    public async Task<IReadOnlyList<ПочтовоеОтправление>> GetByCounterpartyAsync(
         long counterpartyId,
         CancellationToken cancellationToken = default)
     {
@@ -204,7 +205,7 @@ public sealed class MailRepository : IMailRepository
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<Mail>> GetByDistributionAsync(
+    public async Task<IReadOnlyList<ПочтовоеОтправление>> GetByDistributionAsync(
         long distributionId,
         CancellationToken cancellationToken = default)
     {
@@ -254,7 +255,7 @@ public sealed class MailRepository : IMailRepository
     /// </summary>
     /// <param name="mail">Сохраняемое отправление.</param>
     /// <returns>Набор параметров команды.</returns>
-    private static DynamicParameters Параметры(Mail mail)
+    private static DynamicParameters Параметры(ПочтовоеОтправление mail)
     {
         var адрес = mail.RecipientAddress;
 

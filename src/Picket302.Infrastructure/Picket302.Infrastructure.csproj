@@ -22,6 +22,13 @@
     <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
 
+  <!-- Структурированный журнал с независимыми каналами (приложение, печать,
+       аудит, почта) и ротацией по размеру и дню (§10.3, §8.11, функция 111). -->
+  <ItemGroup Label="Журналирование">
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
   <!-- Миграция с баз данных предшественника (ТЗ §8.9, функции 117 и 118):
        драйвер MySQL и ODBC-провайдер для файлов .mdb. -->
   <ItemGroup Label="Миграция с исходных баз">
@@ -51,6 +58,16 @@
        (ТЗ §8.11, функции 150–151). -->
   <ItemGroup>
     <EmbeddedResource Include="Text\lng\*.lng" />
+  </ItemGroup>
+
+  <!-- Файлы локализации поставляются рядом с программой (ТЗ §8.11, функция 112:
+       «Файлы lang/<код>.xml и lng/<валюта>.lng»). Интерфейсные строки лежат
+       в каталоге lang, словари суммы прописью — в каталоге lng; оба набора
+       копируются в каталог вывода, поэтому переключение языка и добавление
+       нового языка копированием шаблона работают без правки кода. -->
+  <ItemGroup>
+    <None Update="Localization\lang\*.xml" CopyToOutputDirectory="PreserveNewest" Link="lang\%(Filename)%(Extension)" />
+    <None Update="Text\lng\*.lng" CopyToOutputDirectory="PreserveNewest" Link="lng\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,5 @@
 using Picket302.Domain.Entities;
+using ПочтовоеОтправление = Picket302.Domain.Entities.Mail;
 using Picket302.Domain.ValueObjects;
 
 namespace Picket302.Infrastructure.Data.Rows;
@@ -81,9 +82,9 @@ internal sealed class MailRow
 
     /// <summary>Собирает доменную сущность из строки таблицы.</summary>
     /// <returns>Отправление со структурированным адресом получателя.</returns>
-    public Mail ToEntity()
+    public ПочтовоеОтправление ToEntity()
     {
-        var отправление = new Mail
+        var отправление = new ПочтовоеОтправление
         {
             Id = Id,
             CounterpartyId = CounterpartyId,

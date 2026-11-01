@@ -1,0 +1,37 @@
+/* Стиль содержимого электронного письма (TЗ §8.7, функция 97).
+   Используется по умолчанию в редакторе письма. */
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12pt;
+    line-height: 1.4;
+    color: #000000;
+    margin: 16px;
+}
+
+p {
+    margin: 0 0 10pt 0;
+}
+
+h1, h2, h3 {
+    font-family: Arial, Helvetica, sans-serif;
+    color: #1f3864;
+}
+
+a {
+    color: #0563c1;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+td, th {
+    padding: 4px 6px;
+    vertical-align: top;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}

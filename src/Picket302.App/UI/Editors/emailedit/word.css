@@ -1,0 +1,49 @@
+/* Стиль "word" — эмуляция оформления Word (TЗ §8.7, функция 97:
+   стиль письма, внешне похожий на документ Word).
+   Подключается вместо content.css по выбору оператора. */
+
+body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 14pt;
+    line-height: 1.15;
+    color: #000000;
+    margin: 25.4mm 20mm 25.4mm 20mm;
+}
+
+p {
+    margin: 0 0 10pt 0;
+    text-align: justify;
+}
+
+h1 {
+    font-size: 16pt;
+    font-weight: bold;
+    margin: 0 0 12pt 0;
+}
+
+h2 {
+    font-size: 14pt;
+    font-weight: bold;
+    margin: 12pt 0 6pt 0;
+}
+
+a {
+    color: #0563c1;
+    text-decoration: underline;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+td, th {
+    border: 1px solid #000000;
+    padding: 2pt 5pt;
+    vertical-align: top;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
+using ПочтовоеОтправление = Picket302.Domain.Entities.Mail;
 using Picket302.Domain.Postal;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.Rules;
@@ -2780,7 +2781,7 @@ public sealed class LegacyTargetWriter
                 var рассылка = РазрешитьРассылкуAsync(письмо.DistributionKey);
                 var опись = РазрешитьОписьAsync(письмо.InventoryKey);
 
-                var сущность = new Mail
+                var сущность = new ПочтовоеОтправление
                 {
                     CounterpartyId = получатель.Value,
                     SenderId = отправитель,

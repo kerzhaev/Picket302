@@ -4,11 +4,19 @@ using System.Globalization;
 using System.Windows.Forms;
 using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
+using Picket302.Application.Services;
 using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
+using Picket302.Domain.Email;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Services;
 using Picket302.Infrastructure.Export;
+using Picket302.Infrastructure.Integration;
+using Picket302.Infrastructure.Mail;
+using Picket302.Infrastructure.Migration;
+using Picket302.Infrastructure.Persistence;
+using Picket302.Infrastructure.Support;
+using Picket302.Infrastructure.Update;
 
 using Picket302.Printing;
 using Picket302.Printing.Devices;
@@ -221,8 +229,10 @@ public sealed class MainShell : Form
 
         var файл = new ToolStripMenuItem("Файл");
         файл.DropDownItems.Add("Открыть базу…", null, (_, _) => ОткрытьФормуОчистки());
-        файл.DropDownItems.Add("Архивирование и восстановление базы…", null, (_, _) =>
-            MessageBox.Show(this, "Архивирование базы реализуется на этапе S5.", "Файл"));
+        файл.DropDownItems.Add("Архивирование и восстановление базы…", null, (_, _) => ОткрытьАрхивацию());
+        файл.DropDownItems.Add("Установить на USB-флешку…", null, (_, _) => ОткрытьУстановкуНаUsb());
+        файл.DropDownItems.Add(new ToolStripSeparator());
+        файл.DropDownItems.Add("Журнал ошибок", null, (_, _) => ОткрытьЖурналОшибок());
         файл.DropDownItems.Add(new ToolStripSeparator());
         файл.DropDownItems.Add("Выход", null, (_, _) => Close());
 
@@ -245,6 +255,7 @@ public sealed class MainShell : Form
         данные.DropDownItems.Add(new ToolStripSeparator());
         данные.DropDownItems.Add("Импорт из 1С…", null, (_, _) => ИмпортИз1С());
         данные.DropDownItems.Add("Импорт из внешней БД…", null, (_, _) => ИмпортИзВнешнейБазы());
+        данные.DropDownItems.Add("Загрузить данные из старой версии…", null, (_, _) => ОткрытьЗагрузкуИзСтаройВерсии());
 
         var сервис = new ToolStripMenuItem("Сервис");
         сервис.DropDownItems.Add("Демо-база", null, (_, _) => НаполнитьДемоБазу());
@@ -256,6 +267,18 @@ public sealed class MainShell : Form
         сервис.DropDownItems.Add("Мастер шаблонов документов…", null, (_, _) => ОткрытьМастерШаблонов());
         сервис.DropDownItems.Add(new ToolStripSeparator());
         сервис.DropDownItems.Add("Настройки интеграции (COM)…", null, (_, _) => ОткрытьНастройкиИнтеграции());
+        сервис.DropDownItems.Add(new ToolStripSeparator());
+        сервис.DropDownItems.Add("Подключение к базе данных…", null, (_, _) => ОткрытьНастройкиПодключения());
+        сервис.DropDownItems.Add("Диагностика сервера базы данных…", null, (_, _) => ОткрытьДиагностикуСервера());
+        сервис.DropDownItems.Add(new ToolStripSeparator());
+        сервис.DropDownItems.Add("Найти это в интернете", null, (_, _) => ОткрытьПоискВИнтернете());
+        сервис.DropDownItems.Add("Удалённый доступ (поддержка)…", null, (_, _) => ОткрытьУдалённыйДоступ());
+        сервис.DropDownItems.Add("Проверить обновления", null, (_, _) => ПроверитьОбновления());
+        сервис.DropDownItems.Add(new ToolStripSeparator());
+        сервис.DropDownItems.Add("Калькулятор", null, (_, _) => ОткрытьКалькулятор());
+        сервис.DropDownItems.Add("Календарь", null, (_, _) => ОткрытьКалендарь());
+        сервис.DropDownItems.Add("Язык интерфейса…", null, (_, _) => ОткрытьВыборЯзыка());
+        сервис.DropDownItems.Add("Регистрация программы…", null, (_, _) => ОткрытьРегистрацию());
 
         var печать = new ToolStripMenuItem("Печать");
         печать.DropDownItems.Add("Текущий конверт (F5)", null, (_, _) => ПечатьТекущийКонверт());
@@ -280,6 +303,8 @@ public sealed class MainShell : Form
         рассылки.DropDownItems.Add("Новая рассылка…", null, (_, _) => СоздатьРассылку());
         рассылки.DropDownItems.Add("Повторная отправка…", null, (_, _) => ПовторнаяОтправка());
         рассылки.DropDownItems.Add("Объединить выделенные в рассылку", null, (_, _) => ОбъединитьВРассылку());
+        рассылки.DropDownItems.Add(new ToolStripSeparator());
+        рассылки.DropDownItems.Add("Электронная рассылка…", null, (_, _) => ОткрытьЭлектроннуюРассылку());
 
         var справка = new ToolStripMenuItem("Справка");
         справка.DropDownItems.Add("Справка (F1)", null, (_, _) => ОткрытьСправку());
@@ -929,6 +954,305 @@ public sealed class MainShell : Form
     {
         using var форма = new FormIntegrationSettings();
         форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает диалог архивирования и восстановления базы адресов
+    /// (ТЗ §8.11, функции 128 и 129; §10.4 и §10.5).
+    /// </summary>
+    private void ОткрытьАрхивацию()
+    {
+        using var форма = new FormBackupRestore(ПутьБазыПрограммы());
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает мастер установки на USB-флешку (ТЗ §8.8, функция 105;
+    /// §8.11, функция 130).
+    /// </summary>
+    private void ОткрытьУстановкуНаUsb()
+    {
+        using var форма = new FormUsbInstallWizard(ПутьБазыПрограммы());
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает окно «Журнал ошибок» (ТЗ §8.11, функция 111; §10.3).
+    /// </summary>
+    private void ОткрытьЖурналОшибок()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        using var форма = new FormErrorLog(_состав.Журнал);
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает мастер загрузки данных из прежней установки
+    /// (ТЗ §8.8, функция 107; §9.8).
+    /// </summary>
+    private void ОткрытьЗагрузкуИзСтаройВерсии()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        using var форма = new FormLegacyUpgradeWizard(new LegacyUpgradeImporter(_состав.Сессия));
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает диалог «Подключение к базе данных» (ТЗ §8.8, функции 101 и 102;
+    /// §8.11, функция 134).
+    /// </summary>
+    private void ОткрытьНастройкиПодключения()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        using var форма = new FormConnectionSettings(_состав.МенеджерПодключения, _состав.РеестрСерверов);
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает диагностику службы СУБД: обнаружение остатков прежней
+    /// установки и предложение их корректного удаления (ТЗ §8.11, функция 136).
+    /// </summary>
+    private void ОткрытьДиагностикуСервера()
+    {
+        using var форма = new FormDbServiceDoctor(new DbServiceDoctor());
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает поиск адреса по ИНН/УНН в интернете (ТЗ §8.8, функция 108).
+    /// </summary>
+    private async void ОткрытьПоискВИнтернете()
+    {
+        var инн = await ВыделитьИдентификаторНалогоплательщикаAsync().ConfigureAwait(true);
+
+        if (инн.Length == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите запись, у которой заполнен ИНН или УНН.",
+                "Найти это в интернете",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var запускатель = new WebLookupLauncher();
+
+        запускатель.OpenWebLookup(инн);
+    }
+
+    /// <summary>
+    /// Запускает утилиту удалённого доступа службы поддержки
+    /// (ТЗ §8.8, функция 109).
+    /// </summary>
+    private void ОткрытьУдалённыйДоступ()
+    {
+        var запускатель = new RemoteAssistantLauncher();
+
+        запускатель.LaunchOrUpdateRemoteAssistant();
+    }
+
+    /// <summary>
+    /// Проверяет наличие обновлений (ТЗ §8.12, функция 163).
+    /// </summary>
+    private async void ПроверитьОбновления()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var проверка = new UpdateChecker(
+            "https://updates.picket302.local/updates.txt",
+            "1.0.0",
+            сообщение => _состав.Журнал.LogError(new InvalidOperationException(сообщение)));
+
+        var сведения = await проверка.CheckForUpdatesAsync().ConfigureAwait(true);
+
+        MessageBox.Show(
+            this,
+            сведения.IsUpdateAvailable
+                ? $"Доступна версия {сведения.Version}.{Environment.NewLine}{сведения.Notes}"
+                : "Обновлений не обнаружено.",
+            "Проверка обновлений",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    /// <summary>
+    /// Открывает встроенный калькулятор (ТЗ §8.12, функция 163).
+    /// </summary>
+    private void ОткрытьКалькулятор()
+    {
+        using var форма = new FormCalculator();
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает всплывающий календарь (ТЗ §8.12, функция 163).
+    /// </summary>
+    private void ОткрытьКалендарь()
+    {
+        var календарь = new PopupCalendar();
+
+        календарь.ShowPopup(_состояниеБазы);
+    }
+
+    /// <summary>
+    /// Открывает диалог выбора языка интерфейса (ТЗ §8.11, функция 112).
+    /// </summary>
+    private void ОткрытьВыборЯзыка()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var языки = _состав.МенеджерЯзыка.AvailableLanguages();
+
+        if (языки.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Языковые файлы не найдены: проверьте наличие каталога lang рядом с программой.",
+                "Язык интерфейса",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var форма = new FormLanguageSelection(_состав.МенеджерЯзыка);
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает окно регистрации программы (ТЗ §8.10, функции 122 и 123;
+    /// §8.12, функция 162).
+    /// </summary>
+    private void ОткрытьРегистрацию()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        using var форма = new FormLicense(
+            _состав.МенеджерЛицензии,
+            _состав.АвтоматЛицензии,
+            _состав.АктивацияЛицензии,
+            _состав.Машина);
+
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает мастер электронной рассылки (ТЗ §8.7, функции 92–100).
+    /// </summary>
+    /// <remarks>
+    /// Электронная рассылка — отдельный канал отправки: она не создаёт записей
+    /// таблицы <c>mails</c> (ТЗ §8.7, функция 92).
+    /// </remarks>
+    private async void ОткрытьЭлектроннуюРассылку()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var опции = new SmtpOptions();
+        var настройки = опции.Load();
+        var прокси = опции.LoadProxy();
+
+        var писатель = new SqliteEmailLogWriter(_состав.Сессия);
+        var журнал = new EmailLogWriterAdapter(писатель);
+
+        var клиент = new SmtpClientFacade(настройки, прокси, опции);
+
+        var маркеры = new EmailMarkerResolver();
+
+        var служба = new EmailDistributionService(
+            (письмо, токен) => Task.FromResult(клиент.SendOne(письмо, токен)),
+            журнал,
+            маркеры);
+
+        var получатели = await СобратьПолучателейДляРассылкиAsync().ConfigureAwait(true);
+
+        using var форма = new FormEmailDistributionWizard(
+            new EmailDistributionWizardController(служба, маркеры, получатели));
+
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Собирает выборку получателей для электронной рассылки: адрес берётся
+    /// из карточки контрагента, получатели без адреса исключаются из отправки,
+    /// но перечисляются в отчёте (ТЗ §8.7, функция 92).
+    /// </summary>
+    /// <returns>Перечень получателей рассылки.</returns>
+    private async Task<IReadOnlyList<EmailRecipient>> СобратьПолучателейДляРассылкиAsync()
+    {
+        var получатели = new List<EmailRecipient>();
+
+        if (_состав is null)
+        {
+            return получатели;
+        }
+
+        foreach (var идентификатор in _выбранныеПолучатели)
+        {
+            var контрагент = await _состав.Контрагенты
+                .GetByIdAsync(идентификатор)
+                .ConfigureAwait(true);
+
+            if (контрагент is null)
+            {
+                continue;
+            }
+
+            получатели.Add(new EmailRecipient(
+                контрагент.Id,
+                контрагент.Name,
+                контрагент.Email ?? string.Empty));
+        }
+
+        return получатели;
+    }
+
+    /// <summary>
+    /// Возвращает путь к файлу базы данных программы.
+    /// </summary>
+    /// <returns>Путь к файлу базы данных.</returns>
+    private string ПутьБазыПрограммы()
+        => _состав?.ПутьБазы ?? AppServices.ПутьБазыПоУмолчанию();
+
+    /// <summary>
+    /// Возвращает ИНН или УНН выделенной записи адресной книги.
+    /// </summary>
+    /// <returns>Идентификатор налогоплательщика; пустая строка — не заполнен.</returns>
+    private async Task<string> ВыделитьИдентификаторНалогоплательщикаAsync()
+    {
+        if (_состав is null || _выбранныеПолучатели.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var получатель = await _состав.Контрагенты
+            .GetByIdAsync(_выбранныеПолучатели[0])
+            .ConfigureAwait(true);
+
+        return получатель?.Inn ?? string.Empty;
     }
 
     /// <summary>
