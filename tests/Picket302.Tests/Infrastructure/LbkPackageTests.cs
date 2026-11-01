@@ -158,7 +158,7 @@ public sealed class LbkPackageTests
             var записи = репозиторий.LoadAllPackages(каталог);
 
             Assert.Equal(3, записи.Count);
-            Assert.Single(записи.Where(запись => запись.IsValid));
+            Assert.Single(записи, запись => запись.IsValid);
             Assert.Equal(2, записи.Count(запись => !запись.IsValid));
             Assert.All(записи.Where(запись => !запись.IsValid), запись => Assert.Contains("Ошибка структуры пакета", запись.Error));
             Assert.NotNull(записи.Single(запись => запись.IsValid).Template);
@@ -170,7 +170,7 @@ public sealed class LbkPackageTests
     }
 
     [Fact]
-    public void ExportBuiltinLibrary_НеМенее20Пакетов()
+    public async System.Threading.Tasks.Task ExportBuiltinLibrary_НеМенее20Пакетов()
     {
         var каталог = Path.Combine(Path.GetTempPath(), "picket302_lib_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(каталог);
@@ -178,7 +178,7 @@ public sealed class LbkPackageTests
         try
         {
             var репозиторий = new TemplatePackageRepository();
-            var записано = репозиторий.ExportBuiltinLibraryAsync(каталог).GetAwaiter().GetResult();
+            var записано = await репозиторий.ExportBuiltinLibraryAsync(каталог);
 
             Assert.True(записано >= 20, $"Библиотека должна содержать не менее 20 пакетов, записано {записано}.");
             Assert.Equal(записано, Directory.GetFiles(каталог, "*.lbk").Length);

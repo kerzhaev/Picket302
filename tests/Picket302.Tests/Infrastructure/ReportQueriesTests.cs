@@ -15,14 +15,14 @@ public sealed class ReportQueriesTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _база = await SqliteTestDatabase.CreateAsync().ConfigureAwait(false);
-        await ReportDataSeeder.SeedAsync(_база.Connection).ConfigureAwait(false);
+        _база = await SqliteTestDatabase.CreateAsync();
+        await ReportDataSeeder.SeedAsync(_база.Connection);
         _поставщик = new SqliteReportDataProvider(_база.Connection);
     }
 
     public async Task DisposeAsync()
     {
-        await _база.DisposeAsync().ConfigureAwait(false);
+        await _база.DisposeAsync();
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         var значения = new QueryParameterValues();
         значения.Set("SelectedMailIds", new List<long> { 1, 2 });
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_Envelopes", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_Envelopes", значения);
 
         Assert.Equal(2, строки.Count);
 
@@ -81,7 +81,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         var значения = new QueryParameterValues();
         значения.Set("PayloadHash", "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b");
 
-        var строки = await _поставщик.RunQueryAsync("qrQRcode_Fetch", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrQRcode_Fetch", значения);
 
         Assert.Single(строки);
         Assert.Equal("img_qrcode", Assert.Single(строки[0].ColumnNames));
@@ -94,7 +94,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         var значения = new QueryParameterValues();
         значения.Set("InventoryId", 1L);
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_Inventory107", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_Inventory107", значения);
 
         Assert.Equal(2, строки.Count);
 
@@ -111,13 +111,13 @@ public sealed class ReportQueriesTests : IAsyncLifetime
     {
         await using var команда = _база.Connection.CreateCommand();
         команда.CommandText = "UPDATE mails SET incoming_number = 'вх-' || id WHERE id <= 2;";
-        await команда.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await команда.ExecuteNonQueryAsync();
 
         var значения = new QueryParameterValues();
         значения.Set("DateFrom", DateTime.UtcNow.Date.AddDays(-1));
         значения.Set("DateTo", DateTime.UtcNow.Date.AddDays(1));
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_IncomingJournal", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_IncomingJournal", значения);
 
         Assert.Equal(2, строки.Count);
         Assert.Equal(
@@ -132,7 +132,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         значения.Set("DateFrom", DateTime.UtcNow.Date.AddDays(-1));
         значения.Set("DateTo", DateTime.UtcNow.Date.AddDays(1));
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_MailingStats", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_MailingStats", значения);
 
         Assert.Single(строки);
         Assert.Equal(new[] { "gr_name", "count_konv", "total_fee", "total_val", "date_stat" }, строки[0].ColumnNames);
@@ -147,7 +147,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         var значения = new QueryParameterValues();
         значения.Set("GroupId", 1L);
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_GroupEnvelopes", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_GroupEnvelopes", значения);
 
         Assert.Equal(4, строки.Count);
         Assert.Equal(
@@ -163,7 +163,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         значения.Set("DateFrom", DateTime.UtcNow.Date.AddDays(-1));
         значения.Set("DateTo", DateTime.UtcNow.Date.AddDays(1));
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_PrintHistoryReport", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_PrintHistoryReport", значения);
 
         Assert.Single(строки);
         Assert.Equal(
@@ -178,7 +178,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         var значения = new QueryParameterValues();
         значения.Set("MailId", 1L);
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_MoneyTransfer112ep", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_MoneyTransfer112ep", значения);
 
         Assert.Single(строки);
         Assert.Equal(
@@ -197,7 +197,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         значения.Set("DateTo", new DateTime(2024, 4, 1));
 
         await Assert.ThrowsAsync<QueryValidationException>(
-            () => _поставщик.RunQueryAsync("qrReport_IncomingJournal", значения)).ConfigureAwait(false);
+            () => _поставщик.RunQueryAsync("qrReport_IncomingJournal", значения));
     }
 
     [Fact]
@@ -207,13 +207,13 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         значения.Set("PayloadHash", "abc'; DROP TABLE qr_cache;--");
 
         await Assert.ThrowsAsync<QueryValidationException>(
-            () => _поставщик.RunQueryAsync("qrQRcode_Fetch", значения)).ConfigureAwait(false);
+            () => _поставщик.RunQueryAsync("qrQRcode_Fetch", значения));
 
         // Таблица не пострадала: инъекция не исполнялась.
         var чистый = new QueryParameterValues();
         чистый.Set("PayloadHash", "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b");
 
-        var строки = await _поставщик.RunQueryAsync("qrQRcode_Fetch", чистый).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrQRcode_Fetch", чистый);
 
         Assert.Single(строки);
     }
@@ -224,7 +224,7 @@ public sealed class ReportQueriesTests : IAsyncLifetime
         var значения = new QueryParameterValues();
         значения.Set("SelectedMailIds", new List<long>());
 
-        var строки = await _поставщик.RunQueryAsync("qrReport_Envelopes", значения).ConfigureAwait(false);
+        var строки = await _поставщик.RunQueryAsync("qrReport_Envelopes", значения);
 
         Assert.Empty(строки);
     }

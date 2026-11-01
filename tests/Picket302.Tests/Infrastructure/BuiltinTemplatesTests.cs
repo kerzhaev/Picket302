@@ -67,8 +67,8 @@ public sealed class BuiltinTemplatesTests
         var бланк = _каталог.GetBuiltinTemplate(BuiltinFormType.Form119_2011);
 
         Assert.Equal(2, бланк.Pages.Count);
-        Assert.Single(бланк.Pages[0].Fields.Where(поле => поле.Kind == BlankFieldKinds.PostIndex));
-        Assert.Single(бланк.Pages[1].Fields.Where(поле => поле.Kind == BlankFieldKinds.PostIndex));
+        Assert.Single(бланк.Pages[0].Fields, поле => поле.Kind == BlankFieldKinds.PostIndex);
+        Assert.Single(бланк.Pages[1].Fields, поле => поле.Kind == BlankFieldKinds.PostIndex);
         Assert.Equal(11, бланк.AllFields().Count(поле => поле.Kind != BlankFieldKinds.PostIndex));
     }
 
@@ -82,7 +82,7 @@ public sealed class BuiltinTemplatesTests
         var штамп = бланк.AllFields().Single(поле => поле.Kind == BlankFieldKinds.PostIndex);
 
         Assert.True(штамп.Printable);
-        Assert.True(бланк.AllFields().Any(поле => поле.Name == "Республика/край/область места назначения"));
+        Assert.Contains(бланк.AllFields(), поле => поле.Name == "Республика/край/область места назначения");
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public sealed class BuiltinTemplatesTests
     }
 
     [Fact]
-    public void ПопыткаПерезаписиВстроенного_СохраняетсяКакКопия()
+    public async System.Threading.Tasks.Task ПопыткаПерезаписиВстроенного_СохраняетсяКакКопия()
     {
         // Поведение экспорта библиотеки: существующий файл не перезаписывается.
         var каталог = Path.Combine(Path.GetTempPath(), "picket302_overwrite_" + Guid.NewGuid().ToString("N"));
@@ -152,10 +152,10 @@ public sealed class BuiltinTemplatesTests
         {
             var репозиторий = new TemplatePackageRepository();
 
-            репозиторий.ExportBuiltinLibraryAsync(каталог).GetAwaiter().GetResult();
+            await репозиторий.ExportBuiltinLibraryAsync(каталог);
             var первая = Directory.GetFiles(каталог, "*.lbk").Select(Path.GetFileName).OrderBy(имя => имя).ToList();
 
-            репозиторий.ExportBuiltinLibraryAsync(каталог).GetAwaiter().GetResult();
+            await репозиторий.ExportBuiltinLibraryAsync(каталог);
             var вторая = Directory.GetFiles(каталог, "*.lbk").Select(Path.GetFileName).OrderBy(имя => имя).ToList();
 
             Assert.True(вторая.Count > первая.Count, "Повторный экспорт добавляет пользовательские копии.");

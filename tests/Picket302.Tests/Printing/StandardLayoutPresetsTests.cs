@@ -35,7 +35,7 @@ public sealed class StandardLayoutPresetsTests
         Assert.Contains("DL/О", форматы);
         Assert.Contains("C5/О", форматы);
         Assert.All(форматы.Where(StandardLayoutPresets.IsWindowVariant), формат =>
-            Assert.True(формат.EndsWith("/О", StringComparison.Ordinal)));
+            Assert.EndsWith("/О", формат, StringComparison.Ordinal));
     }
 
     [Fact]

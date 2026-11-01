@@ -48,6 +48,12 @@ public sealed class FormCounterpartyEdit : Form
     private readonly TextBox _почта = new();
     private readonly TextBox _примечание = new();
 
+    /// <summary>
+    /// Источник данных контрагента: «Импорт &lt;формат&gt; от &lt;дата&gt; из
+    /// &lt;файл&gt;» (ТЗ §8.12, функция 75). Поле только для чтения.
+    /// </summary>
+    private readonly TextBox _источник = new() { ReadOnly = true };
+
     private readonly TextBox _бик = new();
     private readonly TextBox _корсчет = new();
     private readonly TextBox _счет = new();
@@ -143,6 +149,12 @@ public sealed class FormCounterpartyEdit : Form
     /// <summary>Поле БИК карточки.</summary>
     public TextBox ПолеБИК => _бик;
 
+    /// <summary>
+    /// Поле источника данных контрагента: «Импорт &lt;формат&gt; от &lt;дата&gt;
+    /// из &lt;файл&gt;» (ТЗ §8.12, функция 75).
+    /// </summary>
+    public TextBox ПолеИсточник => _источник;
+
     /// <summary>Кнопка «Сохранить».</summary>
     public Button КнопкаСохранить => _сохранить;
 
@@ -176,7 +188,7 @@ public sealed class FormCounterpartyEdit : Form
         var реквизиты = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 150,
+            Height = 165,
             ColumnCount = 4,
             AutoSize = false,
         };
@@ -196,6 +208,7 @@ public sealed class FormCounterpartyEdit : Form
         ДобавитьПоле(реквизиты, 0, 7, "ОКВЭД:", _оквед);
         ДобавитьПоле(реквизиты, 0, 8, "Телефон:", _телефон);
         ДобавитьПоле(реквизиты, 0, 9, "Эл. почта:", _почта);
+        ДобавитьПоле(реквизиты, 0, 10, "Источник:", _источник);
 
         var панельАдресов = new Panel { Dock = DockStyle.Top, Height = 470 };
 
@@ -364,6 +377,7 @@ public sealed class FormCounterpartyEdit : Form
         _телефон.Text = _контрагент.Phone ?? string.Empty;
         _почта.Text = _контрагент.Email ?? string.Empty;
         _примечание.Text = _контрагент.SpecialNotes ?? string.Empty;
+        _источник.Text = _контрагент.Source ?? string.Empty;
 
         _бик.Text = _контрагент.Bik ?? string.Empty;
         _корсчет.Text = _контрагент.Ks ?? string.Empty;

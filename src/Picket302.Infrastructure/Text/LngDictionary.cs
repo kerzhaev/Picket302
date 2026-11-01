@@ -89,7 +89,7 @@ public sealed class LngDictionary
         {
             var строка = сыраяСтрока.TrimEnd('\r').Trim();
 
-            if (строка.Length == 0 || строка.StartsWith('#') || строка.StartsWith("//"))
+            if (строка.Length == 0 || строка.StartsWith("#", StringComparison.Ordinal) || строка.StartsWith("//", StringComparison.Ordinal))
             {
                 continue;
             }

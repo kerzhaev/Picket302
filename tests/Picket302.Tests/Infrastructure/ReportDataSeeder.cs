@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 namespace Picket302.Tests.Infrastructure;
@@ -95,7 +96,7 @@ public static class ReportDataSeeder
         await ВыполнитьAsync(connection, $"""
             INSERT INTO mails (id, counterparty_id, sender_id, inventory_id, outgoing_number, date_created, date_dispatched,
                 copy_count, is_vip, note, declared_value, weight, fee, status, mail_category, to_zip, to_str1, to_str2)
-            VALUES ({id}, {counterpartyId}, {senderId}, {(inventoryId is null ? "NULL" : inventoryId.Value.ToString())}, '{исходящий}', '{дата:yyyy-MM-dd 10:00:00}', '{дата:yyyy-MM-dd 12:00:00}',
+            VALUES ({id}, {counterpartyId}, {senderId}, {(inventoryId is null ? "NULL" : inventoryId.Value.ToString(CultureInfo.InvariantCulture))}, '{исходящий}', '{дата:yyyy-MM-dd 10:00:00}', '{дата:yyyy-MM-dd 12:00:00}',
                 1, 0, 'примечание {id}', 500.00, 0.100, 65.00, 1, 1, '{индекс}', 'Получатель {id}', '{улица}');
             """).ConfigureAwait(false);
     }

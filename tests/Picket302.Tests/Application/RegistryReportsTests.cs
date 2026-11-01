@@ -20,14 +20,14 @@ public sealed class RegistryReportsTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _база = await SqliteTestDatabase.CreateAsync().ConfigureAwait(false);
-        await ReportDataSeeder.SeedAsync(_база.Connection).ConfigureAwait(false);
+        _база = await SqliteTestDatabase.CreateAsync();
+        await ReportDataSeeder.SeedAsync(_база.Connection);
         _поставщик = new SqliteReportDataProvider(_база.Connection);
     }
 
     public async Task DisposeAsync()
     {
-        await _база.DisposeAsync().ConfigureAwait(false);
+        await _база.DisposeAsync();
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     {
         var отчёт = new Form103Report(_поставщик);
 
-        var документ = await отчёт.GenerateF103(new[] { 1L, 2L }, ReportDataSeeder.SenderId).ConfigureAwait(false);
+        var документ = await отчёт.GenerateF103(new[] { 1L, 2L }, ReportDataSeeder.SenderId);
 
         Assert.Equal(2, документ.Main.Rows.Count);
 
@@ -51,7 +51,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var отчёт = new Form103Report(_поставщик);
 
         var ошибка = await Assert.ThrowsAsync<ReportValidationException>(
-            () => отчёт.GenerateF103(new long[] { 1L, 3L }, ReportDataSeeder.SenderId)).ConfigureAwait(false);
+            () => отчёт.GenerateF103(new long[] { 1L, 3L }, ReportDataSeeder.SenderId));
 
         Assert.Equal(Form103Report.MixedSendersError, ошибка.Message);
     }
@@ -62,7 +62,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var отчёт = new Form103Report(_поставщик);
 
         await Assert.ThrowsAsync<ReportValidationException>(
-            () => отчёт.GenerateF103(Array.Empty<long>(), ReportDataSeeder.SenderId)).ConfigureAwait(false);
+            () => отчёт.GenerateF103(Array.Empty<long>(), ReportDataSeeder.SenderId));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     {
         var отчёт = new InventoryF107Report(_поставщик);
 
-        var документ = await отчёт.GenerateF107(1).ConfigureAwait(false);
+        var документ = await отчёт.GenerateF107(1);
 
         Assert.Equal(2, документ.Blocks.Count);
         Assert.Equal(InventoryF107Report.SenderCopyCaption, документ.Blocks[0].Caption);
@@ -92,12 +92,12 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     {
         await using var команда = _база.Connection.CreateCommand();
         команда.CommandText = "INSERT INTO inventories (id, name, counterparty_id) VALUES (99, 'Пустая опись', 3);";
-        await команда.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await команда.ExecuteNonQueryAsync();
 
         var отчёт = new InventoryF107Report(_поставщик);
 
         var ошибка = await Assert.ThrowsAsync<ReportValidationException>(
-            () => отчёт.GenerateF107(99)).ConfigureAwait(false);
+            () => отчёт.GenerateF107(99));
 
         Assert.Equal(InventoryF107Report.NoItemsError, ошибка.Message);
     }
@@ -108,7 +108,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var отчёт = new ExtendedRegistryReport(_поставщик);
         var фильтр = new ReportFilter(MailIds: new List<long> { 1, 2 });
 
-        var документ = await отчёт.GenerateExtendedRegistry(фильтр).ConfigureAwait(false);
+        var документ = await отчёт.GenerateExtendedRegistry(фильтр);
 
         Assert.Equal(2, документ.Main.Rows.Count);
         Assert.Contains("примечание 1", документ.Main.Rows[0].Cells);
@@ -119,7 +119,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     {
         var отчёт = new SimpleRegistryReport(_поставщик);
 
-        var документ = await отчёт.GenerateSimpleRegistry(new[] { 1L, 2L }).ConfigureAwait(false);
+        var документ = await отчёт.GenerateSimpleRegistry(new[] { 1L, 2L });
 
         Assert.Equal(2, документ.Main.Rows.Count);
         Assert.True(документ.Main.Rows.Count <= SimpleRegistryReport.RowsPerPage);
@@ -133,7 +133,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
 
         var документ = await отчёт.BuildIncomingJournal(
             DateTime.UtcNow.Date.AddDays(-1),
-            DateTime.UtcNow.Date.AddDays(1)).ConfigureAwait(false);
+            DateTime.UtcNow.Date.AddDays(1));
 
         Assert.Equal(6, документ.Main.Columns.Count);
         Assert.Equal("Журнал входящей корреспонденции", документ.Title);
@@ -144,11 +144,11 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     {
         await using var команда = _база.Connection.CreateCommand();
         команда.CommandText = "UPDATE mails SET incoming_number = 'вх-1' WHERE id = 1;";
-        await команда.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await команда.ExecuteNonQueryAsync();
 
         var отчёт = new OneCIncomingReport(_поставщик);
 
-        var документ = await отчёт.BuildOneCCompatibleRegistry(DateTime.UtcNow.Date).ConfigureAwait(false);
+        var документ = await отчёт.BuildOneCCompatibleRegistry(DateTime.UtcNow.Date);
 
         Assert.Single(документ.Main.Rows);
         Assert.Equal("вх-1", документ.Main.Rows[0].Cells[0]);
@@ -160,8 +160,8 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     {
         var отчёт = new AuxiliaryPostReports(_поставщик);
 
-        var форма5 = await отчёт.GenerateAuxForm(5, new[] { 1L }).ConfigureAwait(false);
-        var форма6 = await отчёт.GenerateAuxForm(6, new[] { 1L }).ConfigureAwait(false);
+        var форма5 = await отчёт.GenerateAuxForm(5, new[] { 1L });
+        var форма6 = await отчёт.GenerateAuxForm(6, new[] { 1L });
 
         Assert.Contains("ФОРМА 5", форма5.Main.HeaderLines);
         Assert.Contains("ФОРМА 6", форма6.Main.HeaderLines);
@@ -174,7 +174,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var отчёт = new AuxiliaryPostReports(_поставщик);
 
         await Assert.ThrowsAsync<ReportValidationException>(
-            () => отчёт.GenerateAuxForm(7, new long[] { 1L })).ConfigureAwait(false);
+            () => отчёт.GenerateAuxForm(7, new long[] { 1L }));
     }
 
     [Fact]
@@ -182,13 +182,13 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     {
         var отчёт = new StatsAndGroupReports(_поставщик);
 
-        var состав = await отчёт.GenerateGroupReport(1).ConfigureAwait(false);
+        var состав = await отчёт.GenerateGroupReport(1);
 
         Assert.Equal(4, состав.Main.Rows.Count);
         Assert.Equal(4m, состав.Main.TotalValues["Контрагентов"]);
 
         // Пустая группа: отчет с уведомлением «Нет данных».
-        var пустая = await отчёт.GenerateGroupReport(777).ConfigureAwait(false);
+        var пустая = await отчёт.GenerateGroupReport(777);
         Assert.Empty(пустая.Main.Rows);
         Assert.Equal(StatsAndGroupReports.NoDataNotice, пустая.Main.Totals[0]);
     }
@@ -200,7 +200,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
 
         var документ = await отчёт.GenerateMailingStats(
             DateTime.UtcNow.Date.AddDays(-1),
-            DateTime.UtcNow.Date.AddDays(1)).ConfigureAwait(false);
+            DateTime.UtcNow.Date.AddDays(1));
 
         Assert.Single(документ.Main.Rows);
         Assert.Equal(3m, документ.Main.TotalValues["Конвертов"]);
@@ -287,24 +287,24 @@ public sealed class RegistryReportsTests : IAsyncLifetime
     }
 
     [Fact]
-    public void ИсторияПечати_НеизменяемыйСнимок()
+    public async System.Threading.Tasks.Task ИсторияПечати_НеизменяемыйСнимок()
     {
         var репозиторий = new СнимковыйРепозиторий();
         var трекер = new HistoryTracker(репозиторий);
 
         var момент = DateTime.UtcNow;
-        var идентификатор = трекер.RecordPrintEvent(new PrintHistoryRecord(
+        var идентификатор = await трекер.RecordPrintEvent(new PrintHistoryRecord(
             момент,
             MailId: 1,
             RecipientAddressSnapshot: "100000, г. Москва, ул. Тестовая, д. 10; Иванов Иван Иванович",
             SenderAddressSnapshot: "101000, г. Москва, ул. Первая, д. 1; ООО Отправитель",
             CopyCount: 2,
-            TemplateDescription: "Конверт C5 (2012)")).GetAwaiter().GetResult();
+            TemplateDescription: "Конверт C5 (2012)"));
 
         Assert.Equal(1, идентификатор);
 
         // Последующее изменение адреса контрагента не меняет историческую запись.
-        var снимок = репозиторий.GetByMailAsync(1).GetAwaiter().GetResult().Single();
+        var снимок = (await репозиторий.GetByMailAsync(1)).Single();
 
         Assert.Equal("100000, г. Москва, ул. Тестовая, д. 10; Иванов Иван Иванович", снимок.RecipientAddressSnapshot);
         Assert.Equal("101000, г. Москва, ул. Первая, д. 1; ООО Отправитель", снимок.SenderAddressSnapshot);
@@ -320,7 +320,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var результат = await служба.PrintRegistrySilently(
             new[] { 1L, 2L },
             "Реестр ф.103",
-            "HP LaserJet Pro M402dn").ConfigureAwait(false);
+            "HP LaserJet Pro M402dn");
 
         Assert.True(результат.Success);
         Assert.Equal(0, (int)результат.ErrorCode);
@@ -335,7 +335,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var служба = new SilentPrintService(_поставщик, канал);
 
         var результат = await служба.PrintRegistrySilently(
-            new[] { 1L }, "Реестр", "Нет такого принтера").ConfigureAwait(false);
+            new[] { 1L }, "Реестр", "Нет такого принтера");
 
         Assert.False(результат.Success);
         Assert.Equal(SilentPrintErrorCode.SpoolerFailure, результат.ErrorCode);
@@ -348,7 +348,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var служба = new SilentPrintService(_поставщик, new ФейковыйКанал(null));
 
         var результат = await служба.PrintRegistrySilently(
-            new[] { 1L, 3L }, "Реестр", "Принтер").ConfigureAwait(false);
+            new[] { 1L, 3L }, "Реестр", "Принтер");
 
         Assert.Equal(SilentPrintErrorCode.MixedSenders, результат.ErrorCode);
     }
@@ -359,7 +359,7 @@ public sealed class RegistryReportsTests : IAsyncLifetime
         var служба = new SilentPrintService(_поставщик, new ФейковыйКанал(null));
 
         var результат = await служба.PrintRegistrySilently(
-            Array.Empty<long>(), "Реестр", "Принтер").ConfigureAwait(false);
+            Array.Empty<long>(), "Реестр", "Принтер");
 
         Assert.Equal(SilentPrintErrorCode.EmptySelection, результат.ErrorCode);
     }

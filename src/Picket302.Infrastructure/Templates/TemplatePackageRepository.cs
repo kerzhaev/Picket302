@@ -45,12 +45,25 @@ public sealed class TemplatePackageRepository
     /// <param name="directoryPath">Каталог Templates/Packages.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Записи каталога; поврежденные пакеты — с IsValid=false.</returns>
-    public async Task<IReadOnlyList<TemplatePackageRecord>> LoadAllPackagesAsync(
+    public Task<IReadOnlyList<TemplatePackageRecord>> LoadAllPackagesAsync(
         string directoryPath,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
 
+        return Task.FromResult(СканироватьКаталог(directoryPath, cancellationToken));
+    }
+
+    /// <summary>
+    /// Сканирует каталог пакетов и формирует записи реестра.
+    /// </summary>
+    /// <param name="directoryPath">Каталог Templates/Packages.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Записи каталога; повреждённые пакеты — с IsValid=false.</returns>
+    private IReadOnlyList<TemplatePackageRecord> СканироватьКаталог(
+        string directoryPath,
+        CancellationToken cancellationToken)
+    {
         var записи = new List<TemplatePackageRecord>();
 
         if (!Directory.Exists(directoryPath))
