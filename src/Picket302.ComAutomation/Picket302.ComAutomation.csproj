@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- COM-сервер автоматизации Picket302 (ТЗ §9.1–9.3, функции 113–116).
+       Out-of-proc сервер с ProgID PEPro.Application; регистрация выполняется
+       в HKCU\Software\Classes без прав администратора.
+       Допустимые зависимости: доменный слой, прикладной слой, слой печати и
+       слой инфраструктуры (доступ к базе данных и печати). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Picket302.ComAutomation</RootNamespace>
+    <AssemblyName>Picket302.ComAutomation</AssemblyName>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Description>COM-сервер автоматизации Picket302: ProgID PEPro.Application.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Picket302.Application\Picket302.Application.csproj" />
+    <ProjectReference Include="..\Picket302.Domain\Picket302.Domain.csproj" />
+    <ProjectReference Include="..\Picket302.Infrastructure\Picket302.Infrastructure.csproj" />
+    <ProjectReference Include="..\Picket302.Printing\Picket302.Printing.csproj" />
+  </ItemGroup>
+
+  <!-- Бинарная библиотека типов PrintEnvelopePro версии 2.2 (ТЗ §9.3,
+       функция 114: «Includes-версия типилиба 2.2»). Файл собран компилятором
+       MIDL из описания idl\PrintEnvelopePro.idl и копируется в каталог сборки,
+       чтобы путь к библиотеке типов можно было зарегистрировать в ветке
+       HKCU\Software\Classes\TypeLib\{22BC298D-...}\2.2. -->
+  <ItemGroup>
+    <None Update="idl\PrintEnvelopePro.tlb" CopyToOutputDirectory="PreserveNewest" Link="PrintEnvelopePro.tlb" />
+    <None Update="idl\*.idl" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

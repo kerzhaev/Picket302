@@ -22,6 +22,13 @@
     <PackageReference Include="System.Drawing.Common" />
   </ItemGroup>
 
+  <!-- Миграция с баз данных предшественника (ТЗ §8.9, функции 117 и 118):
+       драйвер MySQL и ODBC-провайдер для файлов .mdb. -->
+  <ItemGroup Label="Миграция с исходных баз">
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="System.Data.Odbc" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Picket302.Domain\Picket302.Domain.csproj" />
     <ProjectReference Include="..\Picket302.Printing\Picket302.Printing.csproj" />

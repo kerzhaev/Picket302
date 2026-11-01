@@ -15,4 +15,14 @@
     <ProjectReference Include="..\Picket302.Printing\Picket302.Printing.csproj" />
   </ItemGroup>
 
+  <!-- Словари топонимов и сокращений адреса (ТЗ §8.12, функция 148:
+       «Словари топонимов и сокращений поставляются файлами, расширяемы»).
+       Файлы включаются в сборку как встроенные ресурсы и копируются в
+       каталог вывода, чтобы разбор адреса работал и в собранной
+       программе, и в модульных тестах. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Toponyms\*.txt" />
+    <None Update="Resources\Toponyms\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

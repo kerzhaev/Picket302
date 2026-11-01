@@ -20,7 +20,7 @@ public static class ImportFieldSlotCatalog
         (ImportFieldSlot.ActualAddress, "Фактический адрес"),
         (ImportFieldSlot.Other, "Прочее"),
         (ImportFieldSlot.Name, "Название"),
-        (ImportFieldSlot.ShortName, "Сокращенное"),
+        (ImportFieldSlot.ShortName, "Сокращенное название"),
     ];
 
     /// <summary>Все слоты в порядке, зафиксированном ТЗ.</summary>

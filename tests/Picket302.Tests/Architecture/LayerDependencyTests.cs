@@ -35,6 +35,14 @@ public sealed class LayerDependencyTests
             ["Picket302.App"] = new[]
             {
                 "Picket302.Application",
+                "Picket302.ComAutomation",
+                "Picket302.Domain",
+                "Picket302.Infrastructure",
+                "Picket302.Printing",
+            },
+            ["Picket302.ComAutomation"] = new[]
+            {
+                "Picket302.Application",
                 "Picket302.Domain",
                 "Picket302.Infrastructure",
                 "Picket302.Printing",

@@ -4,9 +4,11 @@ using System.Globalization;
 using System.Windows.Forms;
 using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
+using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Services;
+using Picket302.Infrastructure.Export;
 
 using Picket302.Printing;
 using Picket302.Printing.Devices;
@@ -238,10 +240,22 @@ public sealed class MainShell : Form
         вид.DropDownItems.Add(new ToolStripSeparator());
         вид.DropDownItems.Add("Обновить", null, (_, _) => ОбновитьВсе());
 
+        var данные = new ToolStripMenuItem("Данные");
+        данные.DropDownItems.Add("Мастер импорта адресной книги…", null, (_, _) => ОткрытьМастерИмпорта());
+        данные.DropDownItems.Add(new ToolStripSeparator());
+        данные.DropDownItems.Add("Импорт из 1С…", null, (_, _) => ИмпортИз1С());
+        данные.DropDownItems.Add("Импорт из внешней БД…", null, (_, _) => ИмпортИзВнешнейБазы());
+
         var сервис = new ToolStripMenuItem("Сервис");
         сервис.DropDownItems.Add("Демо-база", null, (_, _) => НаполнитьДемоБазу());
         сервис.DropDownItems.Add("Восстановить удалённые записи", null, (_, _) => ВосстановитьУдалённые());
         сервис.DropDownItems.Add("Создать отправителя…", null, (_, _) => СоздатьОтправителя());
+        сервис.DropDownItems.Add(new ToolStripSeparator());
+        сервис.DropDownItems.Add("Выгрузить данные…", null, (_, _) => ВыгрузитьДанные());
+        сервис.DropDownItems.Add("Сформировать документ…", null, (_, _) => СформироватьДокумент());
+        сервис.DropDownItems.Add("Мастер шаблонов документов…", null, (_, _) => ОткрытьМастерШаблонов());
+        сервис.DropDownItems.Add(new ToolStripSeparator());
+        сервис.DropDownItems.Add("Настройки интеграции (COM)…", null, (_, _) => ОткрытьНастройкиИнтеграции());
 
         var печать = new ToolStripMenuItem("Печать");
         печать.DropDownItems.Add("Текущий конверт (F5)", null, (_, _) => ПечатьТекущийКонверт());
@@ -275,6 +289,7 @@ public sealed class MainShell : Form
             файл,
             правка,
             вид,
+            данные,
             сервис,
             печать,
             рассылки,
@@ -500,11 +515,15 @@ public sealed class MainShell : Form
         var настройки = Кнопка("⚙", "Настройка таблицы");
         настройки.Click += (_, _) => НастроитьТаблицу();
 
+        var вExcel = Кнопка("Открыть список в Excel", "Выгрузить текущую таблицу получателей в Excel (XLSX)");
+        вExcel.Click += (_, _) => ОткрытьСписокВExcel();
+
         кнопки.Controls.Add(добавить);
         кнопки.Controls.Add(изменить);
         кнопки.Controls.Add(удалить);
         кнопки.Controls.Add(печать);
         кнопки.Controls.Add(превью);
+        кнопки.Controls.Add(вExcel);
         кнопки.Controls.Add(настройки);
 
         var заголовок = new Label
@@ -743,6 +762,290 @@ public sealed class MainShell : Form
         _строкаСостояния.Controls.Add(_копий);
         _строкаСостояния.Controls.Add(_состояниеБазы);
         _строкаСостояния.Controls.Add(_состояниеПечати);
+    }
+
+    /// <summary>
+    /// Выгружает текущую таблицу получателей в книгу Excel и открывает файл
+    /// в приложении по умолчанию (ТЗ §8.5, функция 61: «Прямой экспорт текущей
+    /// таблицы в MS Excel»).
+    /// </summary>
+    /// <remarks>
+    /// Файл формируется как пакет OpenXML без вызовов OLE/COM Excel, поэтому
+    /// Microsoft Office на машине оператора не требуется. Если файл занят другой
+    /// программой, оператору предлагается альтернативное имя.
+    /// </remarks>
+    private void ОткрытьСписокВExcel()
+    {
+        using var диалог = new SaveFileDialog
+        {
+            Title = "Открыть список в Excel",
+            Filter = "Книга Excel (*.xlsx)|*.xlsx",
+            FileName = $"Адресная книга_{DateTime.Now:yyyy-MM-dd}.xlsx",
+        };
+
+        if (диалог.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var путь = диалог.FileName;
+        var экспортёр = new SpreadsheetMlExporter();
+
+        try
+        {
+            экспортёр.ExportGridToExcel(_таблицаПолучателей, путь);
+        }
+        catch (IOException)
+        {
+            var альтернатива = Picket302.Application.Services.ExportWizard.SuggestAvailableFilePath(путь);
+            var ответ = MessageBox.Show(
+                this,
+                $"Файл «{путь}» занят другой программой.\nСохранить список под другим именем?\n{альтернатива}",
+                "Открыть список в Excel",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (ответ != DialogResult.Yes)
+            {
+                return;
+            }
+
+            путь = альтернатива;
+
+            try
+            {
+                экспортёр.ExportGridToExcel(_таблицаПолучателей, путь);
+            }
+            catch (IOException ошибка)
+            {
+                MessageBox.Show(
+                    this,
+                    $"Не удалось сохранить файл: {ошибка.Message}",
+                    "Открыть список в Excel",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
+            }
+        }
+
+        экспортёр.OpenInAssociatedApplication(путь);
+    }
+
+    /// <summary>
+    /// Выгружает адресную книгу через мастер выгрузки (ТЗ §8.12, функция 160:
+    /// «Экспорт с настройками и пост-действиями»).
+    /// </summary>
+    private async void ВыгрузитьДанные()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var контрагенты = await СобратьКонтрагентовAsync().ConfigureAwait(true);
+            using var форма = new FormExportWizard(контрагенты);
+            форма.ShowDialog(this);
+        }
+        catch (Exception ошибка)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось выгрузить данные: {ошибка.Message}",
+                "Выгрузка данных",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Собирает все записи адресной книги постранично.
+    /// </summary>
+    /// <returns>Список контрагентов.</returns>
+    private async Task<IReadOnlyList<Counterparty>> СобратьКонтрагентовAsync()
+    {
+        if (_состав is null)
+        {
+            return Array.Empty<Counterparty>();
+        }
+
+        var контрагенты = new List<Counterparty>();
+        var смещение = 0;
+
+        while (true)
+        {
+            var страница = await _состав.Контрагенты
+                .GetPagedAsync(new PageRequest(смещение, PageRequest.MaxLimit))
+                .ConfigureAwait(true);
+
+            контрагенты.AddRange(страница.Items);
+
+            if (страница.Items.Count == 0 || контрагенты.Count >= страница.TotalCount)
+            {
+                break;
+            }
+
+            смещение += страница.Items.Count;
+        }
+
+        return контрагенты;
+    }
+
+    /// <summary>
+    /// Открывает мастер шаблонов документов (ТЗ §8.5, функция 66).
+    /// </summary>
+    private void ОткрытьМастерШаблонов()
+    {
+        using var форма = new FormDocTemplateWizard();
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Формирует документ произвольного вида по шаблону (ТЗ §8.5, функция 65).
+    /// </summary>
+    private void СформироватьДокумент()
+    {
+        using var диалог = new OpenFileDialog
+        {
+            Title = "Шаблон документа",
+            Filter = "Шаблоны документов (*.txt;*.html;*.htm;*.xml;*.xslt;*.docx)|*.txt;*.html;*.htm;*.xml;*.xslt;*.docx|Все файлы (*.*)|*.*",
+        };
+
+        if (диалог.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        using var форма = new FormDocTemplateWizard(диалог.FileName);
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает настройки интеграции: регистрация COM-сервера автоматизации
+    /// и настройки печати конвертов (ТЗ §9.3, функция 114).
+    /// </summary>
+    private void ОткрытьНастройкиИнтеграции()
+    {
+        using var форма = new FormIntegrationSettings();
+        форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Импортирует контрагентов из выгрузки 1С:Предприятие
+    /// (ТЗ §8.5, функция 72: «Импорт контрагентов из выгрузок 1С:Предприятие
+    /// 7.7 и 8.x»).
+    /// </summary>
+    private void ИмпортИз1С()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        using var диалог = new OpenFileDialog
+        {
+            Title = "Выгрузка 1С",
+            Filter = "Выгрузка 1С (*.xml;*.txt)|*.xml;*.txt|Все файлы (*.*)|*.*",
+        };
+
+        if (диалог.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            var версия = ОпределитьВерсию1С(диалог.FileName);
+            var разбор = new Picket302.Application.Services.OneCImportParser();
+            var пакет = разбор.ImportFromOneC(диалог.FileName, версия);
+
+            var сервис = new Picket302.Application.Services.ImportMergeService(_состав.Контрагенты);
+            var отчёт = сервис.MergeImported(пакет.Batch, MergePolicy.SkipExisting);
+
+            var сообщение =
+                $"Прочитано записей: {пакет.RecordCount}.\n" +
+                $"Создано: {отчёт.Created}, обновлено: {отчёт.Updated}, " +
+                $"пропущено: {отчёт.Skipped}, конфликтов: {отчёт.Conflicts}.";
+
+            if (пакет.AllWarnings.Count > 0)
+            {
+                сообщение += "\n\nПредупреждения:\n" +
+                    string.Join("\n", пакет.AllWarnings.Take(10));
+            }
+
+            MessageBox.Show(this, сообщение, "Импорт из 1С", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ОбновитьВсе();
+        }
+        catch (Exception ошибка)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось импортировать выгрузку 1С: {ошибка.Message}",
+                "Импорт из 1С",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Определяет версию выгрузки 1С по первому значащему символу файла.
+    /// </summary>
+    /// <param name="путь">Путь к файлу выгрузки.</param>
+    /// <returns>Версия выгрузки 1С.</returns>
+    private static Picket302.Application.Import.OneCVersion ОпределитьВерсию1С(string путь)
+    {
+        var начало = new byte[16];
+        var прочитано = 0;
+
+        using (var поток = File.OpenRead(путь))
+        {
+            прочитано = поток.Read(начало, 0, начало.Length);
+        }
+
+        var началоТекста = System.Text.Encoding.UTF8.GetString(начало, 0, прочитано).TrimStart();
+        return началоТекста.StartsWith('<') || началоТекста.StartsWith("﻿<", StringComparison.Ordinal)
+            ? Picket302.Application.Import.OneCVersion.V8x
+            : Picket302.Application.Import.OneCVersion.V77;
+    }
+
+    /// <summary>
+    /// Открывает мастер импорта адресной книги (ТЗ §8.12, функция 159:
+    /// «Мастер импорта адресной книги (7 экранов)»).
+    /// </summary>
+    private void ОткрытьМастерИмпорта()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var контроллер = new ImportWizardController(_состав.Контрагенты, _состав.Группы);
+
+        using var форма = new FormImportWizard(контроллер);
+
+        if (форма.ShowDialog(this) == DialogResult.OK)
+        {
+            ОбновитьВсе();
+        }
+    }
+
+    /// <summary>
+    /// Импортирует контрагентов из внешней базы данных (ТЗ §8.5, функция 76).
+    /// </summary>
+    private void ИмпортИзВнешнейБазы()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        using var форма = new FormExternalDbImport(_состав.Контрагенты);
+
+        if (форма.ShowDialog(this) == DialogResult.OK)
+        {
+            ОбновитьВсе();
+        }
     }
 
     /// <summary>

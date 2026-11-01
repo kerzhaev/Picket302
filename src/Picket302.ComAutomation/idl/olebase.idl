@@ -1,0 +1,107 @@
+// Базовые определения OLE/COM, необходимые компилятору MIDL для сборки
+// библиотеки типов PrintEnvelopePro (ТЗ §9.3, функция 114).
+//
+// Файл самодостаточен: MIDL запускается без C-препроцессора, поэтому
+// собственные определения OLE-типов не зависят от состава Windows SDK.
+// Идентификаторы и порядок полей повторяют определения unknwn.idl,
+// wtypes.idl и oaidl.idl так, чтобы собранная библиотека типов была
+// совместима с OLE Automation.
+//
+// Определения вынесены в отдельный файл и подключаются через import, поэтому
+// в библиотеку типов PrintEnvelopePro копируются только объявленные в ней
+// самой типы.
+
+typedef long HRESULT;
+typedef long SCODE;
+typedef int LONG;
+typedef int INT;
+typedef int SHORT;
+typedef int LCID;
+typedef int DISPID;
+typedef int VARIANT_BOOL;
+typedef unsigned long ULONG;
+typedef unsigned int UINT;
+typedef unsigned short WORD;
+typedef unsigned char BYTE;
+
+typedef struct _GUID
+{
+    unsigned long Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char Data4[8];
+} GUID;
+
+typedef GUID IID;
+typedef GUID CLSID;
+typedef GUID REFIID;
+
+typedef wchar_t *LPOLESTR;
+typedef char *LPSTR;
+
+typedef wchar_t OLE_BSTR;
+typedef OLE_BSTR *BSTR;
+
+typedef void *LPSAFEARRAY;
+
+interface ITypeInfo;
+
+[object, uuid(00000000-0000-0000-C000-000000000046)]
+interface IUnknown
+{
+    HRESULT QueryInterface([in] REFIID riid, [out] void **ppvObject);
+    ULONG AddRef();
+    ULONG Release();
+};
+
+[object, uuid(00020401-0000-0000-C000-000000000046)]
+interface ITypeInfo : IUnknown
+{
+    HRESULT GetTypeAttr([out] void **ppTypeAttr);
+    HRESULT GetFuncDesc([in] UINT index, [out] void **ppFuncDesc);
+    HRESULT GetVarDesc([in] UINT index, [out] void **ppVarDesc);
+    HRESULT GetNames(
+        [in] int memid,
+        [out, size_is(cNames)] LPOLESTR *rgszNames,
+        [in] UINT cNames,
+        [out] UINT *pcNames);
+    HRESULT GetRefTypeOfImplType([in] UINT index, [out] int *pRefType);
+    HRESULT GetImplTypeFlags([in] UINT index, [out] int *pImplTypeFlags);
+    HRESULT GetIDsOfNames(
+        [in] REFIID riid,
+        [in, size_is(cNames)] LPOLESTR *rgszNames,
+        [in] UINT cNames,
+        [in] LCID lcid,
+        [out, size_is(cNames)] DISPID *rgDispId);
+    HRESULT Invoke(
+        [in] DISPID dispIdMember,
+        [in] REFIID riid,
+        [in] LCID lcid,
+        [in] WORD wFlags,
+        [in] void *pDispParams,
+        [out, optional] void *pVarResult,
+        [out, optional] void *pExcepInfo,
+        [out, optional] UINT *puArgErr);
+};
+
+[object, uuid(00020400-0000-0000-C000-000000000046)]
+interface IDispatch : IUnknown
+{
+    HRESULT GetTypeInfoCount([out] UINT *pctInfo);
+    HRESULT GetTypeInfo([in] UINT iTInfo, [in] LCID lcid, [out] ITypeInfo **ppTInfo);
+    HRESULT GetIDsOfNames(
+        [in] REFIID riid,
+        [in, size_is(cNames)] LPOLESTR *rgszNames,
+        [in] UINT cNames,
+        [in] LCID lcid,
+        [out, size_is(cNames)] DISPID *rgDispId);
+    HRESULT Invoke(
+        [in] DISPID dispIdMember,
+        [in] REFIID riid,
+        [in] LCID lcid,
+        [in] WORD wFlags,
+        [in] void *pDispParams,
+        [out, optional] void *pVarResult,
+        [out, optional] void *pExcepInfo,
+        [out, optional] UINT *puArgErr);
+};

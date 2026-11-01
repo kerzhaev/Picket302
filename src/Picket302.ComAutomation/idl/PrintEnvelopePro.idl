@@ -1,0 +1,131 @@
+// Описание библиотеки типов COM-сервера автоматизации Picket302.
+//
+// Источник контракта: EVIDENCE/EVIDENCE/automation_idl.txt (библиотека
+// PrintEnvelopePro, версия 2.2, 23 метода интерфейса IPEProApplication).
+//
+// Файл используется для сборки бинарной библиотеки типов PrintEnvelopePro.tlb
+// компилятором MIDL (Windows SDK). Копия собранного файла поставляется в
+// каталоге сборки COM-сервера и регистрируется в
+// HKCU\Software\Classes\TypeLib\{22BC298D-DF0E-3C29-B589-7A50D3A8B871}\2.2.
+
+[
+    uuid(22BC298D-DF0E-3C29-B589-7A50D3A8B871),
+    version(2.2),
+    helpstring("Picket302 — сервер автоматизации конвертов"),
+    custom(90883F05-3D28-11D2-8F17-00A0C9A6186D, "PrintEnvelopePro, Version=2.2.0.0, Culture=neutral, PublicKeyToken=null")
+]
+library PrintEnvelopePro
+{
+    // OLE Automation: {00020430-0000-0000-C000-000000000046}. Библиотека
+    // объявлений OLE Automation, из которой берутся идентификаторы
+    // IUnknown и IDispatch.
+    importlib("stdole2.tlb");
+
+    // Прямое объявление типов библиотеки.
+    interface IPEProApplication;
+
+    [
+        odl,
+        uuid(3A98FA89-27EE-4DDF-8F5D-ABC47EA942E6),
+        version(1.0),
+        dual,
+        oleautomation,
+        helpstring("Интерфейс сервера автоматизации Picket302"),
+        custom(0F21F359-AB84-41E8-9A78-36D110E6D2F9, "PEP.COM.IPEProApplication")
+    ]
+    interface IPEProApplication : IDispatch
+    {
+        [id(0x60020000)]
+        HRESULT PrintFromFileEnvelopes([in] BSTR filename);
+
+        [id(0x60020001)]
+        HRESULT PrintFromFileNotifications([in] BSTR filename);
+
+        [id(0x60020002)]
+        HRESULT PrintFromFileInventories([in] BSTR filename);
+
+        [id(0x60020003)]
+        HRESULT PrintFromFileRegisters([in] BSTR filename);
+
+        [id(0x60020004)]
+        HRESULT PrintFromXmlEnvelopes([in] BSTR xml_text);
+
+        [id(0x60020005)]
+        HRESULT PrintFromXmlNotifications([in] BSTR xml_text);
+
+        [id(0x60020006)]
+        HRESULT PrintFromXmlInventories([in] BSTR xml_text);
+
+        [id(0x60020007)]
+        HRESULT PrintFromXmlRegisters([in] BSTR xml_text);
+
+        [id(0x60020008)]
+        HRESULT PrintEnvelope(
+            [in] BSTR from,
+            [in] BSTR fromAddress,
+            [in] BSTR fromZipCode,
+            [in] BSTR to,
+            [in] BSTR toAddress,
+            [in] BSTR toZipCode);
+
+        [id(0x60020009)]
+        HRESULT OpenDummyFormToSetAsForeground([out, retval] BSTR* pRetVal);
+
+        [id(0x6002000a)]
+        HRESULT CloseDummyFormAndSetAsForeground([in] BSTR process);
+
+        [id(0x6002000b)]
+        HRESULT DatabaseIsLoaded([out, retval] VARIANT_BOOL* pRetVal);
+
+        [id(0x6002000c)]
+        HRESULT SafeLoadDatabase([out, retval] VARIANT_BOOL* pRetVal);
+
+        [id(0x6002000d)]
+        HRESULT GetFlagParseZipIndexFromAddress([out, retval] VARIANT_BOOL* pRetVal);
+
+        [id(0x6002000e)]
+        HRESULT SetFlagParseZipIndexFromAddress(
+            [in] VARIANT_BOOL f,
+            [out, retval] VARIANT_BOOL* pRetVal);
+
+        [id(0x6002000f)]
+        HRESULT GetFlagShowFormsAsModal([out, retval] VARIANT_BOOL* pRetVal);
+
+        [id(0x60020010)]
+        HRESULT SetFlagShowFormsAsModal(
+            [in] VARIANT_BOOL f,
+            [out, retval] VARIANT_BOOL* pRetVal);
+
+        [id(0x60020011)]
+        HRESULT GetProductVersion([out, retval] BSTR* pRetVal);
+
+        [id(0x60020012)]
+        HRESULT GetAPIVersion([out, retval] long* pRetVal);
+
+        [id(0x60020013)]
+        HRESULT GetRegisterTemplateNames([out, retval] SAFEARRAY(BSTR)* pRetVal);
+
+        [id(0x60020014)]
+        HRESULT PrintFromXmlRegistersWithoutForm(
+            [in] BSTR xml_text,
+            [in] BSTR nametemplate,
+            [in] BSTR resultFullPath);
+
+        [id(0x60020015)]
+        HRESULT GetWarningType([out, retval] long* pRetVal);
+
+        [id(0x60020016)]
+        HRESULT GetStdRegisterTemplateNames([out, retval] SAFEARRAY(BSTR)* pRetVal);
+    };
+
+    [
+        uuid(5715286E-F98F-4C1C-AC86-AB943AFAE004),
+        version(1.0),
+        helpstring("Picket302 — сервер автоматизации конвертов"),
+        custom(0F21F359-AB84-41E8-9A78-36D110E6D2F9, "PEP.COM.PEProApplication")
+    ]
+    coclass PEProApplication
+    {
+        [default] interface IPEProApplication;
+    };
+};
