@@ -14,10 +14,20 @@ namespace Picket302.Printing.Devices;
 /// <remarks>
 /// Печать выполняется средствами <c>System.Drawing.Printing</c> с передачей
 /// задания в <c>winspool.drv</c>; собственный драйвер принтера не создаётся.
-/// Прерывание задания выполняется вызовом <c>AbortDoc</c> (ТЗ §6.1).
+/// Прерывание задания выполняется .NET: обработчик PrintPage выставляет
+/// <c>событие.Cancel</c>, и PrintDocument прерывает активное задание
+/// (AbortDoc для дескриптора активного задания); отдельный AbortDoc на
+/// собственном дескрипторе принтера задание не прерывал (F-A5).
 /// </remarks>
 public sealed class SystemDrawingPrintSpooler : IPrintSpooler
 {
+    /// <summary>
+    /// Настройка печатного документа перед выводом: точка автоматических
+    /// проверок (PreviewPrintController вместо системного контроллера);
+    /// в работе не задаётся.
+    /// </summary>
+    public Action<PrintDocument>? НастройкаДокументаДляПроверок { get; set; }
+
     /// <summary>
     /// Печатает задание.
     /// </summary>
@@ -70,32 +80,38 @@ public sealed class SystemDrawingPrintSpooler : IPrintSpooler
 
         документ.DefaultPageSettings = параметрыСтраницы;
 
-        using var прерыватель = new AbortScope(context.Printer.PrinterName, cancellationToken);
+        // Точка автоматических проверок: замена контроллера вывода.
+        НастройкаДокументаДляПроверок?.Invoke(документ);
 
         // Отбор страниц задания по чётности (ТЗ §8.6, функция 87): при
         // двухпроходной печати первый проход выводит нечётные страницы,
-        // второй — чётные.
-        var отобранныеСтраницы = new PageParityFilter()
+        // второй — чётные. Выводятся только отобранные страницы: событие
+        // PrintPage для пропущенной страницы выводило бы пустой лист (F-A4).
+        var очередь = new PageParityFilter()
             .FilterPageNumbers(context.TotalPages, context.Parity)
-            .ToHashSet();
+            .OrderBy(x => x)
+            .ToList();
 
-        var номерСтраницы = 0;
+        if (очередь.Count == 0)
+        {
+            // Выводить нечего: вызов Print() создал бы пустое задание.
+            return Task.CompletedTask;
+        }
+
+        var показанных = 0;
 
         документ.PrintPage += (_, событие) =>
         {
+            // Прерывание выполняется .NET: Cancel завершает задание.
             if (cancellationToken.IsCancellationRequested)
             {
                 событие.Cancel = true;
                 return;
             }
 
-            номерСтраницы++;
-
-            var последняя = номерСтраницы >= context.TotalPages;
-
-            if (!отобранныеСтраницы.Contains(номерСтраницы))
+            if (показанных >= очередь.Count)
             {
-                событие.HasMorePages = !последняя;
+                событие.HasMorePages = false;
                 return;
             }
 
@@ -105,51 +121,21 @@ public sealed class SystemDrawingPrintSpooler : IPrintSpooler
                 return;
             }
 
-            context.CurrentPage = номерСтраницы;
+            context.CurrentPage = очередь[показанных];
 
             var графика = new GdiGraphicsContext(графикаGdi);
             render(графика);
-            событие.HasMorePages = !последняя;
+
+            показанных++;
+            событие.HasMorePages = показанных < очередь.Count;
         };
 
         документ.Print();
 
+        // Задание, прерванное через PrintPage.Cancel, не считается успехом:
+        // отмена отражается исключением для контроллера сессии (F-A5).
+        cancellationToken.ThrowIfCancellationRequested();
+
         return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Область прерывания задания: по требованию отмены вызывается
-    /// <c>AbortDoc</c> для принтера (ТЗ §6.1).
-    /// </summary>
-    private sealed class AbortScope : IDisposable
-    {
-        private readonly IntPtr _дескриптор;
-        private readonly CancellationTokenRegistration _регистрация;
-
-        public AbortScope(string printerName, CancellationToken cancellationToken)
-        {
-            if (string.IsNullOrWhiteSpace(printerName))
-            {
-                return;
-            }
-
-            if (!Winspool.OpenPrinterW(printerName, out var дескриптор, IntPtr.Zero))
-            {
-                return;
-            }
-
-            _дескриптор = дескриптор;
-            _регистрация = cancellationToken.Register(() => Winspool.AbortDoc(_дескриптор));
-        }
-
-        public void Dispose()
-        {
-            _регистрация.Dispose();
-
-            if (_дескриптор != IntPtr.Zero)
-            {
-                Winspool.ClosePrinter(_дескриптор);
-            }
-        }
     }
 }

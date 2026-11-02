@@ -199,6 +199,12 @@ public class PrinterManager
     /// </summary>
     /// <param name="printerName">Имя принтера.</param>
     /// <returns>Структура DEVMODE драйвера.</returns>
+    /// <remarks>
+    /// Буфер выделяется по размеру, который сообщает драйвер первым вызовом
+    /// <c>DocumentPropertiesW</c> с нулевым буфером (F-A3): собственная
+    /// структура DEVMODE меньше драйверной, запись в короткий буфер
+    /// повреждала память.
+    /// </remarks>
     public DevMode ReadDevMode(string printerName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(printerName);
@@ -211,7 +217,21 @@ public class PrinterManager
 
         try
         {
-            var размер = Marshal.SizeOf<DevMode>();
+            // Первый вызов — уточняющий: драйвер сообщает требуемый размер.
+            var размер = Winspool.DocumentPropertiesW(
+                IntPtr.Zero,
+                дескриптор,
+                printerName,
+                IntPtr.Zero,
+                IntPtr.Zero,
+                0);
+
+            if (размер <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"Не удалось получить параметры принтера «{printerName}».");
+            }
+
             var буфер = Marshal.AllocHGlobal(размер);
 
             try
@@ -230,6 +250,8 @@ public class PrinterManager
                         $"Не удалось получить параметры принтера «{printerName}».");
                 }
 
+                // Маршализуются только первые Marshal.SizeOf<DevMode>() байт:
+                // хвост буфера — частные поля драйвера.
                 return Marshal.PtrToStructure<DevMode>(буфер);
             }
             finally
