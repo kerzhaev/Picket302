@@ -72,8 +72,12 @@ public sealed class GdiGraphicsContext : IGraphicsContext
         var масштабY = heightMm / естественный.Height;
 
         var состояние = _графика.Save();
-        _графика.ScaleTransform(масштабX, масштабY);
+
+        // Сначала перенос начала координат в точку поля, затем сжатие
+        // 100pt-кегля в размеры поля (F-A2): при обратном порядке перенесённая
+        // точка умножалась на масштаб, и текст уходил со своего поля.
         _графика.TranslateTransform(xMm, yMm);
+        _графика.ScaleTransform(масштабX, масштабY);
 
         using var кисть = new SolidBrush(Color);
         _графика.DrawString(text, шрифт, кисть, 0f, 0f, формат);
