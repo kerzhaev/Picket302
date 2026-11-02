@@ -74,6 +74,15 @@ public sealed class DbServiceDoctor
     ];
 
     private readonly Func<string, string> _запускКоманды;
+    private readonly Func<string, string?> _путьСлужбы;
+    private readonly Func<bool> _администратор;
+
+    static DbServiceDoctor()
+    {
+        // Кодировки OEM (cp866 для русской локали) поставляются
+        // CodePagesEncodingProvider (F-B5).
+        Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+    }
 
     /// <summary>
     /// Создаёт диагност с запуском команды через <c>sc.exe</c>.
@@ -91,8 +100,30 @@ public sealed class DbServiceDoctor
     /// вывод. При <see langword="null"/> используется <c>sc.exe</c>.
     /// </param>
     public DbServiceDoctor(Func<string, string>? запускКоманды)
+        : this(запускКоманды, null, null)
+    {
+    }
+
+    /// <summary>
+    /// Создаёт диагност с подменёнными внешними эффектами (для проверок).
+    /// </summary>
+    /// <param name="запускКоманды">Запуск команды sc (см. перегрузку).</param>
+    /// <param name="путьСлужбы">
+    /// Чтение пути исполняемого файла службы по имени; по умолчанию — реестр
+    /// ImagePath с откатом на <c>sc qc</c> (F-B4).
+    /// </param>
+    /// <param name="администратор">
+    /// Проверка прав администратора; по умолчанию —
+    /// <see cref="IsAdministrator"/>.
+    /// </param>
+    public DbServiceDoctor(
+        Func<string, string>? запускКоманды,
+        Func<string, string?>? путьСлужбы,
+        Func<bool>? администратор)
     {
         _запускКоманды = запускКоманды ?? ЗапуститьКоманду;
+        _путьСлужбы = путьСлужбы ?? ПрочитатьПутьВРеестре;
+        _администратор = администратор ?? (() => IsAdministrator);
     }
 
     /// <summary>
@@ -140,7 +171,7 @@ public sealed class DbServiceDoctor
         }
 
         var имена = string.Join(", ", осиротевшие.Select(служба => служба.ServiceName));
-        var требуетсяАдминистратор = !IsAdministrator;
+        var требуетсяАдминистратор = !_администратор();
 
         var сообщение = требуетсяАдминистратор
             ? $"Обнаружены осиротевшие службы СУБД: {имена}. "
@@ -159,10 +190,16 @@ public sealed class DbServiceDoctor
     /// Возвращает перечень служб, относящихся к базе данных программы.
     /// </summary>
     /// <returns>Перечень служб.</returns>
+    /// <remarks>
+    /// Путь к исполняемому файлу берётся из реестра
+    /// <c>HKLM\SYSTEM\CurrentControlSet\Services\&lt;имя&gt;\ImagePath</c>
+    /// (F-B4): вывод <c>sc query</c> пути не содержит, а <c>sc qc</c> зависит
+    /// от локали. При недоступности реестра используется вывод <c>sc qc</c>.
+    /// </remarks>
     public IReadOnlyList<ServiceInfo> ListServices()
     {
         var вывод = _запускКоманды("query type= service state= all");
-        var службы = new List<ServiceInfo>();
+        var черновики = new List<(string? Имя, string? Отображаемое, string? Путь, string? Состояние)>();
 
         string? имя = null;
         string? отображаемое = null;
@@ -177,7 +214,7 @@ public sealed class DbServiceDoctor
             {
                 if (имя is not null)
                 {
-                    службы.Add(СобратьСлужбу(имя, отображаемое, путь, состояние));
+                    черновики.Add((имя, отображаемое, путь, состояние));
                 }
 
                 имя = строка["SERVICE_NAME:".Length..].Trim();
@@ -199,19 +236,138 @@ public sealed class DbServiceDoctor
                 continue;
             }
 
-            if (строка.StartsWith("STATE:", StringComparison.OrdinalIgnoreCase))
+            // Метка состояния поддерживается двуязычно (F-B5): русская
+            // локаль sc выводит «СОСТОЯНИЕ»; пробелы перед двоеточием
+            // (STATE : 4 RUNNING) допускаются.
+            if (МеткаСтроки(строка) is "STATE" or "СОСТОЯНИЕ")
             {
-                состояние = строка["STATE:".Length..].Trim();
+                состояние = ТекстСостояния(строка);
                 continue;
             }
         }
 
         if (имя is not null)
         {
-            службы.Add(СобратьСлужбу(имя, отображаемое, путь, состояние));
+            черновики.Add((имя, отображаемое, путь, состояние));
+        }
+
+        // Путь службы дополняется из реестра либо qc-вывода ДО вычисления
+        // признака осиротевшей службы (F-B4): без пути признак не определялся.
+        var службы = new List<ServiceInfo>(черновики.Count);
+
+        foreach (var (имяСлужбы, displayName, путьЗаписи, состояние2) in черновики)
+        {
+            var итоговыйПуть = путьЗаписи;
+
+            if (string.IsNullOrEmpty(итоговыйПуть))
+            {
+                итоговыйПуть = ПрочитатьПутьСлужбы(имяСлужбы!) ?? string.Empty;
+            }
+
+            службы.Add(СобратьСлужбу(имяСлужбы!, displayName, итоговыйПуть, состояние2));
         }
 
         return службы;
+    }
+
+    /// <summary>
+    /// Возвращает метку строки вывода sc (текст до первого двоеточия,
+    /// без пробелов) либо <see langword="null"/>, если двоеточия нет (F-B5).
+    /// </summary>
+    /// <param name="строка">Строка вывода.</param>
+    /// <returns>Метка метаданных либо <see langword="null"/>.</returns>
+    private static string? МеткаСтроки(string строка)
+    {
+        var разделитель = строка.IndexOf(':');
+
+        return разделитель <= 0 ? null : строка[..разделитель].Trim();
+    }
+
+    /// <summary>
+    /// Извлекает текст состояния из строки STATE/СОСТОЯНИЕ по цифровому коду:
+    /// 1 — остановлена, 2 — запуск, 3 — остановка, 4 — работает (F-B5).
+    /// </summary>
+    /// <param name="строка">Строка состояния.</param>
+    /// <returns>Русское описание состояния либо сырой текст после метки.</returns>
+    private static string ТекстСостояния(string строка)
+    {
+        var разделитель = строка.IndexOf(':');
+        var остаток = разделитель >= 0 ? строка[(разделитель + 1)..].Trim() : строка.Trim();
+
+        foreach (var часть in остаток.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (int.TryParse(часть, NumberStyles.Integer, CultureInfo.InvariantCulture, out var код))
+            {
+                return код switch
+                {
+                    1 => "Остановлена",
+                    2 => "Запускается",
+                    3 => "Останавливается",
+                    4 => "Работает",
+                    _ => остаток,
+                };
+            }
+        }
+
+        return остаток;
+    }
+
+    /// <summary>
+    /// Читает путь к исполняемому файлу службы (F-B4): делегат проверки.
+    /// </summary>
+    /// <param name="имяСлужбы">Системное имя службы.</param>
+    /// <returns>Путь либо <see langword="null"/>.</returns>
+    private string? ПрочитатьПутьСлужбы(string имяСлужбы) => _путьСлужбы(имяСлужбы);
+
+    /// <summary>
+    /// Читает путь исполняемого файла службы из реестра ImagePath, при
+    /// недоступности — из вывода <c>sc qc</c> (F-B4).
+    /// </summary>
+    /// <param name="имяСлужбы">Системное имя службы.</param>
+    /// <returns>Путь либо <see langword="null"/>.</returns>
+    private string? ПрочитатьПутьВРеестре(string имяСлужбы)
+    {
+        try
+        {
+            using var ветка = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                $@"SYSTEM\CurrentControlSet\Services\{имяСлужбы}");
+
+            var путь = ветка?.GetValue("ImagePath") as string;
+
+            if (!string.IsNullOrWhiteSpace(путь))
+            {
+                return путь;
+            }
+        }
+        catch (Exception ошибка) when (ошибка is System.Security.SecurityException
+            or UnauthorizedAccessException
+            or IOException)
+        {
+            // Реестр недоступен: путь берётся из qc-вывода.
+        }
+
+        try
+        {
+            var вывод = _запускКоманды($"qc {имяСлужбы}");
+
+            foreach (var сыраяСтрока in вывод.Split('\n'))
+            {
+                var строка = сыраяСтрока.Trim();
+
+                if (строка.StartsWith("BINARY_PATH_NAME", StringComparison.OrdinalIgnoreCase))
+                {
+                    var разделитель = строка.IndexOf(':');
+
+                    return разделитель > 0 ? строка[(разделитель + 1)..].Trim() : null;
+                }
+            }
+        }
+        catch
+        {
+            // qc-вывод недоступен: путь остаётся пустым.
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -223,7 +379,7 @@ public sealed class DbServiceDoctor
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
 
-        if (!IsAdministrator)
+        if (!_администратор())
         {
             return ServiceRemovalResult.Failure(
                 serviceName,
@@ -233,21 +389,17 @@ public sealed class DbServiceDoctor
 
         var вывод = _запускКоманды($"delete {serviceName}");
 
+        // Успех признаётся только по явному маркеру (F-B5): нераспознанный
+        // вывод трактуется как отказ с сохранением сырого текста.
         if (вывод.Contains("DeleteSERVICE", StringComparison.OrdinalIgnoreCase)
             || вывод.Contains("УДАЛЕНИЕ СЛУЖБЫ", StringComparison.OrdinalIgnoreCase))
         {
             return ServiceRemovalResult.Success(serviceName);
         }
 
-        if (вывод.Contains("FAILED", StringComparison.OrdinalIgnoreCase)
-            || вывод.Contains("ОТКАЗАНО", StringComparison.OrdinalIgnoreCase))
-        {
-            return ServiceRemovalResult.Failure(
-                serviceName,
-                $"Не удалось удалить службу «{serviceName}»: {вывод.Trim()}");
-        }
-
-        return ServiceRemovalResult.Success(serviceName);
+        return ServiceRemovalResult.Failure(
+            serviceName,
+            $"Не удалось удалить службу «{serviceName}»: {вывод.Trim()}");
     }
 
     /// <summary>
@@ -333,8 +485,13 @@ public sealed class DbServiceDoctor
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.Default,
-            StandardErrorEncoding = Encoding.Default,
+
+            // Вывод sc.exe идёт в OEM-кодировке консоли текущей локали
+            // (F-B5): Encoding.Default (ANSI) искажал русские метки.
+            StandardOutputEncoding = Encoding.GetEncoding(
+                CultureInfo.CurrentCulture.TextInfo.OEMCodePage),
+            StandardErrorEncoding = Encoding.GetEncoding(
+                CultureInfo.CurrentCulture.TextInfo.OEMCodePage),
         };
 
         try
