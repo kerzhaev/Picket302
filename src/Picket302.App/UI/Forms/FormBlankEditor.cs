@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Text;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using Picket302.Domain.Postal;
@@ -146,6 +147,43 @@ public sealed class FormBlankEditor : Form
         return xml;
     }
 
+    /// <summary>Записывает XML бланка в файл, выбранный оператором (F-E20):
+    /// пункт меню «Сохранить» прежде ничего не сохранял.</summary>
+    /// <remarks>
+    /// Путь выбирается диалогом <c>SaveFileDialog</c> (фильтр blank.xml);
+    /// файл записывается в UTF-8 без BOM. Каталог пользовательских бланков
+    /// в профиле не заведён, поэтому выбор пути остаётся за оператором.
+    /// </remarks>
+    public void СохранитьВФайл()
+    {
+        var xml = Save();
+
+        if (xml is null)
+        {
+            return;
+        }
+
+        using var диалог = new SaveFileDialog
+        {
+            Filter = "Бланк Picket302 (blank.xml)|blank.xml|XML|*.xml",
+            FileName = "blank.xml",
+        };
+
+        if (диалог.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        File.WriteAllText(диалог.FileName, xml, new UTF8Encoding(false));
+
+        MessageBox.Show(
+            this,
+            $"Бланк сохранён: {диалог.FileName}",
+            "Редактор бланков",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
     /// <summary>Переключает единицу представления координат (мм / pt / px).</summary>
     /// <param name="unit">Единица.</param>
     /// <param name="dpi">Плотность экрана для пикселей (96/120).</param>
@@ -228,7 +266,10 @@ public sealed class FormBlankEditor : Form
         var файл = new ToolStripMenuItem("Файл");
         var сохранить = new ToolStripMenuItem("Сохранить");
 
-        сохранить.Click += (_, _) => Save();
+        // Меню «Сохранить» записывает XML в выбранный файл (F-E20): прежде
+        // пункт вызывал Save() и отбрасывал результат — сохранение не
+        // выполнялось.
+        сохранить.Click += (_, _) => СохранитьВФайл();
         файл.DropDownItems.Add(сохранить);
 
         var объект = new ToolStripMenuItem("Объект");

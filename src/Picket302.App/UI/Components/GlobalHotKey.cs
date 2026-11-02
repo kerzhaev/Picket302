@@ -32,6 +32,7 @@ public sealed class GlobalHotKey : IDisposable
     private readonly Action _приНажатии;
     private readonly int _модификаторы;
     private readonly int _виртуальнаяКлавиша;
+    private readonly IntPtr _владелец;
     private bool _зарегистрирована;
 
     /// <summary>
@@ -40,21 +41,26 @@ public sealed class GlobalHotKey : IDisposable
     /// <param name="модификаторы">Модификаторы Win32 (<c>MOD_ALT</c>, <c>MOD_CONTROL</c>, <c>MOD_SHIFT</c>).</param>
     /// <param name="виртуальнаяКлавиша">Код виртуальной клавиши.</param>
     /// <param name="приНажатии">Действие при нажатии сочетания.</param>
-    public GlobalHotKey(int модификаторы, int виртуальнаяКлавиша, Action приНажатии)
+    /// <param name="владелец">Дескриптор окна-владельца (F-E8): при регистрации
+    /// на окно сообщение <c>WM_HOTKEY</c> доставляется в его <c>WndProc</c>;
+    /// регистрация на поток (нулевой дескриптор) сообщение в окно не доставляет.</param>
+    public GlobalHotKey(int модификаторы, int виртуальнаяКлавиша, Action приНажатии, IntPtr владелец = default)
     {
         ArgumentNullException.ThrowIfNull(приНажатии);
 
         _модификаторы = модификаторы;
         _виртуальнаяКлавиша = виртуальнаяКлавиша;
         _приНажатии = приНажатии;
+        _владелец = владелец;
     }
 
     /// <summary>
     /// Создаёт глобальное сочетание Ctrl+Space (ТЗ §7.4).
     /// </summary>
     /// <param name="приНажатии">Действие при нажатии сочетания.</param>
-    public static GlobalHotKey CtrlSpace(Action приНажатии)
-        => new(МодификаторCtrl, ВиртуальнаяКлавишаПробел, приНажатии);
+    /// <param name="владелец">Дескриптор окна-владельца (см. конструктор).</param>
+    public static GlobalHotKey CtrlSpace(Action приНажатии, IntPtr владелец = default)
+        => new(МодификаторCtrl, ВиртуальнаяКлавишаПробел, приНажатии, владелец);
 
     /// <summary>
     /// Признак успешной регистрации горячей клавиши в системе.
@@ -75,7 +81,7 @@ public sealed class GlobalHotKey : IDisposable
             return true;
         }
 
-        _зарегистрирована = RegisterHotKey(IntPtr.Zero, Идентификатор, _модификаторы, _виртуальнаяКлавиша);
+        _зарегистрирована = RegisterHotKey(_владелец, Идентификатор, _модификаторы, _виртуальнаяКлавиша);
         return _зарегистрирована;
     }
 
@@ -99,7 +105,7 @@ public sealed class GlobalHotKey : IDisposable
             return;
         }
 
-        UnregisterHotKey(IntPtr.Zero, Идентификатор);
+        UnregisterHotKey(_владелец, Идентификатор);
         _зарегистрирована = false;
     }
 

@@ -80,9 +80,17 @@ public sealed class ComRegistrationTests : IDisposable
             _регистрация.ServerPath,
             ComRegistration.ReadValue($@"{clsid}\LocalServer32"));
 
+        // Универсальный маршалер автоматизации назначается веткой
+        // ProxyStubClsid32 со CLSID стандартного прокси oleaut32.dll (F-E19):
+        // прежнее значение «ProxyStub32 = oleaut32.dll» системой не читалось,
+        // и маршалер для интерфейса не назначался. Число методов — по IDL.
         Assert.Equal(
-            "oleaut32.dll",
-            ComRegistration.ReadValue(интерфейс, "ProxyStub32"));
+            ComRegistration.ProxyStubClsid32,
+            ComRegistration.ReadValue(интерфейс, "ProxyStubClsid32"));
+
+        Assert.Equal(
+            ComRegistration.NumMethodsIPEProApplication,
+            ComRegistration.ReadValue(интерфейс, "NumMethods"));
 
         // Ссылка на библиотеку типов в ветке интерфейса содержит GUID
         // библиотеки (LIBID) — так устроен контракт COM: по LIBID система

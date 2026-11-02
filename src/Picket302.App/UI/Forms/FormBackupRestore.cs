@@ -463,9 +463,12 @@ public sealed class FormBackupRestore : Form
             НастроитьТочку(_точка3, "Третья точка:", 490),
         };
 
-        foreach (var поле in поля)
+        foreach (var (метка, пикер) in поля)
         {
-            группа.Controls.Add(поле);
+            // Пикер добавляется вместе с подписью (F-E12): прежде возвращалась
+            // только подпись, и поля ввода времени не появлялись на форме.
+            группа.Controls.Add(метка);
+            группа.Controls.Add(пикер);
         }
 
         Controls.Add(группа);
@@ -477,8 +480,11 @@ public sealed class FormBackupRestore : Form
     /// <param name="поле">Поле ввода времени.</param>
     /// <param name="подпись">Подпись поля.</param>
     /// <param name="смещение">Горизонтальное смещение подписи.</param>
-    /// <returns>Подпись поля — она добавляется в контейнер формы.</returns>
-    private static Label НастроитьТочку(DateTimePicker поле, string подпись, int смещение)
+    /// <returns>Подпись и поле ввода — оба добавляются в контейнер формы.</returns>
+    private static (Label Метка, DateTimePicker Пикер) НастроитьТочку(
+        DateTimePicker поле,
+        string подпись,
+        int смещение)
     {
         var метка = new Label
         {
@@ -493,7 +499,7 @@ public sealed class FormBackupRestore : Form
         поле.Location = new Point(смещение + 100, 20);
         поле.Width = 80;
 
-        return метка;
+        return (метка, поле);
     }
 
     /// <summary>

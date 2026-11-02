@@ -1781,13 +1781,16 @@ internal static class ReportRenderer
                 y = НарисоватьТекст(graphics, заголовок, блок.Caption, отступ, y, ширина);
             }
 
-            foreach (var строка in блок.HeaderLines)
-            {
-                y = НарисоватьТекст(graphics, шапка, строка, отступ, y, ширина);
-            }
-
             var ширины = РаспределитьШирины(блок, ширина);
             var yШапки = y;
+
+            // Колоночная шапка печатается один раз (F-E14): прежде строки
+            // HeaderLines выводились ещё и сплошным блоком над колонками,
+            // и шапка появлялась дважды.
+            for (var i = 0; i < ширины.Count && i < блок.HeaderLines.Count; i++)
+            {
+                y = НарисоватьТекст(graphics, шапка, блок.HeaderLines[i], отступ + Смещение(ширины, i), y, ширины[i]);
+            }
 
             for (var i = 0; i < ширины.Count && i < блок.HeaderLines.Count; i++)
             {

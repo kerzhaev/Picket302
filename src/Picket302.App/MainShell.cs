@@ -69,6 +69,18 @@ public sealed class MainShell : Form
     /// </summary>
     private bool _сортировкаПодписана;
 
+    /// <summary>
+    /// Признак однократной подписки на выбор категории в дереве (F-E9):
+    /// загрузка дерева выполняется при каждом обновлении данных.
+    /// </summary>
+    private bool _деревоКатегорийПодписано;
+
+    /// <summary>
+    /// Признак однократной подписки на перетаскивание отправленных писем
+    /// (F-E10): загрузка списка выполняется при каждом обновлении данных.
+    /// </summary>
+    private bool _перетаскиваниеПисемПодписано;
+
     private readonly SearchSession _поиск = new();
     private readonly List<long> _выбранныеОтправители = [];
     private readonly List<long> _выбранныеПолучатели = [];
@@ -157,6 +169,12 @@ public sealed class MainShell : Form
     /// сохранённый фильтр не применён.
     /// </summary>
     private Picket302.Domain.Contracts.FilterCriteria? _применённыйФильтр;
+
+    /// <summary>
+    /// Имя применённого сохранённого фильтра (F-E18): сброс при удалении
+    /// выполняется только для этого имени.
+    /// </summary>
+    private string? _применённыйФильтрИмя;
 
     /// <summary>
     /// Пункт меню «Печать» с галкой «Показывать список шаблонов перед
@@ -358,6 +376,10 @@ public sealed class MainShell : Form
             .ПолучитьКритерииAsync(выбранное)
             .ConfigureAwait(true);
 
+        // Имя применённого фильтра запоминается (F-E18): удаление другого
+        // фильтра не должно сбрасывать действующий.
+        _применённыйФильтрИмя = выбранное;
+
         if (_состав is not null)
         {
             await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
@@ -398,7 +420,10 @@ public sealed class MainShell : Form
 
         await _сохранённыеФильтры.УдалитьAsync(выбранное).ConfigureAwait(true);
 
-        if (_применённыйФильтр is not null)
+        // Сброс только при удалении применённого фильтра (F-E18): прежде
+        // удаление любого фильтра сбрасывало действующий отбор.
+        if (_применённыйФильтр is not null
+            && string.Equals(выбранное, _применённыйФильтрИмя, StringComparison.Ordinal))
         {
             var оставшийся = await _сохранённыеФильтры
                 .ПолучитьКритерииAsync(выбранное)
@@ -407,6 +432,7 @@ public sealed class MainShell : Form
             if (оставшийся is null)
             {
                 _применённыйФильтр = null;
+                _применённыйФильтрИмя = null;
             }
         }
 
@@ -782,17 +808,30 @@ public sealed class MainShell : Form
             Font = new Font("Tahoma", 8f, FontStyle.Bold),
         };
 
-        _сЛоготипом.Location = new Point(14, 24);
+        // Каждая пара переключателей — собственная группа без рамки (F-E16):
+        // в общем контейнере отметка «Адрес получателя» снимала «С логотипом».
+        var группаЛоготип = new Panel { Location = new Point(8, 20), Size = new Size(140, 44) };
+        var группаАдрес = new Panel { Location = new Point(8, 66), Size = new Size(170, 44) };
+
+        _сЛоготипом.Location = new Point(6, 2);
         _сЛоготипом.AutoSize = true;
-        _безЛоготипа.Location = new Point(14, 44);
+        _безЛоготипа.Location = new Point(6, 22);
         _безЛоготипа.AutoSize = true;
-        _переключательАдресОтправителя.Location = new Point(14, 68);
-        _адресОтправителя.AutoSize = true;
-        _переключательАдресПолучателя.Location = new Point(14, 88);
-        _адресПолучателя.AutoSize = true;
+        _переключательАдресОтправителя.Location = new Point(6, 2);
+
+        // AutoSize устанавливается переключателям, а не составным редакторам
+        // адреса (F-E23).
+        _переключательАдресОтправителя.AutoSize = true;
+        _переключательАдресПолучателя.Location = new Point(6, 22);
+        _переключательАдресПолучателя.AutoSize = true;
 
         _сЛоготипом.Checked = true;
         _переключательАдресОтправителя.Checked = true;
+
+        группаЛоготип.Controls.Add(_сЛоготипом);
+        группаЛоготип.Controls.Add(_безЛоготипа);
+        группаАдрес.Controls.Add(_переключательАдресОтправителя);
+        группаАдрес.Controls.Add(_переключательАдресПолучателя);
 
         _превью.BorderStyle = BorderStyle.FixedSingle;
         _превью.Size = new Size(260, 120);
@@ -809,10 +848,8 @@ public sealed class MainShell : Form
         };
 
         панель.Controls.Add(заголовок);
-        панель.Controls.Add(_сЛоготипом);
-        панель.Controls.Add(_безЛоготипа);
-        панель.Controls.Add(_переключательАдресОтправителя);
-        панель.Controls.Add(_переключательАдресПолучателя);
+        панель.Controls.Add(группаЛоготип);
+        панель.Controls.Add(группаАдрес);
         панель.Controls.Add(_превью);
 
         return панель;
@@ -1985,16 +2022,31 @@ public sealed class MainShell : Form
         }
 
         _деревоКатегорий.ExpandAll();
-        _деревоКатегорий.AfterSelect += (_, событие) =>
-        {
-            if (событие.Node?.Tag is not long идентификатор)
-            {
-                return;
-            }
 
-            _поиск.ЗадатьФильтрГрупп(идентификатор);
-            _ = ОбновитьПолучателейAsync();
-        };
+        // Подписка однократная (F-E9): загрузка дерева выполняется при каждом
+        // обновлении, и повторная подписка накапливала обработчики — выбор
+        // категории перезагружал список несколько раз.
+        if (!_деревоКатегорийПодписано)
+        {
+            _деревоКатегорийПодписано = true;
+            _деревоКатегорий.AfterSelect += ВыбратьКатегорию;
+        }
+    }
+
+    /// <summary>
+    /// Фильтрует адресную книгу по выбранной категории дерева (ТЗ §8.1).
+    /// </summary>
+    /// <param name="отправитель">Источник события.</param>
+    /// <param name="событие">Аргументы выбора узла.</param>
+    private void ВыбратьКатегорию(object? отправитель, TreeViewEventArgs событие)
+    {
+        if (событие.Node?.Tag is not long идентификатор)
+        {
+            return;
+        }
+
+        _поиск.ЗадатьФильтрГрупп(идентификатор);
+        _ = ОбновитьПолучателейAsync();
     }
 
     /// <summary>
@@ -2071,7 +2123,13 @@ public sealed class MainShell : Form
         _таблицаОтправленных.Columns.Add("Создано", "Создано");
         _таблицаОтправленных.Columns.Add("Напечатано", "Напечатано");
         _таблицаОтправленных.Columns.Add("Отправлено", "Отправлено");
-        _таблицаОтправленных.MouseDown += ОтправитьПеретаскиваниеПисьма;
+        // Подписка однократная (F-E10): загрузка списка выполняется при
+        // каждом обновлении, и повторная подписка накапливала обработчики.
+        if (!_перетаскиваниеПисемПодписано)
+        {
+            _перетаскиваниеПисемПодписано = true;
+            _таблицаОтправленных.MouseDown += ОтправитьПеретаскиваниеПисьма;
+        }
 
         foreach (var письмо in страница.Items)
         {
@@ -3837,11 +3895,9 @@ public sealed class MainShell : Form
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        if (keyData == (Keys.Control | Keys.Space))
-        {
-            // Глобальная горячая клавиша обрабатывается сообщением WM_HOTKEY.
-            return true;
-        }
+        // Ctrl+Space перехватывается системой как глобальная горячая клавиша
+        // (WM_HOTKEY в WndProc, F-E8): в ProcessCmdKey не попадает и не
+        // блокируется.
 
         if (keyData == (Keys.Control | Keys.F))
         {
@@ -4071,6 +4127,9 @@ public sealed class MainShell : Form
     {
         base.OnHandleCreated(e);
 
+        // Регистрация на окно (F-E8): сообщение WM_HOTKEY доставляется
+        // в WndProc главного окна; прежде сочетание регистрировалось на поток
+        // с нулевым дескриптором, и сообщение в окно не попадало.
         _глобальнаяГорячаяКлавиша = GlobalHotKey.CtrlSpace(() =>
         {
             if (IsDisposed)
@@ -4079,7 +4138,7 @@ public sealed class MainShell : Form
             }
 
             BeginInvoke(() => СвернутьВОбластьУведомлений());
-        });
+        }, Handle);
 
         _глобальнаяГорячаяКлавиша.Зарегистрировать();
     }

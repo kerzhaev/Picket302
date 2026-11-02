@@ -46,7 +46,11 @@ public sealed class FormCounterpartyEdit : Form
     private readonly TextBox _оквед = new();
     private readonly TextBox _телефон = new();
     private readonly TextBox _почта = new();
-    private readonly TextBox _примечание = new();
+    private readonly TextBox _примечание = new()
+    {
+        Multiline = true,
+        Height = 60,
+    };
 
     /// <summary>
     /// Источник данных контрагента: «Импорт &lt;формат&gt; от &lt;дата&gt; из
@@ -188,7 +192,9 @@ public sealed class FormCounterpartyEdit : Form
         var реквизиты = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 165,
+
+            // Высота с запасом на строку многострочного примечания (F-E13).
+            Height = 230,
             ColumnCount = 4,
             AutoSize = false,
         };
@@ -209,6 +215,10 @@ public sealed class FormCounterpartyEdit : Form
         ДобавитьПоле(реквизиты, 0, 8, "Телефон:", _телефон);
         ДобавитьПоле(реквизиты, 0, 9, "Эл. почта:", _почта);
         ДобавитьПоле(реквизиты, 0, 10, "Источник:", _источник);
+
+        // Примечание выводится на форме (F-E13): прежде поле создавалось,
+        // но в сетку реквизитов не попадало, и ввод не отображался.
+        ДобавитьПоле(реквизиты, 0, 11, "Примечание:", _примечание);
 
         var панельАдресов = new Panel { Dock = DockStyle.Top, Height = 470 };
 

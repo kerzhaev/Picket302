@@ -32,6 +32,12 @@ public sealed class FormCalculator : Form
     private bool _новыйВвод = true;
 
     /// <summary>
+    /// Буфер ввода числа (F-E15): прежде «,» прибавляла 0,1 к числу, и
+    /// дробный ввод был невозможен.
+    /// </summary>
+    private string _буферВвода = string.Empty;
+
+    /// <summary>
     /// Создаёт калькулятор.
     /// </summary>
     public FormCalculator()
@@ -145,6 +151,7 @@ public sealed class FormCalculator : Form
                 _текущее = 0;
                 _знакОперации = string.Empty;
                 _новыйВвод = true;
+                _буферВвода = string.Empty;
                 break;
 
             case "=":
@@ -165,6 +172,7 @@ public sealed class FormCalculator : Form
 
                     _знакОперации = string.Empty;
                     _новыйВвод = true;
+                    _буферВвода = string.Empty;
                 }
 
                 break;
@@ -177,31 +185,60 @@ public sealed class FormCalculator : Form
                 _накопитель = _текущее;
                 _знакОперации = клавиша;
                 _новыйВвод = true;
+                _буферВвода = string.Empty;
                 break;
 
             case ",":
+                // Запятая добавляется в буфер один раз (F-E15).
                 if (_новыйВвод)
                 {
-                    _текущее = 0;
+                    _буферВвода = "0";
                     _новыйВвод = false;
                 }
 
-                _текущее += 0.1;
+                if (!_буферВвода.Contains(','))
+                {
+                    _буферВвода += ",";
+                }
+
+                _текущее = РазобратьБуфер();
                 break;
 
             default:
                 if (char.IsDigit(клавиша[0]))
                 {
-                    var цифра = клавиша[0] - '0';
+                    if (_новыйВвод)
+                    {
+                        _буферВвода = string.Empty;
+                        _новыйВвод = false;
+                    }
 
-                    _текущее = _новыйВвод ? цифра : (_текущее * 10) + цифра;
-                    _новыйВвод = false;
+                    _буферВвода += клавиша;
+                    _текущее = РазобратьБуфер();
                 }
 
                 break;
         }
 
         ОбновитьДисплей();
+    }
+
+    /// <summary>
+    /// Разбирает буфер ввода в число; пустой или испорченный буфер даёт ноль.
+    /// </summary>
+    /// <returns>Число из буфера ввода.</returns>
+    private double РазобратьБуфер()
+    {
+        if (_буферВвода.Length == 0)
+        {
+            return 0;
+        }
+
+        return double.TryParse(
+            _буферВвода,
+            NumberStyles.Float,
+            CultureInfo.CurrentCulture,
+            out var число) ? число : 0;
     }
 
     /// <summary>

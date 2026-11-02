@@ -34,6 +34,18 @@ public sealed class ComRegistration
     /// <summary>Корневой путь ветки классов по умолчанию.</summary>
     public const string DefaultClassesRoot = @"Software\Classes";
 
+    /// <summary>
+    /// CLSID универсального маршалера автоматизации oleaut32.dll
+    /// ({00020424-0000-0000-C000-000000000046}) для ветки ProxyStubClsid32
+    /// интерфейса (F-E19).
+    /// </summary>
+    public const string ProxyStubClsid32 = "{00020424-0000-0000-C000-000000000046}";
+
+    /// <summary>
+    /// Число методов интерфейса IPEProApplication по IDL (F-E19).
+    /// </summary>
+    public const string NumMethodsIPEProApplication = "11";
+
     /// <summary>Идентификатор приложения (AppID) сервера автоматизации.</summary>
     public const string AppId = ComAutomationIds.ClassId;
 
@@ -132,7 +144,13 @@ public sealed class ComRegistration
                    writable: true))
         {
             интерфейс?.SetValue(string.Empty, "IPEProApplication", RegistryValueKind.String);
-            интерфейс?.SetValue("ProxyStub32", "oleaut32.dll", RegistryValueKind.String);
+
+            // Универсальный маршалер автоматизации (F-E19): ветка
+            // ProxyStubClsid32 с CLSID стандартного прокси oleaut32.dll и
+            // число методов интерфейса по IDL. Значение «ProxyStub32 =
+            // oleaut32.dll» не читается системой и маршалера не назначает.
+            интерфейс?.SetValue("ProxyStubClsid32", "{00020424-0000-0000-C000-000000000046}", RegistryValueKind.String);
+            интерфейс?.SetValue("NumMethods", NumMethodsIPEProApplication, RegistryValueKind.String);
 
             // Ссылка на библиотеку типов: без неё невозможен экспорт сведений
             // о типе (ITypeInfo) для интерфейса, а значит и работа клиента
