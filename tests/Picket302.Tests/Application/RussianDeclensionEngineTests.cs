@@ -137,4 +137,42 @@ public sealed class RussianDeclensionEngineTests
 
         Assert.Equal("г. Москва, ул. Тверская, д. 12", результат);
     }
+
+    /// <summary>
+    /// Регрессия F-C2: слова на «-ия» проверяются до общей ветви «-я».
+    /// Прежде «Мария» склонялась как «Марие».
+    /// </summary>
+    [Fact]
+    public void Declinename_ИмяНаИя_СклоняетсяПоПравиламИя()
+    {
+        Assert.Equal("Марии", _движок.Declinename("Мария", GrammaticalCase.Genitive));
+        Assert.Equal("Марии", _движок.Declinename("Мария", GrammaticalCase.Dative));
+        Assert.Equal("Марией", _движок.Declinename("Мария", GrammaticalCase.Instrumental));
+        Assert.Equal("Марии", _движок.Declinename("Мария", GrammaticalCase.Prepositional));
+    }
+
+    /// <summary>
+    /// Регрессия F-C3: отчества «-ична» склоняются единым путём замены «на».
+    /// Прежнее особое усечение «-ична» на 4 символа давало «Никитны».
+    /// </summary>
+    [Fact]
+    public void Declinename_ОтчествоНаИчна_СклоняетсяБезУсечкиОсновы()
+    {
+        Assert.Equal("Никитичны", _движок.Declinename("Никитична", GrammaticalCase.Genitive));
+        Assert.Equal("Никитичне", _движок.Declinename("Никитична", GrammaticalCase.Dative));
+        Assert.Equal("Никитичной", _движок.Declinename("Никитична", GrammaticalCase.Instrumental));
+        Assert.Equal("Ильиничны", _движок.Declinename("Ильинична", GrammaticalCase.Genitive));
+    }
+
+    /// <summary>
+    /// Регрессия F-C3: отчество «-овна» и фамилии/имена на «-а»/-ый не
+    /// повреждены единым путём.
+    /// </summary>
+    [Fact]
+    public void Declinename_ЖенскиеИменаИФамилии_НеЛомаются()
+    {
+        Assert.Equal("Петровны", _движок.Declinename("Петровна", GrammaticalCase.Genitive));
+        Assert.Equal("Натальи", _движок.Declinename("Наталья", GrammaticalCase.Genitive));
+        Assert.Equal("Иванову", _движок.Declinename("Иванов", GrammaticalCase.Dative));
+    }
 }

@@ -193,7 +193,10 @@ public sealed class MachineIdentity
                 return null;
             }
 
-            using var ветка = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SYSTEM");
+            // Значения вида \DosDevices\C: лежат в ветке MountedDevices
+            // (F-C1): прежде читалась ветка SYSTEM, в которой этих значений
+            // нет, и отпечаток тома всегда был пустым.
+            using var ветка = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\MountedDevices");
 
             if (ветка is null)
             {
