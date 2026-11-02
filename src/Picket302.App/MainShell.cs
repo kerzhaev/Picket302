@@ -259,6 +259,12 @@ public sealed class MainShell : Form
     public AppServices? ТекущийСостав => _состав;
 
     /// <summary>
+    /// Текущий текст прямого набора в адресной книге: точка доступа
+    /// автоматических проверок (F-E6).
+    /// </summary>
+    public string ПрямойНабор => _поиск.ПрямойНабор;
+
+    /// <summary>
     /// Формирует действующие условия отбора и сортировки адресной книги:
     /// сортировка по выбранной колонке и условия применённого сохранённого
     /// фильтра (ТЗ §8.1, функция 9).
@@ -991,6 +997,7 @@ public sealed class MainShell : Form
         _таблицаПолучателей.SelectionChanged += (_, _) => ОбновитьВыделенное();
         _таблицаПолучателей.CellDoubleClick += (_, _) => ИзменитьПолучателя();
         _таблицаПолучателей.KeyDown += ОбработатьНаборВТаблице;
+        _таблицаПолучателей.KeyPress += ОбработатьНаборВТаблицеПоСимволу;
 
         var контекстноеМеню = new ContextMenuStrip { Font = new Font("Tahoma", 8f) };
         _пунктИзбранного.Checked = false;
@@ -2208,6 +2215,9 @@ public sealed class MainShell : Form
     /// </summary>
     private void ОбработатьНаборВТаблице(object? отправитель, KeyEventArgs аргументы)
     {
+        // Символьный ввод обрабатывается в KeyPress (F-E6): виртуальный код
+        // клавиши не зависит от раскладки и давал латиницу вместо кириллицы.
+
         if (аргументы.KeyCode == Keys.Escape)
         {
             аргументы.Handled = true;
@@ -2222,18 +2232,25 @@ public sealed class MainShell : Form
 
         if (аргументы.KeyCode == Keys.Back)
         {
+            аргументы.Handled = true;
             _поиск.УдалитьИзПрямогоНабора();
+            _ = ОбновитьПолучателейAsync();
         }
-        else if (!char.IsControl((char)аргументы.KeyCode))
-        {
-            _поиск.ДобавитьВПрямойНабор((char)аргументы.KeyCode);
-        }
-        else
+    }
+
+    /// <summary>
+    /// Добавляет введённый символ в прямой набор: событие KeyPress даёт
+    /// символ текущей раскладки (F-E6).
+    /// </summary>
+    private void ОбработатьНаборВТаблицеПоСимволу(object? отправитель, KeyPressEventArgs аргументы)
+    {
+        if (char.IsControl(аргументы.KeyChar))
         {
             return;
         }
 
         аргументы.Handled = true;
+        _поиск.ДобавитьВПрямойНабор(аргументы.KeyChar);
         _ = ОбновитьПолучателейAsync();
     }
 
@@ -2887,7 +2904,7 @@ public sealed class MainShell : Form
         }
 
         await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
-        await ЗагрузитьКатегорииAsync(_состав, CancellationToken.None).ConfigureAwait(false);
+        await ЗагрузитьКатегорииAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         await ЗагрузитьРассылкиAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
     }
