@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Windows.Forms;
 using Picket302.App.UI.Forms;
 using Picket302.Domain.Contracts;
 using Picket302.Infrastructure.Repositories;
@@ -300,5 +301,57 @@ public sealed class ImportWizardFormTests
         var сохранённые = await репозиторий.GetAllAsync();
 
         Assert.Contains(сохранённые, группа => группа.Name == "Поставщики");
+    }
+
+    /// <summary>
+    /// Регрессия F-E4: переход на шаг «Начало импорта и категория» загружает
+    /// категории в список. Прежде ОбновитьКатегории вызывался под флагом
+    /// _обновление и молча пропускался.
+    /// </summary>
+    [Fact]
+    public async Task Мастер_ШагНачала_КатегорииЗагружаютсяВСписок()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var репозиторий = new GroupRepository(база.Session);
+
+        await репозиторий.AddAsync(new Picket302.Domain.Entities.Group { Name = "Клиенты" });
+
+        var контроллер = new ImportWizardController(null, репозиторий);
+
+        using var форма = new FormImportWizard(контроллер);
+
+        var путь = ЗаписатьФайл();
+
+        try
+        {
+            Assert.True(форма.ВыбратьФайл(путь));
+            Assert.True(форма.ПерейтиВперёд());
+
+            Assert.Equal(ImportWizardStep.StartRowAndGroup, форма.Шаг);
+
+            // Загрузка категорий асинхронная: ожидаем появления пунктов.
+            var крайнийСрок = DateTime.UtcNow.AddSeconds(5);
+
+            while (DateTime.UtcNow < крайнийСрок && форма.ПунктыКатегорий.Count == 0)
+            {
+                await Task.Delay(50);
+            }
+
+            // «(без категории)» и «Создать категорию…» плюс загруженные группы.
+            Assert.True(
+                форма.ПунктыКатегорий.Count >= 3,
+                $"Категории должны быть загружены в список; фактически: [{string.Join("; ", форма.ПунктыКатегорий)}].");
+
+            Assert.Contains(
+                форма.ПунктыКатегорий,
+                элемент => элемент is Picket302.Domain.Entities.Group группа && группа.Name == "Клиенты");
+        }
+        finally
+        {
+            if (File.Exists(путь))
+            {
+                File.Delete(путь);
+            }
+        }
     }
 }

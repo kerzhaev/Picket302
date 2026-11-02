@@ -165,6 +165,14 @@ public sealed class FormImportWizard : Form
     public string ЗаголовокШага => _заголовок.Text;
 
     /// <summary>
+    /// Пункты списка категорий на шаге «Начало импорта и категория»:
+    /// точка доступа автоматических проверок (F-E4).
+    /// </summary>
+    public IReadOnlyList<object> ПунктыКатегорий => _категория.Items
+        .Cast<object>()
+        .ToList();
+
+    /// <summary>
     /// Подписи трёх политик импорта финального экрана — их набор зафиксирован
     /// ТЗ и не расширяется.
     /// </summary>
@@ -892,7 +900,9 @@ public sealed class FormImportWizard : Form
                 break;
 
             case ImportWizardStep.StartRowAndGroup:
-                ОбновитьКатегории();
+                // Принудительное обновление: шаг показывается под флагом
+                // _обновление, и guard без force пропускал загрузку (F-E4).
+                ОбновитьКатегории(force: true);
                 break;
 
             case ImportWizardStep.ColumnMapping:
@@ -945,16 +955,25 @@ public sealed class FormImportWizard : Form
         }
     }
 
-    private async void ОбновитьКатегории()
+    /// <summary>
+    /// Загружает категории адресной книги в выбор шага «Начало и категория»
+    /// (ТЗ §8.12, функция 159).
+    /// </summary>
+    /// <param name="force">Принудительное обновление при активном флаге
+    /// <c>_обновление</c> (показ шага из <see cref="ПоказатьШаг"/>).</param>
+    private async void ОбновитьКатегории(bool force = false)
     {
-        if (_обновление)
+        if (_обновление && !force)
         {
             return;
         }
 
         var группы = await _контроллер.LoadCategoriesAsync().ConfigureAwait(true);
 
-        if (_обновление || IsDisposed)
+        // Принудительное обновление выполняется внутри показа шага: загрузка
+        // нередко завершается синхронно, когда флаг _обновление ещё активен
+        // (F-E4), поэтому пост-проверка на force не распространяется.
+        if ((!force && _обновление) || IsDisposed)
         {
             return;
         }

@@ -196,7 +196,21 @@ public sealed class FormExternalDbImport : Form
         _соответствие.RowHeadersVisible = false;
         _соответствие.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _соответствие.Columns.Add("Колонка", "Колонка базы");
-        _соответствие.Columns.Add("Поле", "Поле адресной книги");
+
+        // Поле адресной книги выбирается выпадающим списком (F-E5): прежде
+        // второй столбец был текстовым, ячейки ComboBox не создавались, и
+        // сопоставление полей оставалось пустым.
+        var поле = new DataGridViewComboBoxColumn
+        {
+            Name = "Поле",
+            HeaderText = "Поле адресной книги",
+            FlatStyle = FlatStyle.Flat,
+        };
+
+        поле.Items.Add("— не использовать —");
+        поле.Items.AddRange(ОписанияПолей());
+
+        _соответствие.Columns.Add(поле);
 
         Controls.Add(метка);
         Controls.Add(_соответствие);
@@ -333,19 +347,11 @@ public sealed class FormExternalDbImport : Form
 
         foreach (var колонка in результат.Value)
         {
-            _соответствие.Rows.Add(колонка);
-            var строка = _соответствие.Rows[_соответствие.Rows.Count - 1];
-            var поле = строка.Cells[1] as DataGridViewComboBoxCell;
+            var индекс = _соответствие.Rows.Add(колонка);
+            var строка = _соответствие.Rows[индекс];
+            var поле = (DataGridViewComboBoxCell)строка.Cells[1];
 
-            if (поле is null)
-            {
-                continue;
-            }
-
-            поле.Items.Clear();
-            поле.Items.Add("— не использовать —");
-            поле.Items.AddRange(ОписанияПолей());
-
+            // Прогрев CreateAuto пишет выбранное поле в ячейку списка (F-E5).
             var найденное = НайтиПолеПоКолонке(автоматическое, колонка);
 
             поле.Value = найденное is null
