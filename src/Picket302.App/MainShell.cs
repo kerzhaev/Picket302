@@ -47,7 +47,21 @@ public sealed class MainShell : Form
     private const int ИдентификаторГорячейКлавиши = 0xA302;
     private const int СообщениеГорячейКлавиши = 0x0312;
 
-    private readonly AppServices? _состав;
+    /// <summary>
+    /// Действующий состав приложения. Присваивается в конструкторе с составом
+    /// либо при инициализации (путь по умолчанию): прежде поле было только
+    /// для чтения и оставалось пустым, из-за чего обработчики молча пропускали
+    /// работу с базой данных.
+    /// </summary>
+    private AppServices? _состав;
+
+    /// <summary>
+    /// Признак того, что состав создан самой оболочкой (путь по умолчанию):
+    /// такой состав освобождается при закрытии окна, состав, переданный
+    /// снаружи, остаётся во владении вызывающего.
+    /// </summary>
+    private bool _составСозданоВнутри;
+
     private readonly SearchSession _поиск = new();
     private readonly List<long> _выбранныеОтправители = [];
     private readonly List<long> _выбранныеПолучатели = [];
@@ -230,6 +244,12 @@ public sealed class MainShell : Form
     /// Надпись срока пробного периода: осталось дней (ТЗ §8.10, функция 119).
     /// </summary>
     public Label ИндикаторЛицензии => _лицензия;
+
+    /// <summary>
+    /// Действующий состав приложения: точка доступа автоматических проверок;
+    /// до инициализации — <see langword="null"/>.
+    /// </summary>
+    public AppServices? ТекущийСостав => _состав;
 
     /// <summary>
     /// Формирует действующие условия отбора и сортировки адресной книги:
@@ -428,13 +448,55 @@ public sealed class MainShell : Form
     /// <param name="состав">Состав приложения; при <see langword="null"/> используется
     /// путь по умолчанию.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
-    public async Task ИнициализироватьAsync(
+    public Task ИнициализироватьAsync(
         AppServices? состав = null,
         CancellationToken cancellationToken = default)
+        => ИнициализироватьЯдроAsync(состав, AppServices.ПутьБазыПоУмолчанию(), cancellationToken);
+
+    /// <summary>
+    /// Инициализирует окно с составом, созданным по указанному пути базы
+    /// данных: точка повторного подключения («Открыть базу…») и автоматических
+    /// проверок, которым недоступен путь по умолчанию.
+    /// </summary>
+    /// <param name="путьБазы">Путь к файлу базы данных.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    public Task ИнициализироватьAsync(
+        string путьБазы,
+        CancellationToken cancellationToken = default)
+        => ИнициализироватьЯдроAsync(null, путьБазы, cancellationToken);
+
+    /// <summary>
+    /// Общая цепочка инициализации: получает состав (создаёт при
+    /// необходимости), открывает данные и применяет оформление.
+    /// </summary>
+    /// <param name="состав">Переданный состав; при <see langword="null"/> состав
+    /// создаётся по <paramref name="путьБазы"/>.</param>
+    /// <param name="путьБазы">Путь к файлу базы данных.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    private async Task ИнициализироватьЯдроAsync(
+        AppServices? состав,
+        string путьБазы,
+        CancellationToken cancellationToken)
     {
-        var активный = состав ?? _состав ?? await AppServices
-            .СоздатьAsync(AppServices.ПутьБазыПоУмолчанию(), true, cancellationToken)
-            .ConfigureAwait(true);
+        if (состав is not null)
+        {
+            // Состав передан снаружи: владение остаётся у вызывающего.
+            _состав = состав;
+            _составСозданоВнутри = false;
+        }
+        else if (_состав is null)
+        {
+            _состав = await AppServices
+                .СоздатьAsync(путьБазы, true, cancellationToken)
+                .ConfigureAwait(true);
+            _составСозданоВнутри = true;
+        }
+
+        var активный = _состав!;
+
+        // Подключение к базе состоялось: после первого подключения имя базы
+        // данных изменению не подлежит (ТЗ §8.11, функция 127).
+        активный.МенеджерПодключения.MarkConnectionEstablished();
 
         _оформление = await активный.НастройкиОтображения.LoadAppearanceAsync(cancellationToken)
             .ConfigureAwait(true);
@@ -3949,6 +4011,16 @@ public sealed class MainShell : Form
         {
             _глобальнаяГорячаяКлавиша?.Dispose();
             _глобальнаяГорячаяКлавиша = null;
+
+            // Состав, созданный оболочкой по пути по умолчанию, освобождается
+            // вместе с окном; переданный конструктором остаётся во владении
+            // вызывающего. Закрытие соединения SQLite не требует потока
+            // интерфейса, синхронное ожидание здесь безопасно.
+            if (_составСозданоВнутри && _состав is not null)
+            {
+                _состав.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                _состав = null;
+            }
         }
 
         base.Dispose(disposing);
