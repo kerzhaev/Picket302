@@ -300,7 +300,7 @@ public sealed class DistributionServiceTests
         // Адрес получателя в обоих письмах — адрес центрального контрагента.
         Assert.All(письма, письмо =>
         {
-            Assert.Equal("ООО «Центральный»", письмо.RecipientAddress.Lines[0]);
+            Assert.Equal("ООО «Центральный»", письмо.RecipientAddress!.Lines[0]);
             Assert.Equal(центральный, письмо.CounterpartyId);
         });
 

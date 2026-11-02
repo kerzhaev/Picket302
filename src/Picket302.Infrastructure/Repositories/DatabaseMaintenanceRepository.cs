@@ -27,6 +27,12 @@ public sealed class DatabaseMaintenanceRepository : IDatabaseMaintenanceReposito
             .ExecuteScalarAsync<long>("SELECT COUNT(*) FROM groups;", cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
+        // Самоссылающийся ключ parent_id не имеет ON DELETE-правила: ссылки
+        // на родительские категории обнуляются до удаления (F-B7).
+        await _сессия.ExecuteAsync(
+            "UPDATE groups SET parent_id = NULL WHERE parent_id IS NOT NULL;",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
         await _сессия.ExecuteAsync(
             "DELETE FROM groups;",
             cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -73,8 +79,19 @@ public sealed class DatabaseMaintenanceRepository : IDatabaseMaintenanceReposito
             .ConfigureAwait(false);
 
         // У письма получатель обязателен (mails.counterparty_id NOT NULL), поэтому
-        // письма удаляются вместе с контрагентами: у активных рассылок получатели
-        // обнуляются каскадно (ТЗ §8.12, функция 153).
+        // письма удаляются вместе с контрагентами. Ссылки без ON DELETE-правила
+        // обнуляются до удаления (F-B6): sender_id рассылок и counterparty_id
+        // описей остаются со значениями NULL (ТЗ §8.12, функция 153: очистка
+        // адресной книги не удаляет рассылки и описи — вопрос подтверждения
+        // каскадного удаления см. в комментариях к промпту фикса).
+        await _сессия.ExecuteAsync(
+            "UPDATE distributions SET sender_id = NULL;",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        await _сессия.ExecuteAsync(
+            "UPDATE inventories SET counterparty_id = NULL;",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
         await _сессия.ExecuteAsync(
             "DELETE FROM mails;",
             cancellationToken: cancellationToken).ConfigureAwait(false);
