@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -9,13 +8,15 @@ using Xunit;
 namespace Picket302.Tests.Infrastructure;
 
 /// <summary>
-/// Регрессии F-B1 и F-B2: собственный SMTP-клиент против минимального
-/// эмулятора сервера на <see cref="TcpListener"/>.
+/// Регрессии F-B1, F-B2, F-B8 и F-B9: собственный SMTP-клиент против
+/// минимального эмулятора сервера на <see cref="TcpListener"/>.
 ///
 /// F-B1 — промежуточные коды 334/354 прежде считались отказом: после AUTH
 /// PLAIN токен уходил в фолбэк LOGIN, ответ на DATA прерывал передачу тела.
 /// F-B2 — при включённом прокси сокет подключался к SMTP-серверу напрямую,
 /// и CONNECT уходил не по адресу.
+/// F-B8 — невалидный получатель даёт отказ без открытия SMTP-сессии.
+/// F-B9 — отпечаток отклонённого сертификата сбрасывается при новой отправке.
 /// </summary>
 public sealed class SmtpFakeServerTests
 {
@@ -84,6 +85,74 @@ public sealed class SmtpFakeServerTests
 
         Assert.Equal($"\0{Логин}\0{Пароль}", DecodeBase64(токен));
         Assert.Contains("QUIT", сервер.Команды);
+    }
+
+    /// <summary>
+    /// Регрессия F-B8: невалидный получатель даёт отказ без SMTP-сессии
+    /// для него; валидный получатель отправляется.
+    /// </summary>
+    [Fact]
+    public void Отправка_НевалидныйПолучатель_ОтказБезСессии()
+    {
+        using var сервер = ФейковыйSmtp.Запустить("LOGIN");
+
+        var опции = new SmtpOptions();
+        var клиент = new SmtpClientFacade(
+            new SmtpSettings
+            {
+                Server = "127.0.0.1",
+                Port = сервер.Порт,
+                Login = Логин,
+                ProtectedPassword = опции.ProtectPassword(Пароль),
+                SslMode = SslMode.None,
+            });
+
+        var письмо = new MailMessage(["dest@example.test", "плохой адрес"])
+        {
+            From = "sender@example.test",
+            Body = "Тело",
+        };
+
+        var результаты = клиент.Send(письмо);
+
+        // Один отказ по невалидному адресу, одна отправка по валидному.
+        Assert.Equal(1, результаты.FailedCount);
+        Assert.Equal(1, результаты.SentCount);
+
+        var отказ = результаты.Results.Single(результат => !результат.IsSuccess);
+
+        Assert.Equal("плохой адрес", отказ.Recipient);
+        Assert.Contains("Неверный формат адреса получателя", отказ.Error, StringComparison.Ordinal);
+
+        // Сервер увидел ровно один RCPT TO: сессии для невалидного адреса
+        // не открывалось.
+        Assert.Equal(1, сервер.Команды.Count(команда => команда.StartsWith("RCPT TO", StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    /// Регрессия F-B9: отпечаток отклонённого сертификата не переживает
+    /// успешную отправку — сброс в начале сессии работает.
+    /// </summary>
+    [Fact]
+    public void Отправка_УспешнаяСессия_ОтпечатокОтклоненияПуст()
+    {
+        using var сервер = ФейковыйSmtp.Запустить("LOGIN");
+
+        var опции = new SmtpOptions();
+        var клиент = new SmtpClientFacade(
+            new SmtpSettings
+            {
+                Server = "127.0.0.1",
+                Port = сервер.Порт,
+                Login = Логин,
+                ProtectedPassword = опции.ProtectPassword(Пароль),
+                SslMode = SslMode.None,
+            });
+
+        var результат = клиент.SendOne(Письмо());
+
+        Assert.True(результат.IsSuccess, результат.Error ?? "Отправка не удалась.");
+        Assert.Equal(string.Empty, клиент.ОтклонённыйОтпечаток);
     }
 
     [Fact]

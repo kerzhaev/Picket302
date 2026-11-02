@@ -285,7 +285,9 @@ public sealed class SmtpClientFacade
         if (разобранный.Адрес.Contains(' ', StringComparison.Ordinal)
             || разобранный.Адрес.Contains(',', StringComparison.Ordinal)
             || разобранный.Адрес.Contains('<', StringComparison.Ordinal)
-            || разобранный.Адрес.Contains('>', StringComparison.Ordinal))
+            || разобранный.Адрес.Contains('>', StringComparison.Ordinal)
+            || разобранный.Адрес.Contains('\r', StringComparison.Ordinal)
+            || разобранный.Адрес.Contains('\n', StringComparison.Ordinal))
         {
             ошибка = "адрес содержит недопустимые символы";
             return false;
@@ -412,6 +414,70 @@ public sealed class SmtpClientFacade
             return [SendResult.Failure(string.Empty, 0, null, "Не задан получатель письма.")];
         }
 
+        // Валидация адресов до открытия SMTP-сессии (F-B8): невалидные адреса
+        // (включая переводы строк — защиту от SMTP-инъекции) дают отказ по
+        // каждому такому адресу без соединения с сервером.
+        var невалидные = new List<string>();
+        var валидные = new List<string>();
+
+        foreach (var адрес in адреса)
+        {
+            if (ПроверитьАдрес(адрес, out var ошибкаАдреса))
+            {
+                // Нормализация: адрес приводится к виду без имени в угловых
+                // скобках (метод есть в ПроверитьАдрес — повторяем разбор).
+                валидные.Add(РазобратьАдрес(адрес).Адрес);
+            }
+            else
+            {
+                невалидные.Add(адрес);
+            }
+        }
+
+        if (невалидные.Count > 0)
+        {
+            var список = string.Join(
+                ", ",
+                невалидные.Select(адрес => $"'{адрес}'"));
+
+            List<SendResult> отказы = невалидные
+                .Select(адрес => SendResult.Failure(
+                    адрес,
+                    0,
+                    null,
+                    string.Create(
+                        CultureInfo.CurrentCulture,
+                        $"Неверный формат адреса получателя '{адрес}'.")))
+                .ToList();
+
+            if (валидные.Count == 0)
+            {
+                return отказы;
+            }
+
+            // Сессия открывается только для валидных адресов; отказы по
+            // невалидным добавляются к итогам.
+            var результатыВалидных = ОтправитьВалидным(message, валидные, ct);
+
+            return [.. отказы, .. результатыВалидных];
+        }
+
+        return ОтправитьВалидным(message, валидные, ct);
+    }
+
+    /// <summary>
+    /// Открывает SMTP-сессию и отправляет письмо проверенным получателям
+    /// (F-B8): отделяет сетевой диалог от валидации адресов.
+    /// </summary>
+    /// <param name="message">Письмо.</param>
+    /// <param name="адреса">Проверенные адреса получателей.</param>
+    /// <param name="ct">Токен отмены.</param>
+    /// <returns>Результаты отправки.</returns>
+    private IReadOnlyList<SendResult> ОтправитьВалидным(
+        MailMessage message,
+        IReadOnlyList<string> адреса,
+        CancellationToken ct)
+    {
         var отправитель = string.IsNullOrWhiteSpace(message.From) ? АдресОтправителя : message.From.Trim();
 
         if (!ПроверитьАдрес(отправитель, out var ошибкаОтправителя))
@@ -516,6 +582,9 @@ public sealed class SmtpClientFacade
         IReadOnlyList<string> адреса,
         CancellationToken ct)
     {
+        // Сброс следа отклонённого сертификата от предыдущей сессии (F-B9).
+        ОтклонённыйОтпечаток = string.Empty;
+
         using var сессия = СоздатьСоединение();
 
         сессия.Подключиться(ct);
@@ -525,17 +594,9 @@ public sealed class SmtpClientFacade
         // уходит в TLS-порт открытым текстом и сервер разрывает соединение.
         if (РежимЗащиты == SslMode.ImplicitTls)
         {
-            сессия.ПерейтиВЗащищённыйРежим(ПроверитьСертификат);
-
-            if (!string.IsNullOrEmpty(ОтклонённыйОтпечаток))
+            if (!ПерейтиВЗащищённыйРежимПоУмолчанию(сессия, адреса, out var ошибкаСертификата))
             {
-                return ОшибкаДляВсех(
-                    адреса,
-                    0,
-                    null,
-                    string.Create(
-                        CultureInfo.CurrentCulture,
-                        $"{CertificateRejectedMessage} (отпечаток {ОтклонённыйОтпечаток})."));
+                return ошибкаСертификата;
             }
         }
 
@@ -574,17 +635,11 @@ public sealed class SmtpClientFacade
                     string.Create(CultureInfo.CurrentCulture, $"Сервер отклонил STARTTLS: {ответStartTls.Text}"));
             }
 
-            сессия.ПерейтиВЗащищённыйРежим(ПроверитьСертификат);
-
-            if (!string.IsNullOrEmpty(ОтклонённыйОтпечаток))
+            // Отклонение сертификата фиксируется AuthenticationException из
+            // рукопожатия с отпечатком в ОтклонённыйОтпечаток (F-B9).
+            if (!ПерейтиВЗащищённыйРежимПоУмолчанию(сессия, адреса, out var ошибкаСертификата))
             {
-                return ОшибкаДляВсех(
-                    адреса,
-                    0,
-                    null,
-                    string.Create(
-                        CultureInfo.CurrentCulture,
-                        $"{CertificateRejectedMessage} (отпечаток {ОтклонённыйОтпечаток})."));
+                return ошибкаСертификата;
             }
 
             возможности = ВыполнитьEHLO(сессия, адреса);
@@ -696,6 +751,60 @@ public sealed class SmtpClientFacade
         }
 
         return результаты;
+    }
+
+    /// <summary>
+    /// Переводит сессию в защищённый режим и формирует отказ по отклонённому
+    /// сертификату (F-B9): AuthenticationException от рукопожатия перехватывается,
+    /// отпечаток отклонённого сертификата читается из
+    /// <see cref="ОтклонённыйОтпечаток"/>.
+    /// </summary>
+    /// <param name="сессия">SMTP-сессия.</param>
+    /// <param name="адреса">Адреса получателей (для сообщения об ошибке).</param>
+    /// <param name="ошибка">Готовый отказ; пусто — переход выполнен.</param>
+    /// <returns><see langword="true"/>, если переход выполнен.</returns>
+    private bool ПерейтиВЗащищённыйРежимПоУмолчанию(
+        SmtpSession сессия,
+        IReadOnlyList<string> адреса,
+        out IReadOnlyList<SendResult> ошибка)
+    {
+        try
+        {
+            сессия.ПерейтиВЗащищённыйРежим(ПроверитьСертификат);
+        }
+        catch (AuthenticationException)
+        {
+            var отпечаток = string.IsNullOrEmpty(ОтклонённыйОтпечаток)
+                ? "отпечаток не определён"
+                : ОтклонённыйОтпечаток;
+
+            ошибка = ОшибкаДляВсех(
+                адреса,
+                0,
+                null,
+                string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"{CertificateRejectedMessage} (отпечаток {отпечаток})."));
+
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(ОтклонённыйОтпечаток))
+        {
+            ошибка = ОшибкаДляВсех(
+                адреса,
+                0,
+                null,
+                string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"{CertificateRejectedMessage} (отпечаток {ОтклонённыйОтпечаток})."));
+
+            return false;
+        }
+
+        ошибка = Array.Empty<SendResult>();
+
+        return true;
     }
 
     /// <summary>
@@ -1355,9 +1464,15 @@ internal sealed class SmtpSession : IDisposable
     /// Передаёт тело письма и завершает его командой «.» (RFC 5321).
     /// </summary>
     /// <param name="тело">Текст письма.</param>
+    /// <remarks>
+    /// Строки собираются в один буфер и записываются одним вызовом с одним
+    /// Flush (F-B13): построчная запись с AutoFlush на каждой строке вызывала
+    /// сетевую отправку на каждую строку, что замедляло большие письма.
+    /// </remarks>
     public void ОтправитьТело(string тело)
     {
         var строки = тело.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var буфер = new StringBuilder(тело.Length + 16);
 
         for (var индекс = 0; индекс < строки.Length; индекс++)
         {
@@ -1373,11 +1488,13 @@ internal sealed class SmtpSession : IDisposable
                 строка = "." + строка;
             }
 
-            _писатель!.Write(строка);
-            _писатель.Write("\r\n");
+            буфер.Append(строка);
+            буфер.Append("\r\n");
         }
 
-        _писатель!.Write(".\r\n");
+        буфер.Append(".\r\n");
+
+        _писатель!.Write(буфер.ToString());
         _писатель.Flush();
     }
 

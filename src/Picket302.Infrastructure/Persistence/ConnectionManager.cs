@@ -63,6 +63,12 @@ public sealed record ConnectionDescriptor(
 
     /// <summary>Признак локального режима.</summary>
     public bool IsLocal => Kind == DatabaseKind.LocalSqlite;
+
+    /// <summary>
+    /// Признак выполненного первого подключения, сохраняемый в
+    /// connection.json (F-B11): переживает перезапуск приложения.
+    /// </summary>
+    public bool FirstConnectionDone { get; init; }
 }
 
 /// <summary>
@@ -164,6 +170,7 @@ public sealed class ConnectionManager
 
         _секреты = new DpapiSecretStore(каталогСекретов);
         _текущий = ПрочитатьНастройки();
+        IsFirstConnectionDone = _текущий.FirstConnectionDone;
     }
 
     /// <summary>Путь к файлу настроек подключения.</summary>
@@ -321,6 +328,9 @@ public sealed class ConnectionManager
     public void MarkConnectionEstablished()
     {
         IsFirstConnectionDone = true;
+
+        // Признак переносится в сохраняемый дескриптор (F-B11).
+        _текущий = _текущий with { FirstConnectionDone = true };
 
         СохранитьНастройки();
     }

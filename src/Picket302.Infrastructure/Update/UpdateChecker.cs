@@ -169,7 +169,17 @@ public sealed class UpdateChecker
         var каталог = Path.Combine(Path.GetTempPath(), "Picket302Update");
         Directory.CreateDirectory(каталог);
 
-        var имя = Path.GetFileName(new Uri(info.DownloadUrl).LocalPath);
+        // Разбор адреса до файловых операций (F-C8): некорректный адрес
+        // прежде падал UriFormatException либо создавал частичный файл.
+        if (!Uri.TryCreate(info.DownloadUrl, UriKind.Absolute, out var адресЗагрузки)
+            || (адресЗагрузки.Scheme != Uri.UriSchemeHttps && адресЗагрузки.Scheme != Uri.UriSchemeHttp))
+        {
+            ЗаписатьВЖурнал($"Некорректный адрес обновления: {info.DownloadUrl}");
+
+            return null;
+        }
+
+        var имя = Path.GetFileName(адресЗагрузки.LocalPath);
 
         if (string.IsNullOrWhiteSpace(имя))
         {
@@ -183,7 +193,7 @@ public sealed class UpdateChecker
             using var клиент = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
             var поток = await клиент
-                .GetStreamAsync(info.DownloadUrl, cancellationToken)
+                .GetStreamAsync(адресЗагрузки, cancellationToken)
                 .ConfigureAwait(false);
 
             var целевойПоток = System.IO.File.Create(путь);
@@ -201,16 +211,39 @@ public sealed class UpdateChecker
         {
             ЗаписатьВЖурнал($"Не удалось скачать обновление: {ошибка.Message}");
 
+            УдалитьЧастичныйФайл(путь);
+
             return null;
         }
         catch (IOException ошибка)
         {
             ЗаписатьВЖурнал($"Сбой загрузки обновления: {ошибка.Message}");
 
+            УдалитьЧастичныйФайл(путь);
+
             return null;
         }
 
         return путь;
+    }
+
+    /// <summary>
+    /// Удаляет частичный файл загрузки после сбоя (F-C8).
+    /// </summary>
+    /// <param name="путь">Путь частичного файла.</param>
+    private static void УдалитьЧастичныйФайл(string путь)
+    {
+        try
+        {
+            if (System.IO.File.Exists(путь))
+            {
+                System.IO.File.Delete(путь);
+            }
+        }
+        catch (IOException)
+        {
+            // Файл занят: будет удалён следующей попыткой.
+        }
     }
 
     /// <summary>

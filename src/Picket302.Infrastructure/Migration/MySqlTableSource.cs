@@ -263,6 +263,14 @@ public sealed class MySqlTableSource : ILegacyTableSource, IDisposable
                 $"Не удалось подключиться к исходной базе MySQL {_хост}:{_порт} (база «{_база}», пользователь «{_пользователь}»): {ошибка.Message}",
                 ошибка);
         }
+        catch (Exception)
+        {
+            // Отмена или прочий отказ открытия: соединение освобождается,
+            // чтобы не остаться висящим (F-B12).
+            await соединение.DisposeAsync().ConfigureAwait(false);
+
+            throw;
+        }
 
         _соединение?.Dispose();
         _соединение = соединение;
