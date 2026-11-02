@@ -54,7 +54,9 @@ public sealed class EnvelopeRenderer
 
         foreach (var поле in job.Fields)
         {
-            if (!поле.IsPrintable)
+            // Невидимые поля не выводятся на печать так же, как непечатаемые
+            // (F-A7: прежде проверялась только IsPrintable).
+            if (!поле.IsPrintable || !поле.IsVisible)
             {
                 continue;
             }

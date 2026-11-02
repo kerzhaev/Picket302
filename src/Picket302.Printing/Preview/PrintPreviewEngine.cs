@@ -119,8 +119,10 @@ public sealed class PrintPreviewEngine
             (float)context.Printer.PrintableWidthMm,
             (float)context.Printer.PrintableHeightMm);
 
+        // Предпросмотр повторяет состав печати: невидимые поля не выводятся
+        // так же, как непечатаемые (F-A7).
         var поля = context.Fields
-            .Where(поле => поле.IsPrintable)
+            .Where(поле => поле.IsPrintable && поле.IsVisible)
             .Select(поле => new PreviewField(
                 поле.Name,
                 поле.Kind,
