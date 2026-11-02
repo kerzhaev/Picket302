@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Picket302.Domain.Exchange;
 
 /// <summary>
@@ -91,7 +93,7 @@ public static class ZipIndexExtractor
             return address.Trim();
         }
 
-        var position = address.IndexOf(zip, StringComparison.Ordinal);
+        var position = НайтиГраницуБлока(address, zip);
 
         if (position < 0)
         {
@@ -100,10 +102,87 @@ public static class ZipIndexExtractor
 
         var result = string.Concat(address.AsSpan(0, position), address.AsSpan(position + zip.Length));
 
+        // На месте вырезанного индекса остаются двойные разделители
+        // («тел. 8916…, , г. Москва») — схлопываются (F-D7).
+        result = СхлопнутьРазделители(result);
+
         return result
             .Trim()
             .TrimStart(',', ';', ':', '-', '.')
             .TrimEnd(',', ';', ':', '-', '.')
             .Trim();
+    }
+
+    /// <summary>
+    /// Схлопывает повторяющиеся разделители «,» и «;», оставшиеся на месте
+    /// вырезанного индекса.
+    /// </summary>
+    /// <param name="текст">Текст после выкусывания.</param>
+    /// <returns>Текст без повторных разделителей.</returns>
+    private static string СхлопнутьРазделители(string текст)
+    {
+        var builder = new StringBuilder(текст.Length);
+        var предыдущийЗначащий = '\0';
+        var предыдущийПробел = false;
+
+        foreach (var символ in текст)
+        {
+            if ((символ == ',' || символ == ';')
+                && (предыдущийЗначащий == ',' || предыдущийЗначащий == ';'))
+            {
+                continue;
+            }
+
+            // Двойные пробелы на месте вырезанного блока схлопываются.
+            if (символ == ' ' && предыдущийПробел)
+            {
+                continue;
+            }
+
+            builder.Append(символ);
+
+            if (!char.IsWhiteSpace(символ))
+            {
+                предыдущийЗначащий = символ;
+            }
+
+            предыдущийПробел = символ == ' ';
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Ищет вхождение индекса, ограниченное нецифровыми соседями (F-D7):
+    /// прежде выкусывалось первое вхождение подстроки, и телефон
+    /// «89161234567» при индексе «123456» терял часть цифр.
+    /// </summary>
+    /// <param name="address">Текст адреса.</param>
+    /// <param name="zip">Индекс.</param>
+    /// <returns>Позиция вхождения либо -1.</returns>
+    private static int НайтиГраницуБлока(string address, string zip)
+    {
+        var start = 0;
+
+        while (true)
+        {
+            var position = address.IndexOf(zip, start, StringComparison.Ordinal);
+
+            if (position < 0)
+            {
+                return -1;
+            }
+
+            var left = position == 0 || !char.IsDigit(address[position - 1]);
+            var right = position + zip.Length >= address.Length
+                || !char.IsDigit(address[position + zip.Length]);
+
+            if (left && right)
+            {
+                return position;
+            }
+
+            start = position + 1;
+        }
     }
 }

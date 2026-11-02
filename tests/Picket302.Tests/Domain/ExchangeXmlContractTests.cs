@@ -232,6 +232,31 @@ public sealed class ExchangeXmlContractTests
         Assert.Equal(string.Empty, ZipIndexExtractor.ExtractZip(null));
     }
 
+    /// <summary>
+    /// Регрессия F-D7: выкусывание индекса не повреждает телефон. Прежде
+    /// удалялось первое вхождение подстроки «123456» — из середины номера
+    /// «89161234567» пропадали шесть цифр.
+    /// </summary>
+    [Fact]
+    public void RemoveZip_ИндексВнутриТелефона_ТелефонНеПовреждается()
+    {
+        var результат = ZipIndexExtractor.RemoveZip(
+            "тел. 89161234567, 123456, г. Москва",
+            "123456");
+
+        Assert.Equal("тел. 89161234567, г. Москва", результат);
+    }
+
+    [Fact]
+    public void RemoveZip_ТолькоВхождениеВнутриЧисел_СтрокаБезИзменений()
+    {
+        var результат = ZipIndexExtractor.RemoveZip(
+            "тел. 89161234567, факс 9123456",
+            "123456");
+
+        Assert.Equal("тел. 89161234567, факс 9123456", результат);
+    }
+
     [Fact]
     public void ReadListFromXmlAndFixForPrint_УсекаетПолеИНормализуетИндекс()
     {
