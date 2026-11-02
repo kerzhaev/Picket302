@@ -270,16 +270,18 @@ public sealed class DistributionService
 
             foreach (var письмо in письма)
             {
-                var контрагентId = исходная.Kind == DistributionKind.OneToMany
-                    ? письмо.CounterpartyId
-                    : письмо.SenderId;
+                // Роли получателя и отправителя переносятся без ветвления по
+                // виду рассылки (F-D2): прежде в «многие к одному» роли
+                // инвертировались, и адрес снимался со стороны отправителя.
+                var получатель = письмо.CounterpartyId;
+                var отправитель = письмо.SenderId;
 
-                var контрагент = await _контрагенты.GetByIdAsync(контрагентId, cancellationToken)
+                var контрагент = await _контрагенты.GetByIdAsync(получатель, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (контрагент is null || контрагент.IsDeleted)
                 {
-                    пропущены.Add(контрагент?.Name ?? $"#{контрагентId}");
+                    пропущены.Add(контрагент?.Name ?? $"#{получатель}");
                     continue;
                 }
 
@@ -292,10 +294,8 @@ public sealed class DistributionService
                 }
 
                 var новое = MailFactory.CreateOutcoming(
-                    контрагентId,
-                    исходная.Kind == DistributionKind.OneToMany
-                        ? письмо.SenderId
-                        : письмо.CounterpartyId,
+                    получатель,
+                    отправитель,
                     письмо.EnvelopeType ?? "C6",
                     адрес,
                     контрагент.IsVip,
@@ -463,37 +463,44 @@ public sealed class DistributionService
     /// <param name="plan">План рассылки.</param>
     /// <param name="counterpartyId">Идентификатор контрагента.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
-    /// <returns>Письмо либо <see langword="null"/>, если у контрагента нет основного адреса.</returns>
+    /// <returns>Письмо либо <see langword="null"/>, если у получателя нет основного адреса.</returns>
+    /// <remarks>
+    /// Роли зависят от вида рассылки (F-D1): в «один ко многим» перебираемый
+    /// контрагент — получатель, в «многие к одному» получателем является
+    /// центральный контрагент (<c>plan.SenderId</c>), а перебираемый
+    /// контрагент используется только в роли отправителя. Адрес снимается
+    /// со стороны получателя.
+    /// </remarks>
     private async Task<Mail?> СоздатьПисьмоAsync(
         long distributionId,
         DistributionPlan plan,
         long counterpartyId,
         CancellationToken cancellationToken)
     {
-        var контрагент = await _контрагенты.GetByIdAsync(counterpartyId, cancellationToken)
+        var получательId = plan.Kind == DistributionKind.OneToMany ? counterpartyId : plan.SenderId;
+        var отправительId = plan.Kind == DistributionKind.OneToMany ? plan.SenderId : counterpartyId;
+
+        var получатель = await _контрагенты.GetByIdAsync(получательId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (контрагент is null || контрагент.IsDeleted)
+        if (получатель is null || получатель.IsDeleted)
         {
             return null;
         }
 
-        var адрес = контрагент.GetAddress(контрагент.AddressMainType);
+        var адрес = получатель.GetAddress(получатель.AddressMainType);
 
         if (адрес is null)
         {
             return null;
         }
 
-        var получательId = plan.Kind == DistributionKind.OneToMany ? counterpartyId : plan.SenderId;
-        var отправительId = plan.Kind == DistributionKind.OneToMany ? plan.SenderId : counterpartyId;
-
         var письмо = MailFactory.CreateOutcoming(
             получательId,
             отправительId,
             plan.EnvelopeType ?? "C6",
             адрес,
-            контрагент.IsVip,
+            получатель.IsVip,
             plan.CopyCount);
 
         письмо.DistributionId = distributionId;

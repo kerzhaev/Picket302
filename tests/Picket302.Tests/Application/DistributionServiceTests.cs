@@ -265,4 +265,88 @@ public sealed class DistributionServiceTests
 
         Assert.True(результат.IsFailure);
     }
+
+    /// <summary>
+    /// Регрессия F-D1: в «многие к одному» адрес получателя снимается
+    /// у центрального контрагента, а не у перебираемого отправителя.
+    /// Прежде в <c>RecipientAddress</c> попадал адрес стороны отправителя.
+    /// </summary>
+    [Fact]
+    public async Task GenerateDistribution_МногиеКОдному_АдресПолучателяУЦентрального()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var служба = Служба(база, out var контрагенты);
+
+        var центральный = await контрагенты.AddAsync(НовыйКонтрагент("ООО «Центральный»"));
+        var первый = await контрагенты.AddAsync(НовыйКонтрагент("ООО «Первый»"));
+        var второй = await контрагенты.AddAsync(НовыйКонтрагент("ООО «Второй»"));
+
+        var план = new DistributionPlan
+        {
+            Kind = DistributionKind.ManyToOne,
+            SenderId = центральный,
+            CounterpartyIds = [первый, второй],
+        };
+
+        var результат = await служба.GenerateDistributionAsync(план);
+
+        Assert.True(результат.IsSuccess);
+
+        var письма = await new MailRepository(база.Session)
+            .GetByDistributionAsync(результат.Value.Id);
+
+        Assert.Equal(2, письма.Count);
+
+        // Адрес получателя в обоих письмах — адрес центрального контрагента.
+        Assert.All(письма, письмо =>
+        {
+            Assert.Equal("ООО «Центральный»", письмо.RecipientAddress.Lines[0]);
+            Assert.Equal(центральный, письмо.CounterpartyId);
+        });
+
+        // Отправители писем различаются.
+        Assert.Equal(
+            new HashSet<long> { первый, второй },
+            письма.Select(письмо => письмо.SenderId).ToHashSet());
+    }
+
+    /// <summary>
+    /// Регрессия F-D2: клон рассылки «многие к одному» сохраняет пары
+    /// (получатель, отправитель) исходных писем. Прежде роли инвертировались.
+    /// </summary>
+    [Fact]
+    public async Task CloneForResend_МногиеКОдному_СохраняетРолиПисем()
+    {
+        await using var база = await SqliteTestDatabase.CreateAsync();
+        var служба = Служба(база, out var контрагенты);
+
+        var центральный = await контрагенты.AddAsync(НовыйКонтрагент("ООО «Центральный»"));
+        var первый = await контрагенты.AddAsync(НовыйКонтрагент("ООО «Первый»"));
+        var второй = await контрагенты.AddAsync(НовыйКонтрагент("ООО «Второй»"));
+
+        var исходная = await служба.GenerateDistributionAsync(new DistributionPlan
+        {
+            Kind = DistributionKind.ManyToOne,
+            SenderId = центральный,
+            CounterpartyIds = [первый, второй],
+        });
+
+        Assert.True(исходная.IsSuccess);
+
+        var копия = await служба.CloneForResendAsync(исходная.Value.Id);
+
+        Assert.True(копия.IsSuccess);
+        Assert.Equal(2, копия.Value.LettersCreated);
+
+        var письма = await new MailRepository(база.Session)
+            .GetByDistributionAsync(копия.Value.Distribution.Id);
+
+        Assert.Equal(2, письма.Count);
+
+        Assert.All(письма, письмо => Assert.Equal(центральный, письмо.CounterpartyId));
+
+        Assert.Equal(
+            new HashSet<long> { первый, второй },
+            письма.Select(письмо => письмо.SenderId).ToHashSet());
+    }
 }
