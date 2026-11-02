@@ -80,7 +80,10 @@ public sealed class AccessOdbcTableSource : ILegacyTableSource, IDisposable
 
         try
         {
-            using var поток = new FileStream(путь, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            // Чтение без монопольной блокировки (F-B12): прежде
+            // FileAccess.ReadWrite | FileShare.None отказывал при открытой
+            // базе и ложных «файл занят».
+            using var поток = new FileStream(путь, FileMode.Open, FileAccess.Read, FileShare.Read);
         }
         catch (IOException ошибка)
         {
@@ -213,7 +216,21 @@ public sealed class AccessOdbcTableSource : ILegacyTableSource, IDisposable
             }
         }
 
-        throw new LegacyMigrationException(СообщениеНетДрайвера, последняяОшибка!);
+        // Различение «нет драйвера» от прочих отказов (F-B12): код IM002
+        // (data source not found) означает отсутствие ODBC-драйвера; в текст
+        // ошибки включается краткое сообщение последней попытки.
+        var кодДрайвера = последняяОшибка is OdbcException исключение
+            && исключение.Errors.Cast<OdbcError>().Any(ошибка => ошибка.SQLState == "IM002");
+
+        var деталь = последняяОшибка?.Message
+            .Replace("\r\n", " ", StringComparison.Ordinal)
+            .Trim();
+
+        throw new LegacyMigrationException(
+            кодДрайвера
+                ? $"{СообщениеНетДрайвера} Детали: {деталь}"
+                : $"{СообщениеНетДрайвера} Причина последней попытки: {деталь}",
+            последняяОшибка!);
     }
 
     /// <summary>Читает имена таблиц файла .mdb.</summary>
