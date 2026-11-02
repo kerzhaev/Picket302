@@ -38,7 +38,7 @@ public sealed class RemoteAssistantLauncher
         "Утилита удалённого доступа не настроена администратором";
 
     private readonly Func<string, string?> _получитьНастройку;
-    private readonly Func<string, CancellationToken, Task<bool>> _скачать;
+    private readonly Func<string, string, CancellationToken, Task<bool>> _скачать;
     private readonly Func<string, bool> _запустить;
     private readonly string _папкаПоУмолчанию;
     private string _папкаЗагрузки;
@@ -50,8 +50,9 @@ public sealed class RemoteAssistantLauncher
     /// Чтение настройки программы по имени; по умолчанию — пустое значение.
     /// </param>
     /// <param name="скачать">
-    /// Загрузка утилиты по адресу; по умолчанию — загрузка по HTTPS средствами
-    /// <see cref="HttpClient"/>.
+    /// Загрузка утилиты: адрес и целевой путь файла (F-C5 — прежде делегат
+    /// получал только адрес, и целевой файл настраиваемой папки не создавался);
+    /// по умолчанию — загрузка по HTTPS средствами <see cref="HttpClient"/>.
     /// </param>
     /// <param name="запустить">
     /// Запуск утилиты; по умолчанию — системный запуск файла.
@@ -62,7 +63,7 @@ public sealed class RemoteAssistantLauncher
     /// </param>
     public RemoteAssistantLauncher(
         Func<string, string?>? получитьНастройку = null,
-        Func<string, CancellationToken, Task<bool>>? скачать = null,
+        Func<string, string, CancellationToken, Task<bool>>? скачать = null,
         Func<string, bool>? запустить = null,
         string? папкаПоУмолчанию = null)
     {
@@ -155,7 +156,8 @@ public sealed class RemoteAssistantLauncher
 
             try
             {
-                загружена = await _скачать(адрес, cancellationToken).ConfigureAwait(false);
+                // Целевой путь передаётся в загрузчик (F-C5).
+                загружена = await _скачать(адрес, путьУтилиты, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -230,22 +232,24 @@ public sealed class RemoteAssistantLauncher
     }
 
     /// <summary>
-    /// Загружает утилиту по HTTPS в указанную папку.
+    /// Загружает утилиту по HTTPS в заданный путь (F-C5).
     /// </summary>
     /// <param name="адрес">Адрес загрузки.</param>
+    /// <param name="путьФайла">Целевой путь файла утилиты.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns><see langword="true"/>, если файл загружен.</returns>
-    private async Task<bool> СкачатьПоУмолчаниюAsync(string адрес, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Загрузка ведётся во временный файл <c>.part</c>, который по успехе
+    /// атомарно переименовывается в целевой; при ошибке или отмене частичный
+    /// файл удаляется, и целевой путь не остаётся повреждённым.
+    /// </remarks>
+    private async Task<bool> СкачатьПоУмолчаниюAsync(
+        string адрес,
+        string путьФайла,
+        CancellationToken cancellationToken)
     {
         if (!Uri.TryCreate(адрес, UriKind.Absolute, out var разобранный)
             || !разобранный.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var имяФайла = Path.GetFileName(разобранный.LocalPath);
-
-        if (string.IsNullOrWhiteSpace(имяФайла))
         {
             return false;
         }
@@ -258,17 +262,61 @@ public sealed class RemoteAssistantLauncher
 
         поток.EnsureSuccessStatusCode();
 
-        var целеваяПапка = _папкаЗагрузки;
+        Directory.CreateDirectory(Path.GetDirectoryName(путьФайла)!);
 
-        Directory.CreateDirectory(целеваяПапка);
-
-        var путь = Path.Combine(целеваяПапка, имяФайла);
-
-        using var файл = File.Create(путь);
-
-        await поток.Content.CopyToAsync(файл, cancellationToken).ConfigureAwait(false);
+        await СохранитьПотокВФайлАтомарно(
+            await поток.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false),
+            путьФайла,
+            cancellationToken).ConfigureAwait(false);
 
         return true;
+    }
+
+    /// <summary>
+    /// Записывает поток в файл через временный <c>.part</c> с атомарным
+    /// переименованием (F-C5).
+    /// </summary>
+    /// <param name="содержимое">Поток содержимого.</param>
+    /// <param name="путьФайла">Целевой путь файла.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Задача записи.</returns>
+    /// <remarks>
+    /// При ошибке или отмене частичный файл удаляется, и целевой путь
+    /// не остаётся повреждённым: обрыв загрузки не должен выглядеть
+    /// как готовая утилита.
+    /// </remarks>
+    public static async Task СохранитьПотокВФайлАтомарно(
+        Stream содержимое,
+        string путьФайла,
+        CancellationToken cancellationToken)
+    {
+        var путьЧасти = путьФайла + ".part";
+
+        try
+        {
+            await using (var файл = File.Create(путьЧасти))
+            {
+                await содержимое.CopyToAsync(файл, cancellationToken).ConfigureAwait(false);
+            }
+
+            File.Move(путьЧасти, путьФайла, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(путьЧасти))
+                {
+                    File.Delete(путьЧасти);
+                }
+            }
+            catch (IOException)
+            {
+                // Файл занят: будет перезаписан следующей попыткой.
+            }
+
+            throw;
+        }
     }
 
     /// <summary>

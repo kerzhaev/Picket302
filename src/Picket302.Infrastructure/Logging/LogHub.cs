@@ -287,7 +287,10 @@ public sealed class LogHub : IDisposable
             return null;
         }
 
-        var имяБезРасширения = Path.GetFileNameWithoutExtension(шаблонПути);
+        // Завершающий дефис шаблона (app-) срезается (F-C4): маска строится
+        // как «app-*», иначе двойной дефис «app--*» не совпадает с фактическим
+        // именем файла Serilog «app-20261102.log».
+        var имяБезРасширения = Path.GetFileNameWithoutExtension(шаблонПути).TrimEnd('-');
         var расширение = Path.GetExtension(шаблонПути);
 
         try
