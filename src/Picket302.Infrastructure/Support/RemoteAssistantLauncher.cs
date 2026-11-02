@@ -292,12 +292,14 @@ public sealed class RemoteAssistantLauncher
     {
         var путьЧасти = путьФайла + ".part";
 
+#pragma warning disable CA2007 // Библиотечный код без контекста синхронизации.
         try
         {
             await using (var файл = File.Create(путьЧасти))
             {
                 await содержимое.CopyToAsync(файл, cancellationToken).ConfigureAwait(false);
             }
+#pragma warning restore CA2007
 
             File.Move(путьЧасти, путьФайла, overwrite: true);
         }

@@ -362,10 +362,12 @@ public sealed class DbServiceDoctor
                 }
             }
         }
+#pragma warning disable CA1031 // qc-вывод недоступен при любой внешней ошибке: путь остаётся пустым, диагностика не прерывается.
         catch
         {
             // qc-вывод недоступен: путь остаётся пустым.
         }
+#pragma warning restore CA1031
 
         return null;
     }
