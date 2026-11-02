@@ -658,9 +658,12 @@ public class PrinterManager
     /// Сведения о принтере уровня 2 (<c>PRINTER_INFO_2</c>).
     /// </summary>
     /// <remarks>
-    /// Разметка повторяет <c>PRINTER_INFO_2W</c>: 13 указателей на строки
-    /// и 8 значений <c>DWORD</c>. Строки читаются по указателям вручную —
-    /// автоматическая маршализация строк сместила бы поля структуры.
+    /// Разметка повторяет <c>PRINTER_INFO_2W</c>: 13 указателей на строки и
+    /// дескриптор безопасности, затем 8 значений <c>DWORD</c> (136 байт на
+    /// x64). Прежде в структуре отсутствовали <c>Parameters</c> и
+    /// <c>SecurityDescriptor</c>, и все поля после <c>Datatype</c> читались
+    /// со смещением. Строки читаются по указателям вручную — автоматическая
+    /// маршализация строк сместила бы поля структуры.
     /// </remarks>
     [StructLayout(LayoutKind.Sequential)]
     private struct PrinterInfo2
@@ -697,6 +700,12 @@ public class PrinterManager
 
         /// <summary>Тип данных.</summary>
         public IntPtr Datatype;
+
+        /// <summary>Параметры драйвера печати.</summary>
+        public IntPtr Parameters;
+
+        /// <summary>Дескриптор безопасности.</summary>
+        public IntPtr SecurityDescriptor;
 
         /// <summary>Атрибуты принтера.</summary>
         public uint Attributes;

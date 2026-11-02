@@ -36,26 +36,26 @@ internal static class Winspool
     /// <summary>Уровень сведений о принтере.</summary>
     public const uint PRINTER_LEVEL_2 = 2;
 
-    /// <summary>Признак принтера по умолчанию.</summary>
-    public const uint PRINTER_ATTRIBUTE_DEFAULT = 0x00000002;
+    /// <summary>Признак принтера по умолчанию (winspool.h).</summary>
+    public const uint PRINTER_ATTRIBUTE_DEFAULT = 0x00000004;
 
-    /// <summary>Принтер не готов к печати.</summary>
-    public const uint PRINTER_STATUS_OFFLINE = 0x00000001;
+    /// <summary>Печать приостановлена (winspool.h).</summary>
+    public const uint PRINTER_STATUS_PAUSED = 0x00000001;
 
-    /// <summary>Принтер в состоянии ошибки.</summary>
+    /// <summary>Принтер в состоянии ошибки (winspool.h).</summary>
     public const uint PRINTER_STATUS_ERROR = 0x00000002;
 
-    /// <summary>Нет бумаги.</summary>
-    public const uint PRINTER_STATUS_PAPEROUT = 0x00000004;
+    /// <summary>Нет бумаги (winspool.h).</summary>
+    public const uint PRINTER_STATUS_PAPEROUT = 0x00000010;
 
-    /// <summary>Печать приостановлена.</summary>
-    public const uint PRINTER_STATUS_PAUSED = 0x00000008;
+    /// <summary>Принтер вне сети (winspool.h).</summary>
+    public const uint PRINTER_STATUS_OFFLINE = 0x00000080;
 
-    /// <summary>Принтер недоступен.</summary>
-    public const uint PRINTER_STATUS_NOT_AVAILABLE = 0x00000100;
+    /// <summary>Принтер недоступен (winspool.h).</summary>
+    public const uint PRINTER_STATUS_NOT_AVAILABLE = 0x00001000;
 
-    /// <summary>Принтер не установлен.</summary>
-    public const uint PRINTER_STATUS_NO_TONER = 0x00000400;
+    /// <summary>Нет тонера (winspool.h).</summary>
+    public const uint PRINTER_STATUS_NO_TONER = 0x00040000;
 
     /// <summary>
     /// Открывает принтер в спулере.
