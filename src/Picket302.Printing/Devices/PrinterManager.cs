@@ -431,7 +431,24 @@ public class PrinterManager
     /// </remarks>
     private static (decimal Width, decimal Height) PaperSizeFromDeviceCapabilities(string printerName)
     {
-        var буфер = Marshal.AllocHGlobal(sizeof(int) * 2);
+        // Двухфазная схема DeviceCapabilitiesW (как в GetSupportedPaperSizes):
+        // первый вызов с нулевым буфером возвращает число элементов массива
+        // POINT, второй — заполняет буфер. Без первой фазы драйвер пишет массив
+        // по числу ВСЕХ поддерживаемых форматов в буфер на одну POINT —
+        // запись за границей выделенной памяти.
+        var количество = Winspool.DeviceCapabilitiesW(
+            printerName,
+            null,
+            DevModeConstants.DC_PAPERSIZE,
+            IntPtr.Zero,
+            IntPtr.Zero);
+
+        if (количество <= 0)
+        {
+            return (0m, 0m);
+        }
+
+        var буфер = Marshal.AllocHGlobal(количество * sizeof(int) * 2);
 
         try
         {

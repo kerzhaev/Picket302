@@ -520,6 +520,25 @@ public sealed class SmtpClientFacade
 
         сессия.Подключиться(ct);
 
+        // ImplicitTls (ТЗ §8.7, функция 94 — порт 465, режим «SSL»):
+        // TLS-рукопожатие выполняется ДО первого SMTP-обмена, иначе EHLO
+        // уходит в TLS-порт открытым текстом и сервер разрывает соединение.
+        if (РежимЗащиты == SslMode.ImplicitTls)
+        {
+            сессия.ПерейтиВЗащищённыйРежим(ПроверитьСертификат);
+
+            if (!string.IsNullOrEmpty(ОтклонённыйОтпечаток))
+            {
+                return ОшибкаДляВсех(
+                    адреса,
+                    0,
+                    null,
+                    string.Create(
+                        CultureInfo.CurrentCulture,
+                        $"{CertificateRejectedMessage} (отпечаток {ОтклонённыйОтпечаток})."));
+            }
+        }
+
         var приветствие = сессия.ПрочитатьОтвет();
 
         if (!приветствие.IsSuccess)
@@ -736,15 +755,17 @@ public sealed class SmtpClientFacade
         {
             var ответ = сессия.Выполнить("AUTH PLAIN");
 
-            if (!ответ.IsSuccess)
+            if (ответ.IsSuccess)
             {
-                return ответ;
+                var токен = Convert.ToBase64String(
+                    Encoding.UTF8.GetBytes(string.Create(CultureInfo.InvariantCulture, $"\0{логин}\0{пароль}")));
+
+                return сессия.Выполнить(токен);
             }
 
-            var токен = Convert.ToBase64String(
-                Encoding.UTF8.GetBytes(string.Create(CultureInfo.InvariantCulture, $"\0{логин}\0{пароль}")));
-
-            return сессия.Выполнить(токен);
+            // Фолбэк AUTH LOGIN (ТЗ §8.7, функции 93/100): часть серверов
+            // объявляет AUTH, но поддерживает только механизм LOGIN — отказ
+            // PLAIN не завершает авторизацию попыткой LOGIN.
         }
 
         var ответLogin = сессия.Выполнить("AUTH LOGIN");
@@ -1030,13 +1051,18 @@ public sealed class SmtpClientFacade
         {
             var имя = Path.GetFileName(вложение);
 
+            // Имя файла уходит в заголовок: не-ASCII (кириллица) кодируется по
+            // RFC 2047, иначе ASCII-писатель заменяет символы на «?»
+            // (ТЗ §8.7, функция 98; §10.2 — Unicode/UTF-8 везде).
+            var имяЗаголовка = КодироватьЗначениеЗаголовка(имя);
+
             текст.Append("--").Append(граница).Append("\r\n");
             текст.Append("Content-Type: application/octet-stream; name=\"")
-                .Append(имя)
+                .Append(имяЗаголовка)
                 .Append("\"")
                 .Append("\r\n");
             текст.Append("Content-Disposition: attachment; filename=\"")
-                .Append(имя)
+                .Append(имяЗаголовка)
                 .Append("\"")
                 .Append("\r\n");
             текст.Append("Content-Transfer-Encoding: base64").Append("\r\n");

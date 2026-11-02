@@ -145,6 +145,47 @@ public sealed class PrintPreviewEngineTests
     }
 
     [Fact]
+    public void Предпросмотр_ПартияОтправлений_СтраницаЗаданияРаскладываетсяНаЭлементИСтраницуШаблона()
+    {
+        // ТЗ §8.6, функции 79-80: страница задания = "отправление x страница
+        // шаблона". Партия из двух отправлений на двухстраничном шаблоне даёт
+        // четыре страницы предпросмотра (регрессия: все элементы партии
+        // рисовались поверх одной страницы шаблона).
+        var базовый = КонтекстC6(Принтер());
+        var контекст = базовый with
+        {
+            Blank = new BlankMetrics
+            {
+                TemplateName = базовый.Blank.TemplateName,
+                WidthMm = базовый.Blank.WidthMm,
+                HeightMm = базовый.Blank.HeightMm,
+                Orientation = базовый.Blank.Orientation,
+                PaperSizeName = базовый.Blank.PaperSizeName,
+                PageCount = 2,
+            },
+            TotalPages = 4,
+            Items = new[]
+            {
+                базовый.Items[0],
+                new PrintableItem
+                {
+                    Id = 2,
+                    Values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["[edt_str_to1]"] = "ИП Сидоров",
+                        ["[edt_str_to2]"] = "Тверь",
+                    },
+                },
+            },
+        };
+
+        using var документ = new PrintPreviewEngine(new EnvelopeRenderer(new Измеритель()))
+            .RenderPreview(контекст);
+
+        Assert.Equal(4, документ.Pages.Count);
+    }
+
+    [Fact]
     public void Предпросмотр_ТолькоЧётныеСтраницы_ФормируетСоответствующееЧислоСтраниц()
     {
         var контекст = КонтекстC6(Принтер()) with

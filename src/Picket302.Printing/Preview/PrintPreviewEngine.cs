@@ -133,7 +133,11 @@ public sealed class PrintPreviewEngine
             .ToList();
 
         var страницы = new List<Metafile>();
-        var элемент = context.Items.Count > 0 ? context.Items[0] : new PrintableItem();
+
+        // Предпросмотр повторяет разбиение задания на страницы печати
+        // («отправление × страница шаблона», ТЗ §8.6, функции 79–80): страница
+        // задания раскладывается на номер отправления и номер страницы шаблона.
+        var страницНаЭлемент = Math.Max(context.Blank.PageCount, 1);
 
         try
         {
@@ -141,12 +145,20 @@ public sealed class PrintPreviewEngine
             {
                 var метафайл = СоздатьМетафайл(ширинаМм, высотаМм);
 
+                var индексЭлемента = context.Items.Count > 0
+                    ? Math.Min((страница - 1) / страницНаЭлемент, context.Items.Count - 1)
+                    : -1;
+                var элемент = индексЭлемента >= 0
+                    ? context.Items[индексЭлемента]
+                    : new PrintableItem();
+
                 // Предпросмотр формируется тем же конвейером рендеринга, что и
-                // печать; отличие — маркер переполнения поля и номер страницы.
+                // печать; отличие — маркер переполнения поля и номер страницы
+                // шаблона (CurrentPage фильтрует поля по их странице).
                 var контекстСтраницы = context with
                 {
                     IsPreview = true,
-                    CurrentPage = страница,
+                    CurrentPage = (страница - 1) % страницНаЭлемент + 1,
                 };
 
                 using (var графика = Graphics.FromImage(метафайл))

@@ -59,6 +59,15 @@ public sealed class SystemDrawingPrintSpooler : IPrintSpooler
             ? Duplex.Vertical
             : Duplex.Simplex;
 
+        // Число копий задания (ТЗ §6.5, §7.2): значение из UI фиксируется в
+        // журнале печати (copy_count, §3.1.3), поэтому физический вывод обязан
+        // ему соответствовать. Драйверу передаётся счётчик копий; диапазон
+        // спулера Windows — 1…999.
+        if (context.Copies > 1)
+        {
+            документ.PrinterSettings.Copies = (short)Math.Clamp(context.Copies, 1, 999);
+        }
+
         документ.DefaultPageSettings = параметрыСтраницы;
 
         using var прерыватель = new AbortScope(context.Printer.PrinterName, cancellationToken);
