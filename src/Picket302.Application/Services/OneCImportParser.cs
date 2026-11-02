@@ -303,24 +303,15 @@ public sealed class OneCImportParser
     /// </summary>
     /// <param name="байты">Содержимое файла.</param>
     /// <returns>Текстовое содержимое файла.</returns>
+    /// <remarks>
+    /// Декодирование выполняется штатной кодировкой windows-1251
+    /// (<see cref="TextEncodingDetector.Cp1251"/>; F-D3): ручная таблица
+    /// прежде не переводила диапазон 0x80–0xBF (тире «—», кавычки «„“»,
+    /// знак «№»), и символы искажались.
+    /// </remarks>
     private static string ДекодироватьCp1251(byte[] байты)
     {
-        var символы = new char[байты.Length];
-
-        for (var i = 0; i < байты.Length; i++)
-        {
-            var байт = байты[i];
-
-            символы[i] = байт switch
-            {
-                0xA8 => 'Ё',
-                0xB8 => 'ё',
-                >= 0xC0 and <= 0xFF => (char)(байт + 0x0350),
-                _ => (char)байт,
-            };
-        }
-
-        return new string(символы);
+        return TextEncodingDetector.Cp1251.GetString(байты);
     }
 
     /// <summary>

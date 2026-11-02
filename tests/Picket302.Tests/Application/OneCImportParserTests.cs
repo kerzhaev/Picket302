@@ -220,6 +220,38 @@ public sealed class OneCImportParserTests
         Assert.Equal("7707654321", результат.Records[1].Draft.Inn);
     }
 
+    /// <summary>
+    /// Регрессия F-D3: ANSI-файл (cp1251) с символами диапазона 0x80–0xBF —
+    /// тире «—», кавычки «„“» и знак «№» — декодируется штатной кодировкой.
+    /// Прежде ручная таблица не переводила этот диапазон, и символы искажались.
+    /// </summary>
+    [Fact]
+    public void РазборТекста_AnsiCp1251_СпецсимволыДекодируются()
+    {
+        const string содержимое = "Наименование;ИНН\nООО „Ромашка“ — № 1;7701234567";
+
+        var путь = Path.Combine(Path.GetTempPath(), $"onec_{Guid.NewGuid():N}.txt");
+
+        try
+        {
+            File.WriteAllBytes(путь, TextEncodingDetector.Cp1251.GetBytes(содержимое));
+
+            var результат = _разборщик.ImportFromOneC(путь, OneCVersion.V77);
+
+            var запись = Assert.Single(результат.Records);
+
+            Assert.Equal("ООО „Ромашка“ — № 1", запись.Draft.Name);
+            Assert.Equal("7701234567", запись.Draft.Inn);
+        }
+        finally
+        {
+            if (File.Exists(путь))
+            {
+                File.Delete(путь);
+            }
+        }
+    }
+
     [Fact]
     public void РазборТекста_СтрокаСлишкомДлинная_ОбрезаетсяСПредупреждением()
     {
