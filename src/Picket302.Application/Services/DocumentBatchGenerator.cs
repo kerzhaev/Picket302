@@ -183,7 +183,9 @@ public sealed class DocumentBatchGenerator
                 continue;
             }
 
-            var filePath = Path.Combine(outputDirectory, BuildFileName(rendered.FileName, counterparty.Name));
+            var filePath = Path.Combine(
+                outputDirectory,
+                BuildFileName(rendered.FileName, counterparty.Id, counterparty.Name));
 
             File.WriteAllBytes(filePath, rendered.Content);
 
@@ -198,21 +200,31 @@ public sealed class DocumentBatchGenerator
     }
 
     /// <summary>
-    /// Формирует имя выходного файла: имя шаблона, наименование контрагента и
-    /// расширение шаблона.
+    /// Формирует имя выходного файла: имя шаблона, наименование контрагента,
+    /// идентификатор контрагента и расширение шаблона.
     /// </summary>
     /// <param name="templateFileName">Имя файла шаблона.</param>
+    /// <param name="counterpartyId">Идентификатор контрагента.</param>
     /// <param name="counterpartyName">Наименование контрагента.</param>
     /// <returns>Имя выходного файла.</returns>
-    private static string BuildFileName(string templateFileName, string counterpartyName)
+    /// <remarks>
+    /// Идентификатор включается в имя файла (F-D5): прежде одноимённые
+    /// контрагенты перезаписывали документ друг друга, и отчёт показывал
+    /// фактическую запись только последнего. Выбор в пользу детерминизма:
+    /// у одного контрагента имя файла стабильно между запусками.
+    /// </remarks>
+    private static string BuildFileName(
+        string templateFileName,
+        long counterpartyId,
+        string counterpartyName)
     {
         var baseName = Path.GetFileNameWithoutExtension(templateFileName);
         var extension = Path.GetExtension(templateFileName);
         var suffix = SanitizeFileName(counterpartyName);
 
         return suffix.Length == 0
-            ? baseName + extension
-            : $"{baseName}_{suffix}{extension}";
+            ? $"{baseName}_{counterpartyId}{extension}"
+            : $"{baseName}_{suffix}_{counterpartyId}{extension}";
     }
 
     /// <summary>

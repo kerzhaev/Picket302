@@ -160,4 +160,47 @@ public sealed class DocumentBatchGeneratorTests
             Directory.Delete(каталог, recursive: true);
         }
     }
+
+    /// <summary>
+    /// Регрессия F-D5: два контрагента с одинаковым наименованием формируют
+    /// два разных файла. Прежде идентичные имена файлов перезаписывали
+    /// документы друг друга.
+    /// </summary>
+    [Fact]
+    public void GenerateBatch_ОдноимённыеКонтрагенты_ФайлыНеПерезаписываются()
+    {
+        var каталог = СоздатьКаталог();
+        var выходнойКаталог = Path.Combine(каталог, "output");
+
+        try
+        {
+            var путь = Path.Combine(каталог, "letter.txt");
+            File.WriteAllText(путь, "Уважаемый #Counterparty_Name#!", Encoding.UTF8);
+
+            var контрагенты = new[]
+            {
+                СоздатьКонтрагента(1, "ООО «Двойник»", "7701234567"),
+                СоздатьКонтрагента(2, "ООО «Двойник»", "7707654321"),
+            };
+
+            var генератор = new DocumentBatchGenerator();
+            var результат = генератор.GenerateBatch(путь, контрагенты, выходнойКаталог);
+
+            Assert.Equal(2, результат.Generated.Count);
+            Assert.Equal(2, Directory.GetFiles(выходнойКаталог).Length);
+
+            // Оба документа существуют и содержат свой текст: файлы различны.
+            foreach (var документ in результат.Generated)
+            {
+                Assert.True(File.Exists(документ.FilePath));
+                Assert.Contains("ООО «Двойник»", File.ReadAllText(документ.FilePath, Encoding.UTF8), StringComparison.Ordinal);
+            }
+
+            Assert.NotEqual(результат.Generated[0].FilePath, результат.Generated[1].FilePath);
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
 }
