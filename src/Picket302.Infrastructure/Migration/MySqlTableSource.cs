@@ -147,22 +147,32 @@ public sealed class MySqlTableSource : ILegacyTableSource, IDisposable
 
         var соединение = await ОткрытьСоединениеAsync(cancellationToken).ConfigureAwait(false);
 
-        var таблицы = new List<LegacyTable>();
+        // Список имён таблиц материализуется до чтения столбцов (F-B3):
+        // прежде чтение столбцов выполнялось при открытом reader SHOW TABLES,
+        // а соединение MySql не допускает вложенных читателей.
+        var имена = new List<string>();
 
-        using var command = соединение.CreateCommand();
-        command.CommandText = "SHOW TABLES;";
-
-        using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        using (var command = соединение.CreateCommand())
         {
-            var имя = reader.IsDBNull(0) ? null : reader.GetString(0);
+            command.CommandText = "SHOW TABLES;";
 
-            if (string.IsNullOrWhiteSpace(имя))
+            using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                continue;
-            }
+                var имя = reader.IsDBNull(0) ? null : reader.GetString(0);
 
+                if (!string.IsNullOrWhiteSpace(имя))
+                {
+                    имена.Add(имя);
+                }
+            }
+        }
+
+        var таблицы = new List<LegacyTable>(имена.Count);
+
+        foreach (var имя in имена)
+        {
             var столбцы = await ПрочитатьСтолбцыAsync(соединение, имя, cancellationToken).ConfigureAwait(false);
 
             таблицы.Add(new LegacyTable(имя, столбцы));
