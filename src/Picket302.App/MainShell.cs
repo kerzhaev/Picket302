@@ -62,6 +62,13 @@ public sealed class MainShell : Form
     /// </summary>
     private bool _составСозданоВнутри;
 
+    /// <summary>
+    /// Признак однократной подписки на изменения сортировки адресной книги:
+    /// повторная инициализация («Открыть базу…») не должна накапливать
+    /// обработчики.
+    /// </summary>
+    private bool _сортировкаПодписана;
+
     private readonly SearchSession _поиск = new();
     private readonly List<long> _выбранныеОтправители = [];
     private readonly List<long> _выбранныеПолучатели = [];
@@ -511,13 +518,21 @@ public sealed class MainShell : Form
         // цвета, заголовки столбцов, скрытие столбцов, «полосатая таблица»
         // (ТЗ §8.1, функция 9; §8.11, функция 131).
         _сортировкаПолучателей.Подключить(_таблицаПолучателей);
-        _сортировкаПолучателей.СортировкаИзменена += async (_, _) =>
+
+        // Подписка однократная: повторная инициализация («Открыть базу…»)
+        // не должна накапливать обработчики.
+        if (!_сортировкаПодписана)
         {
-            if (_состав is not null)
+            _сортировкаПодписана = true;
+
+            _сортировкаПолучателей.СортировкаИзменена += async (_, _) =>
             {
-                await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
-            }
-        };
+                if (_состав is not null)
+                {
+                    await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+                }
+            };
+        }
 
         _настройкиВидаТаблиц = new GridViewSettingsController(активный.НастройкиОтображения);
 
@@ -554,7 +569,7 @@ public sealed class MainShell : Form
         _меню.Dock = DockStyle.None;
 
         var файл = new ToolStripMenuItem("Файл");
-        файл.DropDownItems.Add("Открыть базу…", null, (_, _) => ОткрытьФормуОчистки());
+        файл.DropDownItems.Add("Открыть базу…", null, (_, _) => ОткрытьБазу());
         файл.DropDownItems.Add("Архивирование и восстановление базы…", null, (_, _) => ОткрытьАрхивацию());
         файл.DropDownItems.Add("Установить на USB-флешку…", null, (_, _) => ОткрытьУстановкуНаUsb());
         файл.DropDownItems.Add(new ToolStripSeparator());
@@ -1420,6 +1435,67 @@ public sealed class MainShell : Form
 
         using var форма = new FormConnectionSettings(_состав.МенеджерПодключения, _состав.РеестрСерверов);
         форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает другую базу данных по выбору оператора (ТЗ §8.8, функция 102:
+    /// «Открыть базу…»). Выбран полный цикл переподключения в рамках живой
+    /// формы: диалог подключения, освобождение состава, созданного оболочкой,
+    /// и повторная инициализация. Состав передаётся по пути из диалога, поэтому
+    /// перезапуск приложения не требуется (F-E3: прежде пункт открывал форму
+    /// очистки базы).
+    /// </summary>
+    private async void ОткрытьБазу()
+    {
+        // Диалог создаётся с независимым менеджером подключения, как при
+        // запуске приложения (Program.Main): выбранные реквизиты не должны
+        // зависеть от текущей сессии.
+        using var диалог = new FormConnectionSettings(new ConnectionManager(), new ServerRegistry());
+
+        if (диалог.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var дескриптор = диалог.Descriptor;
+
+        // Состав приложения работает с файлом SQLite; серверные реквизиты
+        // из диалога не открываются в живой форме.
+        if (!дескриптор.IsLocal || string.IsNullOrWhiteSpace(дескриптор.DatabasePath))
+        {
+            MessageBox.Show(
+                this,
+                "Открытие в работающем окне возможно только для файла базы данных "
+                + "на этом компьютере. Серверные реквизиты применяются при перезапуске.",
+                "Открыть базу…",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        // Состав, созданный оболочкой, освобождается перед подключением
+        // к другой базе; переданный снаружи остаётся во владении вызывающего.
+        if (_составСозданоВнутри && _состав is not null)
+        {
+            await _состав.DisposeAsync().ConfigureAwait(true);
+            _состав = null;
+        }
+
+        _инициализировано = false;
+
+        try
+        {
+            await ИнициализироватьAsync(дескриптор.DatabasePath).ConfigureAwait(true);
+        }
+        catch (Exception ошибка)
+        {
+            MessageBox.Show(
+                this,
+                ошибка.Message,
+                "Открытие базы данных",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     /// <summary>

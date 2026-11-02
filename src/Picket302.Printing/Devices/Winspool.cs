@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Picket302.Printing.Devices;
 
@@ -143,4 +144,18 @@ internal static class Winspool
         uint bytesNeeded,
         ref uint count,
         ref uint printersCount);
+
+    /// <summary>
+    /// Возвращает имя принтера по умолчанию системы
+    /// (<c>GetDefaultPrinterW</c>). Бит <c>PRINTER_ATTRIBUTE_DEFAULT</c> в
+    /// перечислении сообщается не во всех контекстах сеанса (перенаправленные
+    /// принтеры RDP), поэтому имя по умолчанию запрашивается этим вызовом.
+    /// </summary>
+    /// <param name="buffer">Буфер для имени принтера; <see langword="null"/> —
+    /// запрос требуемого размера.</param>
+    /// <param name="size">Размер буфера в символах; при нехватке — требуемый
+    /// размер.</param>
+    /// <returns><see langword="true"/>, если имя получено.</returns>
+    [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool GetDefaultPrinterW(StringBuilder? buffer, ref int size);
 }

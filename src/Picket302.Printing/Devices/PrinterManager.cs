@@ -135,9 +135,18 @@ public class PrinterManager
     /// Возвращает принтер по умолчанию.
     /// </summary>
     /// <returns>Принтер по умолчанию либо <see langword="null"/>.</returns>
+    /// <remarks>
+    /// Бит <c>PRINTER_ATTRIBUTE_DEFAULT</c> в перечислении
+    /// <c>EnumPrintersW</c> сообщается не во всех контекстах сеанса
+    /// (перенаправленные принтеры RDP), поэтому при отсутствии помеченного
+    /// принтера имя по умолчанию запрашивается штатным
+    /// <c>GetDefaultPrinterW</c> и сопоставляется с перечислением.
+    /// </remarks>
     public PrinterDescriptor? GetDefaultPrinter()
     {
-        foreach (var принтер in EnumeratePrinters())
+        var принтеры = EnumeratePrinters();
+
+        foreach (var принтер in принтеры)
         {
             if (принтер.IsDefault)
             {
@@ -145,7 +154,44 @@ public class PrinterManager
             }
         }
 
-        return null;
+        var имяПоУмолчанию = ПрочитатьИмяПринтераПоУмолчанию();
+
+        if (имяПоУмолчанию is null)
+        {
+            return null;
+        }
+
+        return принтеры.FirstOrDefault(принтер => string.Equals(
+            принтер.Name,
+            имяПоУмолчанию,
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Читает имя принтера по умолчанию через <c>GetDefaultPrinterW</c>:
+    /// первый вызов запрашивает размер, второй — имя.
+    /// </summary>
+    /// <returns>Имя принтера по умолчанию либо <see langword="null"/>.</returns>
+    private static string? ПрочитатьИмяПринтераПоУмолчанию()
+    {
+        var размер = 0;
+
+        // Первый вызов штатно возвращает FALSE с требуемым размером буфера.
+        Winspool.GetDefaultPrinterW(null, ref размер);
+
+        if (размер <= 0)
+        {
+            return null;
+        }
+
+        var имя = new System.Text.StringBuilder(размер);
+
+        if (!Winspool.GetDefaultPrinterW(имя, ref размер))
+        {
+            return null;
+        }
+
+        return имя.ToString();
     }
 
     /// <summary>
