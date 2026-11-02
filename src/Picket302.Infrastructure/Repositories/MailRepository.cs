@@ -250,6 +250,23 @@ public sealed class MailRepository : IMailRepository
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<long, int>> ПолучитьСчётчикиПоПапкамAsync(
+        CancellationToken cancellationToken = default)
+    {
+        // Агрегатный запрос (F-E21): счётчики точны при любом числе писем.
+        var строки = await _сессия.QueryAsync<(long FolderId, int Число)>(
+            """
+            SELECT folder_id AS FolderId, COUNT(*) AS Число
+            FROM mails
+            WHERE folder_id IS NOT NULL
+            GROUP BY folder_id;
+            """,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return строки.ToDictionary(строка => строка.FolderId, строка => строка.Число);
+    }
+
     /// <summary>
     /// Формирует параметры команды записи отправления.
     /// </summary>

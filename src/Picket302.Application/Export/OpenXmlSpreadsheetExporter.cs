@@ -286,7 +286,11 @@ public sealed class OpenXmlSpreadsheetExporter : ISpreadsheetExporter
         IReadOnlyList<(int[] Строки, IReadOnlyList<SpreadsheetCell> Значения)> строки)
     {
         var числоСтолбцов = Math.Max(таблица.ColumnCount, строки.Count == 0 ? 0 : строки.Max(с => с.Значения.Count));
-        var числоСтрок = строки.Count + 1;
+
+        // Строка заголовков не пишется при IncludeHeader=false (F-D10),
+        // строки данных сдвигаются на одну позицию вверх.
+        var писатьЗаголовок = таблица.IncludeHeader;
+        var числоСтрок = строки.Count + (писатьЗаголовок ? 1 : 0);
 
         писатель.WriteStartDocument(true);
         писатель.WriteStartElement("worksheet", SpreadsheetNamespace);
@@ -299,22 +303,25 @@ public sealed class OpenXmlSpreadsheetExporter : ISpreadsheetExporter
 
         писатель.WriteStartElement("sheetData", SpreadsheetNamespace);
 
-        писатель.WriteStartElement("row", SpreadsheetNamespace);
-        писатель.WriteAttributeString("r", "1");
-
-        for (var i = 0; i < индексыЗаголовков.Length; i++)
+        if (писатьЗаголовок)
         {
-            ЗаписатьОбщуюЯчейку(писатель, $"{БукваСтолбца(i + 1)}1", индексыЗаголовков[i]);
-        }
+            писатель.WriteStartElement("row", SpreadsheetNamespace);
+            писатель.WriteAttributeString("r", "1");
 
-        писатель.WriteEndElement();
+            for (var i = 0; i < индексыЗаголовков.Length; i++)
+            {
+                ЗаписатьОбщуюЯчейку(писатель, $"{БукваСтолбца(i + 1)}1", индексыЗаголовков[i]);
+            }
+
+            писатель.WriteEndElement();
+        }
 
         for (var номер = 0; номер < строки.Count; номер++)
         {
             var строка = строки[номер];
 
             писатель.WriteStartElement("row", SpreadsheetNamespace);
-            писатель.WriteAttributeString("r", (номер + 2).ToString(CultureInfo.InvariantCulture));
+            писатель.WriteAttributeString("r", (номер + (писатьЗаголовок ? 2 : 1)).ToString(CultureInfo.InvariantCulture));
 
             for (var i = 0; i < строка.Значения.Count; i++)
             {

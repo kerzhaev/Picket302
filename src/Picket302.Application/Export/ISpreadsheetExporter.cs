@@ -44,11 +44,16 @@ public sealed class SpreadsheetTable
     /// Формат представления дат в таблице; при пустом значении применяется
     /// формат <see cref="DefaultDateFormat"/>.
     /// </param>
+    /// <param name="includeHeader">
+    /// Писать ли строку заголовков (F-D10): прежде XLSX-писатель игнорировал
+    /// признак и всегда выводил заголовки.
+    /// </param>
     public SpreadsheetTable(
         string sheetName,
         IReadOnlyList<string> headers,
         IReadOnlyList<IReadOnlyList<SpreadsheetCell>> rows,
-        string? dateFormat = null)
+        string? dateFormat = null,
+        bool includeHeader = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sheetName);
         ArgumentNullException.ThrowIfNull(headers);
@@ -58,6 +63,7 @@ public sealed class SpreadsheetTable
         Headers = headers;
         Rows = rows;
         DateFormat = string.IsNullOrWhiteSpace(dateFormat) ? DefaultDateFormat : dateFormat;
+        IncludeHeader = includeHeader;
     }
 
     /// <summary>Имя листа книги Excel.</summary>
@@ -65,6 +71,22 @@ public sealed class SpreadsheetTable
 
     /// <summary>Заголовки столбцов.</summary>
     public IReadOnlyList<string> Headers { get; }
+
+    /// <summary>Признак вывода строки заголовков (F-D10).</summary>
+    public bool IncludeHeader { get; }
+
+    /// <summary>
+    /// Возвращает копию таблицы с переопределённым признаком вывода заголовков
+    /// (F-D10).
+    /// </summary>
+    /// <param name="includeHeader">Новый признак.</param>
+    /// <returns>Копия таблицы.</returns>
+    public SpreadsheetTable СПризнакомЗаголовка(bool includeHeader) => new(
+        SheetName,
+        Headers,
+        Rows,
+        DateFormat,
+        includeHeader);
 
     /// <summary>Строки таблицы.</summary>
     public IReadOnlyList<IReadOnlyList<SpreadsheetCell>> Rows { get; }

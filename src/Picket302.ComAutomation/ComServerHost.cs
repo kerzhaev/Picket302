@@ -445,6 +445,11 @@ public interface IClassFactory
 [ComVisible(true)]
 public sealed class ComClassFactory : IClassFactory
 {
+    /// <summary>Единственная служба переднего плана на процесс сервера (F-E24):
+    /// каждый экземпляр PEProApplication получает один и тот же STA-поток
+    /// вспомогательного окна, а не собственный.</summary>
+    private static readonly ForegroundWindowService ОбщаяСлужбаПереднегоПлана = new();
+
     /// <inheritdoc />
     public void CreateInstance(
         IntPtr outer,
@@ -458,7 +463,7 @@ public sealed class ComClassFactory : IClassFactory
                 unchecked((int)0x80040110));
         }
 
-        instance = new PEProApplication();
+        instance = new PEProApplication(ОбщаяСлужбаПереднегоПлана);
     }
 
     /// <inheritdoc />

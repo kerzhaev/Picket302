@@ -234,7 +234,7 @@ public sealed class DemoDatabaseSeeder
 
         yield return (СоздатьЮрЛицо(
             "ООО «Вектор Трейд»",
-            "500100732259",
+            "7707000008",
             "773001003",
             "125167",
             "ООО «Вектор Трейд»",
@@ -255,12 +255,13 @@ public sealed class DemoDatabaseSeeder
             "ул. Ленина, д. 3, кв. 12",
             "630005",
             "+7 (383) 300-12-45",
-            "smirnov@example"),
+            "smirnov@example.com",
+            физлицо: true),
             "Получатели", null, null);
 
         yield return (СоздатьЮрЛицо(
             "ООО «Балтика-Логистик»",
-            "7707083893",
+            "7707000015",
             "774001004",
             "199106",
             "ООО «Балтика-Логистик»",
@@ -273,7 +274,7 @@ public sealed class DemoDatabaseSeeder
 
         yield return (СоздатьЮрЛицо(
             "ФГУП «Почта Тест»",
-            "7740000005",
+            "7707000022",
             "774001005",
             "101000",
             "ФГУП «Почта Тест»",
@@ -298,7 +299,8 @@ public sealed class DemoDatabaseSeeder
         string строка3,
         string почтовыйИндекс,
         string телефон,
-        string почта)
+        string почта,
+        bool физлицо = false)
     {
         var юридический = Address.Create(индекс,
         [
@@ -322,7 +324,8 @@ public sealed class DemoDatabaseSeeder
 
         var контрагент = new Counterparty
         {
-            Type = CounterpartyType.LegalEntity,
+            // ИП — физическое лицо с 12-значным ИНН (F-D12).
+            Type = физлицо ? CounterpartyType.NaturalPerson : CounterpartyType.LegalEntity,
             Name = наименование,
             ShortName = наименование,
             Inn = инн,

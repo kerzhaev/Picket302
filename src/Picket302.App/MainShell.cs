@@ -1166,14 +1166,12 @@ public sealed class MainShell : Form
     private async Task ЗагрузитьПапкиAsync(AppServices состав, CancellationToken cancellationToken)
     {
         var папки = await состав.Папки.GetAllAsync(cancellationToken).ConfigureAwait(true);
-        var письма = await состав.Письма
-            .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 200), cancellationToken: cancellationToken)
-            .ConfigureAwait(true);
 
-        var счётчики = письма.Items
-            .Where(письмо => письмо.FolderId is not null)
-            .GroupBy(письмо => письмо.FolderId!.Value)
-            .ToDictionary(группа => группа.Key, группа => группа.Count());
+        // Счётчики агрегатом по всем папкам (F-E21): выборка первой страницы
+        // давала неполные счётчики при письмах глубже 200 записей.
+        var счётчики = await состав.Письма
+            .ПолучитьСчётчикиПоПапкамAsync(cancellationToken)
+            .ConfigureAwait(true);
 
         _деревоПапок.Nodes.Clear();
 

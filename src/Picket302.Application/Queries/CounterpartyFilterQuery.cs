@@ -86,15 +86,31 @@ public static class CounterpartyFilterQuery
             "email" => поУбыванию
                 ? query.OrderByDescending(контрагент => контрагент.Email)
                 : query.OrderBy(контрагент => контрагент.Email),
-            "post_zip" or "zip" => поУбыванию
-                ? query.OrderByDescending(контрагент => контрагент.PostalAddress!.Zip)
-                : query.OrderBy(контрагент => контрагент.PostalAddress!.Zip),
-            "post_str5" or "city" => поУбыванию
-                ? query.OrderByDescending(контрагент => контрагент.PostalAddress!.Lines[4])
-                : query.OrderBy(контрагент => контрагент.PostalAddress!.Lines[4]),
-            "post_str1" => поУбыванию
-                ? query.OrderByDescending(контрагент => контрагент.PostalAddress!.Lines[0])
-                : query.OrderBy(контрагент => контрагент.PostalAddress!.Lines[0]),
+            "post_zip" or "zip" or "main_zip" => поУбыванию
+                ? query.OrderByDescending(контрагент => контрагент.PostalAddress != null
+                    ? контрагент.PostalAddress.Zip
+                    : string.Empty)
+                : query.OrderBy(контрагент => контрагент.PostalAddress != null
+                    ? контрагент.PostalAddress.Zip
+                    : string.Empty),
+            "post_str5" or "city" or "main_city" => поУбыванию
+                ? query.OrderByDescending(контрагент => контрагент.PostalAddress != null
+                    && контрагент.PostalAddress.Lines.Count > 4
+                    ? контрагент.PostalAddress.Lines[4]
+                    : string.Empty)
+                : query.OrderBy(контрагент => контрагент.PostalAddress != null
+                    && контрагент.PostalAddress.Lines.Count > 4
+                    ? контрагент.PostalAddress.Lines[4]
+                    : string.Empty),
+            "post_str1" or "main_street" => поУбыванию
+                ? query.OrderByDescending(контрагент => контрагент.PostalAddress != null
+                    && контрагент.PostalAddress.Lines.Count > 0
+                    ? контрагент.PostalAddress.Lines[0]
+                    : string.Empty)
+                : query.OrderBy(контрагент => контрагент.PostalAddress != null
+                    && контрагент.PostalAddress.Lines.Count > 0
+                    ? контрагент.PostalAddress.Lines[0]
+                    : string.Empty),
             "group_id" => поУбыванию
                 ? query.OrderByDescending(контрагент => контрагент.GroupId)
                 : query.OrderBy(контрагент => контрагент.GroupId),

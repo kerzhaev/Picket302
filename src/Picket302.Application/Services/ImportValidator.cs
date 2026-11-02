@@ -1,5 +1,6 @@
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Rules;
 
 namespace Picket302.Application.Services;
 
@@ -123,20 +124,13 @@ public sealed class ImportValidator
 
         if (!string.IsNullOrWhiteSpace(черновик.Inn))
         {
-            if (!черновик.Inn.All(char.IsAsciiDigit))
-            {
-                ошибки.Add("ИНН должен состоять только из цифр.");
-            }
-            else
-            {
-                var ожидаемое = черновик.Type == CounterpartyType.NaturalPerson ? 12 : 10;
-                var подсказка = ожидаемое == 10 ? "юридического лица" : "физического лица";
+            // Полная проверка как в карточке контрагента (F-D11): длина и
+            // контрольная сумма, а не только длина.
+            var проверкаИнн = InnValidator.Validate(черновик.Inn, черновик.Type);
 
-                if (черновик.Inn.Length != ожидаемое)
-                {
-                    ошибки.Add(
-                        $"ИНН должен содержать {ожидаемое} цифр ({подсказка}), указано {черновик.Inn.Length}.");
-                }
+            if (проверкаИнн.IsFailure)
+            {
+                ошибки.Add(проверкаИнн.Error!);
             }
         }
 

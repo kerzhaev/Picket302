@@ -66,10 +66,11 @@ public sealed class Address
     public string? Raw { get; }
 
     /// <summary>
-    /// Признак наличия структурированных данных: индекс задан и хотя бы одна
-    /// адресная строка непуста.
+    /// Признак отсутствия структурированных данных: индекс пуст и все
+    /// адресные строки пусты. Условие по индексу — ИЛИ (F-D9): прежде пустой
+    /// индекс при заполненных строках давал «пустой» адрес.
     /// </summary>
-    public bool IsEmpty => string.IsNullOrEmpty(Zip) && _lines.All(string.IsNullOrEmpty);
+    public bool IsEmpty => string.IsNullOrEmpty(Zip) || _lines.All(string.IsNullOrEmpty);
 
     /// <summary>
     /// Создаёт адрес по почтовому индексу и шести адресным строкам.

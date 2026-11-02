@@ -1582,15 +1582,17 @@ internal static class HtmlTableReader
     }
 
     /// <summary>
-    /// Раскодирует HTML-сущности текста.
+    /// Раскодирует HTML-сущности текста; «&amp;amp;» — последним (F-D13):
+    /// прежде раннее декодирование «&amp;amp;» порождало новые сущности
+    /// («&amp;amp;lt;» → «&amp;lt;»), которые оставались в тексте.
     /// </summary>
     /// <param name="текст">Исходный текст.</param>
     /// <returns>Текст с раскодированными сущностями.</returns>
     private static string РаскодироватьСущности(string текст) => текст
         .Replace("&nbsp;", " ", StringComparison.OrdinalIgnoreCase)
-        .Replace("&amp;", "&", StringComparison.OrdinalIgnoreCase)
         .Replace("&lt;", "<", StringComparison.OrdinalIgnoreCase)
         .Replace("&gt;", ">", StringComparison.OrdinalIgnoreCase)
         .Replace("&quot;", "\"", StringComparison.OrdinalIgnoreCase)
-        .Replace("&#39;", "'", StringComparison.OrdinalIgnoreCase);
+        .Replace("&#39;", "'", StringComparison.OrdinalIgnoreCase)
+        .Replace("&amp;", "&", StringComparison.OrdinalIgnoreCase);
 }

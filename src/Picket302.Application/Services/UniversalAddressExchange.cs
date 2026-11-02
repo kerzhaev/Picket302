@@ -126,7 +126,8 @@ public sealed class UniversalAddressExchange
 
             case ExchangeFormat.Xls:
             case ExchangeFormat.Xlsx:
-                _экспортТаблиц.Write(таблица, output);
+                // Признак заголовков пробрасывается в XLSX-писатель (F-D10).
+                _экспортТаблиц.Write(таблица.СПризнакомЗаголовка(параметры.IncludeHeader), output);
                 break;
 
             default:

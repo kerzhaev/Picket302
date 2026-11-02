@@ -248,7 +248,7 @@ public sealed class ImportMergeService
                         FieldName = имя,
                         FieldValue = пара.Value,
                         FieldType = CounterpartyFieldType.Text,
-                        UpdatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.UtcNow,
                     },
                     cancellationToken).ConfigureAwait(false);
 
@@ -272,7 +272,7 @@ public sealed class ImportMergeService
             }
 
             существующее.FieldValue = пара.Value;
-            существующее.UpdatedAt = DateTime.Now;
+            существующее.UpdatedAt = DateTime.UtcNow;
             await _поля.UpdateAsync(существующее, cancellationToken).ConfigureAwait(false);
             изменено++;
         }

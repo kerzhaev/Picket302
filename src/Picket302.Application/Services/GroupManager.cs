@@ -88,7 +88,7 @@ public sealed class GroupManager
         }
 
         var имя = name.Trim();
-        var все = await _группы.GetAllAsync(cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<Group> все = await _группы.GetAllAsync(cancellationToken).ConfigureAwait(false);
 
         if (все.Any(группа => string.Equals(группа.Name, имя, StringComparison.OrdinalIgnoreCase)))
         {
@@ -110,6 +110,18 @@ public sealed class GroupManager
 
             if (isDefault)
             {
+                // Новая группа добавляется в снимок (F-D8): прежде ApplyDefault
+                // получал список без новой группы и не снимал признак
+                // по умолчанию с остальных групп.
+                if (все is List<Group> снимок)
+                {
+                    снимок.Add(группа);
+                }
+                else
+                {
+                    все = [.. все, группа];
+                }
+
                 var назначение = DefaultGroupPolicy.ApplyDefault(группа, все);
 
                 if (назначение.IsFailure)

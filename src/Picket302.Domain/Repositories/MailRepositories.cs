@@ -91,6 +91,16 @@ public interface IMailRepository
         long counterpartyId,
         Address address,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Возвращает счётчики отправлений по папкам одним агрегатным запросом
+    /// (F-E21): прежде счётчики считались по первой странице выборки и
+    /// были неполными.
+    /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Словарь «идентификатор папки — число отправлений».</returns>
+    Task<IReadOnlyDictionary<long, int>> ПолучитьСчётчикиПоПапкамAsync(
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

@@ -49,6 +49,10 @@ public sealed class FormPrintPreview : Form
         _зум.SelectedIndex = 2;
         _зум.Location = new Point(78, 8);
 
+        // Смена масштаба перерисовывает холст (F-E22): прежде подписка
+        // отсутствовала, и выбор масштаба не менял предпросмотр.
+        _зум.SelectedIndexChanged += (_, _) => _холст.Invalidate();
+
         var кнопкаПечать = new Button { Text = "Печать", Size = new Size(96, 26) };
         кнопкаПечать.Location = new Point(420, 6);
         кнопкаПечать.Click += (_, _) =>
