@@ -56,6 +56,55 @@ public sealed class HtmlBodySanitizerTests
         Assert.Equal(разметка, результат);
     }
 
+    /// <summary>Регрессия F-D6: значение схемы без кавычек вырезается.</summary>
+    [Fact]
+    public void Sanitize_СхемаБезКавычек_Очищается()
+    {
+        var разметка = "<a href=javascript:alert(1)>Переход</a>";
+
+        var результат = HtmlBodySanitizer.Sanitize(разметка);
+
+        Assert.DoesNotContain("javascript:", результат, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert(1)", результат, StringComparison.Ordinal);
+    }
+
+    /// <summary>Регрессия F-D6: сущности внутри имени схемы декодируются
+    /// перед проверкой.</summary>
+    [Fact]
+    public void Sanitize_СущностиВнутриСхемы_Очищаются()
+    {
+        var разметка = "<a href=\"java&#115;cript:alert(1)\">Переход</a>";
+
+        var результат = HtmlBodySanitizer.Sanitize(разметка);
+
+        Assert.DoesNotContain("alert(1)", результат, StringComparison.Ordinal);
+        Assert.DoesNotContain("&#115;", результат, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Регрессия F-D6: пробельные символы внутри имени схемы
+    /// удаляются перед проверкой.</summary>
+    [Fact]
+    public void Sanitize_ПробелыВнутриСхемы_Очищаются()
+    {
+        var разметка = "<a href=\"java\tscript:alert(1)\">Переход</a>";
+
+        var результат = HtmlBodySanitizer.Sanitize(разметка);
+
+        Assert.DoesNotContain("alert(1)", результат, StringComparison.Ordinal);
+    }
+
+    /// <summary>Регрессия F-D6: обработчик после «/» без пробела вырезается.</summary>
+    [Fact]
+    public void Sanitize_ОбработчикПослеСлеша_Вырезается()
+    {
+        var разметка = "<img/src=x/onerror=alert(1)>";
+
+        var результат = HtmlBodySanitizer.Sanitize(разметка);
+
+        Assert.DoesNotContain("onerror", результат, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert(1)", результат, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Sanitize_ПустаяРазметка_ВозвращаетПустуюСтроку()
     {

@@ -53,11 +53,51 @@ public static partial class HtmlBodySanitizer
         }
 
         результат = ОбработчикСобытия().Replace(результат, string.Empty);
-        результат = ОпаснаяСхема().Replace(результат, "$1=\"\"");
+        результат = УбратьОпасныеСхемы(результат);
         результат = МетаПеренаправление().Replace(результат, string.Empty);
 
         return результат;
     }
+
+    /// <summary>
+    /// Очищает атрибуты с опасными схемами: значение проверяется после
+    /// декодирования сущностей и удаления пробельных символов (F-D6).
+    /// </summary>
+    /// <param name="разметка">Разметка.</param>
+    /// <returns>Разметка с очищенными опасными атрибутами.</returns>
+    /// <remarks>
+    /// Прежде обходились: значение без кавычек (<c>href=javascript:…</c>),
+    /// HTML-сущности внутри имени схемы (<c>java&amp;#115;cript:</c>) и
+    /// пробельные символы (<c>java\tscript:</c>). Решение о вырезании
+    /// принимается по нормализованной копии значения, вырезается атрибут
+    /// в оригинале по границам совпадения.
+    /// </remarks>
+    private static string УбратьОпасныеСхемы(string разметка) =>
+        ОпаснаяСхема().Replace(
+            разметка,
+            совпадение =>
+            {
+                var значение = совпадение.Groups["значение"].Value;
+
+                // Сущности декодируются рабочей копией значения; «&amp;»
+                // декодируется в том же проходе — повторного декодирования
+                // не возникает.
+                var рабочее = System.Net.WebUtility.HtmlDecode(значение);
+
+                // Браузеры игнорируют пробельные символы внутри имени схемы:
+                // «java\tscript:» опасен как «javascript:».
+                var нормализованное = new string(
+                    рабочее.Where(символ => !char.IsWhiteSpace(символ)).ToArray());
+
+                if (нормализованное.StartsWith("javascript:", StringComparison.OrdinalIgnoreCase)
+                    || нормализованное.StartsWith("vbscript:", StringComparison.OrdinalIgnoreCase)
+                    || нормализованное.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"{совпадение.Groups["атрибут"].Value}=\"\"";
+                }
+
+                return совпадение.Value;
+            });
 
     /// <summary>
     /// Проверяет разметку и сообщает о проблемных местах (ТЗ §8.7, функция 96:
@@ -150,12 +190,15 @@ public static partial class HtmlBodySanitizer
     private static string Сократить(string значение, int предел = 40)
         => значение.Length <= предел ? значение : значение[..предел] + "…";
 
-    /// <summary>Шаблон обработчиков событий вида <c>onclick="…"</c>.</summary>
-    [GeneratedRegex(@"\s+on[a-z]+\s*=\s*(?:""[^""]*""|'[^']*'|[^\s>]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>Шаблон обработчиков событий вида <c>onclick="…"</c> (перед
+    /// именем допускается пробел или «/»: <c>&lt;img/src=x/onerror=…&gt;</c>,
+    /// F-D6).</summary>
+    [GeneratedRegex(@"[\s/]+on[a-z]+\s*=\s*(?:""[^""]*""|'[^']*'|[^\s>]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ОбработчикСобытия();
 
-    /// <summary>Шаблон опасных схем в адресах.</summary>
-    [GeneratedRegex(@"(href|src|action)\s*=\s*[""']\s*(?:javascript|vbscript|data)\s*:[^""']*[""']", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>Шаблон атрибута-адреса: значение в двойных или одинарных
+    /// кавычках либо без кавычек (F-D6).</summary>
+    [GeneratedRegex(@"\b(?<атрибут>href|src|action)\s*=\s*(?:""(?<значение>[^""]*)""|'(?<значение>[^']*)'|(?<значение>[^\s>]+))", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ОпаснаяСхема();
 
     /// <summary>Шаблон мета-тега перенаправления.</summary>
