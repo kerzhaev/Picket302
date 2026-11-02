@@ -176,17 +176,24 @@ public sealed class QrCodeRenderer
         var параметры = options ?? new QrRenderOptions();
         var хэш = ВычислитьХэш(payload);
 
-        // Пересечение с логотипом проверяется до вывода: код не должен
-        // накладываться на логотип (ТЗ §8.6, функция 48).
-        ПроверитьПересечениеСЛоготипом(bounds, logoBounds);
+        // Пересечение с логотипом проверяется до вывода по фактическому
+        // прямоугольнику вывода: код не должен накладываться на логотип
+        // (ТЗ §8.6, функция 48).
+        ПроверитьПересечениеСЛоготипом(ПрямоугольникВывода(bounds), logoBounds);
 
         if (_кэшПамяти.TryGetValue(хэш, out var блоб))
         {
             using var изКэша = QrBitmapCodec.Decode(блоб);
 
-            Вывести(context, изКэша, bounds, параметры);
+            // Растр кэша построен под конкретные границы и DPI (F-A8):
+            // при несовпадении с текущим полем код перестраивается ниже,
+            // и кэш обновляется.
+            if (СоответствуетГраницам(изКэша, bounds, параметры))
+            {
+                Вывести(context, изКэша, bounds, параметры);
 
-            return;
+                return;
+            }
         }
 
         var код = QrEncoder.Encode(payload, параметры.ErrorCorrection);
@@ -200,17 +207,63 @@ public sealed class QrCodeRenderer
         _неСохранённые[хэш] = (payload, данные);
     }
 
+    /// <summary>
+    /// Фактический прямоугольник вывода кода: квадрат по меньшей стороне
+    /// поля (F-A8).
+    /// </summary>
+    /// <param name="bounds">Границы размещения кода.</param>
+    /// <returns>Прямоугольник вывода.</returns>
+    private static RectangleF ПрямоугольникВывода(RectangleF bounds)
+    {
+        var сторона = Math.Min(bounds.Width, bounds.Height);
+
+        return new RectangleF(bounds.X, bounds.Y, сторона, сторона);
+    }
+
+    /// <summary>
+    /// Определяет, соответствует ли кэшированный растр требуемым границам
+    /// (F-A8): растр строится под конкретные границы и DPI, кэш по payload
+    /// с другого поля бланка даёт другой размер.
+    /// </summary>
+    /// <param name="растр">Кэшированный растр.</param>
+    /// <param name="bounds">Требуемые границы.</param>
+    /// <param name="параметры">Параметры вывода.</param>
+    /// <returns><see langword="true"/>, если растр пригоден.</returns>
+    /// <remarks>
+    /// Растр строится с округлением размера до целых модулей, поэтому даже
+    /// для тех же границ он немного меньше расчётного (до ~4 % при минимальной
+    /// версии кода); большее расхождение означает растр другого поля либо
+    /// другого DPI (F-A8).
+    /// </remarks>
+    private static bool СоответствуетГраницам(Bitmap растр, RectangleF bounds, QrRenderOptions параметры)
+    {
+        var сторонаМм = Math.Min(bounds.Width, bounds.Height);
+        var dpiРастра = растр.HorizontalResolution > 0f ? растр.HorizontalResolution : параметры.Dpi;
+        var ожидаемыхПикселей = (int)Math.Round((сторонаМм / 25.4f) * dpiРастра, MidpointRounding.AwayFromZero);
+
+        if (ожидаемыхПикселей <= 0)
+        {
+            return false;
+        }
+
+        // Допуск — округление до целых модулей построения растра.
+        var отклонение = Math.Abs(растр.Width - ожидаемыхПикселей);
+
+        return отклонение * 8 <= ожидаемыхПикселей;
+    }
+
     private static void Вывести(
         IGraphicsContext context,
         Bitmap растр,
         RectangleF bounds,
-        QrRenderOptions параметры) =>
-        context.DrawImageMm(
-            растр,
-            bounds.X,
-            bounds.Y,
-            растр.Width / (float)параметры.Dpi * 25.4f,
-            растр.Height / (float)параметры.Dpi * 25.4f);
+        QrRenderOptions параметры)
+    {
+        // Вывод по границам поля, а не по размеру растра (F-A8): прежде
+        // кэшированный растр чужого поля рисовался в размере кэша.
+        var сторона = Math.Min(bounds.Width, bounds.Height);
+
+        context.DrawImageMm(растр, bounds.X, bounds.Y, сторона, сторона);
+    }
 
     /// <summary>
     /// Отрисовывает QR-код с обращением к хранилищу кэша: готовый растр берётся
@@ -235,6 +288,7 @@ public sealed class QrCodeRenderer
 
         var параметры = options ?? new QrRenderOptions();
         var хэш = ВычислитьХэш(payload);
+        QrCache? устаревшаяЗапись = null;
 
         if (_репозиторий is not null)
         {
@@ -245,33 +299,49 @@ public sealed class QrCodeRenderer
             if (запись is not null && запись.ImageBlob.Length > 0)
             {
                 using var растр = QrBitmapCodec.Decode(запись.ImageBlob);
-                ПроверитьПересечениеСЛоготипом(bounds, logoBounds);
 
-                context.DrawImageMm(
-                    растр,
-                    bounds.X,
-                    bounds.Y,
-                    растр.Width / (float)параметры.Dpi * 25.4f,
-                    растр.Height / (float)параметры.Dpi * 25.4f);
+                ПроверитьПересечениеСЛоготипом(ПрямоугольникВывода(bounds), logoBounds);
 
-                return true;
+                // Растр кэша построен под конкретные границы и DPI (F-A8):
+                // при несовпадении код перестраивается ниже и запись
+                // заменяется.
+                if (СоответствуетГраницам(растр, bounds, параметры))
+                {
+                    var вывод = ПрямоугольникВывода(bounds);
+
+                    context.DrawImageMm(растр, вывод.X, вывод.Y, вывод.Width, вывод.Height);
+
+                    return true;
+                }
+
+                устаревшаяЗапись = запись;
             }
         }
 
         var код = QrEncoder.Encode(payload, параметры.ErrorCorrection);
         using var новыйРастр = ПостроитьРастр(код, bounds, параметры);
 
-        ПроверитьПересечениеСЛоготипом(bounds, logoBounds);
+        ПроверитьПересечениеСЛоготипом(ПрямоугольникВывода(bounds), logoBounds);
+
+        var прямоугольникВывода = ПрямоугольникВывода(bounds);
 
         context.DrawImageMm(
             новыйРастр,
-            bounds.X,
-            bounds.Y,
-            новыйРастр.Width / (float)параметры.Dpi * 25.4f,
-            новыйРастр.Height / (float)параметры.Dpi * 25.4f);
+            прямоугольникВывода.X,
+            прямоугольникВывода.Y,
+            прямоугольникВывода.Width,
+            прямоугольникВывода.Height);
 
         if (_репозиторий is not null)
         {
+            // Устаревшая запись кэша (чужие границы/DPI) заменяется.
+            if (устаревшаяЗапись is not null)
+            {
+                await _репозиторий
+                    .DeleteAsync(устаревшаяЗапись.Id, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             var блоб = QrBitmapCodec.Encode(новыйРастр, параметры.Dpi);
             var запись = QrCache.Create(payload, блоб, DateTime.UtcNow);
 
