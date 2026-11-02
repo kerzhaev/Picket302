@@ -14,6 +14,44 @@ namespace Picket302.Printing.Elements;
 public sealed record LogoSizeInfo(int Width, int Height, bool ExceedsLimit, string? Warning);
 
 /// <summary>
+/// Совместное владение изображением логотипа и его источником (F-A10).
+/// </summary>
+/// <remarks>
+/// GDI+ требует, чтобы поток, из которого создано изображение, оставался
+/// открытым всё время жизни изображения: прежде поток закрывался при выходе
+/// из <c>LoadImage</c>, и последующий вывод растра падал с ошибкой GDI+.
+/// Держатель освобождает изображение и поток вместе.
+/// </remarks>
+public sealed class LogoImageHolder : IDisposable
+{
+    private readonly Stream _поток;
+
+    /// <summary>
+    /// Создаёт держатель изображения и его источника.
+    /// </summary>
+    /// <param name="изображение">Загруженное изображение.</param>
+    /// <param name="поток">Поток-источник изображения.</param>
+    public LogoImageHolder(Image изображение, Stream поток)
+    {
+        ArgumentNullException.ThrowIfNull(изображение);
+        ArgumentNullException.ThrowIfNull(поток);
+
+        Изображение = изображение;
+        _поток = поток;
+    }
+
+    /// <summary>Загруженное изображение.</summary>
+    public Image Изображение { get; }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        Изображение.Dispose();
+        _поток.Dispose();
+    }
+}
+
+/// <summary>
 /// Наложение растрового логотипа (ТЗ §8.4, функция 47:
 /// <c>Printing.Elements.LogoRenderer.DrawLogo</c>).
 /// </summary>
@@ -38,7 +76,8 @@ public sealed class LogoRenderer
     {
         ArgumentNullException.ThrowIfNull(logoBytes);
 
-        using var изображение = LoadImage(logoBytes);
+        using var держатель = LoadImage(logoBytes);
+        var изображение = держатель.Изображение;
 
         var наибольшаяСторона = Math.Max(изображение.Width, изображение.Height);
         var превышает = наибольшаяСторона > maxSidePx;
@@ -61,7 +100,8 @@ public sealed class LogoRenderer
     {
         ArgumentNullException.ThrowIfNull(logoBytes);
 
-        using var изображение = LoadImage(logoBytes);
+        using var держатель = LoadImage(logoBytes);
+        var изображение = держатель.Изображение;
 
         var наибольшаяСторона = Math.Max(изображение.Width, изображение.Height);
 
@@ -107,11 +147,11 @@ public sealed class LogoRenderer
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(logoBytes);
 
-        Image? изображение = null;
+        LogoImageHolder? держатель = null;
 
         try
         {
-            изображение = LoadImage(logoBytes);
+            держатель = LoadImage(logoBytes);
         }
 #pragma warning disable CA1031 // Повреждённый логотип любого формата заменяется заглушкой.
         catch (Exception)
@@ -121,8 +161,11 @@ public sealed class LogoRenderer
             return "Файл логотипа повреждён: вместо изображения выведена заглушка.";
         }
 
-        using (изображение)
+        // Поток-источник живёт вместе с изображением в держателе: вывод
+        // растра выполняется внутри области его существования (F-A10).
+        using (держатель)
         {
+            var изображение = держатель.Изображение;
             var границы = targetBounds;
 
             if (keepAspectRatio)
@@ -153,24 +196,40 @@ public sealed class LogoRenderer
     }
 
     /// <summary>
-    /// Загружает растровое изображение из BLOB.
+    /// Загружает растровое изображение из BLOB вместе с потоком-источником.
     /// </summary>
     /// <param name="logoBytes">Содержимое логотипа.</param>
-    /// <returns>Изображение.</returns>
-    public static Image LoadImage(byte[] logoBytes)
+    /// <returns>Держатель изображения и потока.</returns>
+    /// <remarks>
+    /// GDI+ требует открытого потока на всё время жизни изображения (F-A10):
+    /// возвращается держатель, освобождающий оба объекта.
+    /// </remarks>
+    public static LogoImageHolder LoadImage(byte[] logoBytes)
     {
         ArgumentNullException.ThrowIfNull(logoBytes);
 
-        using var поток = new MemoryStream(logoBytes);
-        var изображение = Image.FromStream(поток);
+        var поток = new MemoryStream(logoBytes);
+        Image изображение;
+
+        try
+        {
+            изображение = Image.FromStream(поток);
+        }
+        catch
+        {
+            поток.Dispose();
+            throw;
+        }
 
         if (изображение.Width <= 0 || изображение.Height <= 0)
         {
             изображение.Dispose();
+            поток.Dispose();
+
             throw new InvalidOperationException("Файл логотипа повреждён.");
         }
 
-        return изображение;
+        return new LogoImageHolder(изображение, поток);
     }
 
     private static void DrawPlaceholder(IGraphicsContext context, RectangleF targetBounds)
