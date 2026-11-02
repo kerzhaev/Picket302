@@ -352,7 +352,11 @@ public sealed class PrintSessionController
             if (request.Preprinted)
             {
                 контекст = new PreprintedMode().StripBackground(контекст);
-                предупреждения.AddRange(контекст.Warnings);
+
+                // Режимы накапливают предупреждения в контексте: повторный
+                // AddRange дублировал предупреждения FixA4 (F-A9) —
+                // добавляются только новые.
+                предупреждения.AddRange(контекст.Warnings.Except(предупреждения));
             }
 
             // Проверка параметров кодового штампа: отсутствие шрифта ZIPcode

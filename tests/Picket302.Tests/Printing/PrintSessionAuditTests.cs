@@ -82,6 +82,27 @@ public sealed class PrintSessionAuditTests : IDisposable
     }
 
     [Fact]
+    public async Task Печать_FixA4СРазлиновкой_ПредупрежденияБезДублей()
+    {
+        var контроллер = СобратьКонтроллер(
+            new PrintAuditWriter(_каталог),
+            new СпулерЗаглушка(),
+            new РеестрЗаглушка());
+
+        var итог = await контроллер.PrintSelectionDirectAsync(
+            new[] { 1L },
+            Запрос() with { FixA4 = true, Preprinted = true },
+            CancellationToken.None);
+
+        Assert.True(итог.IsSuccess, итог.ErrorMessage);
+
+        // Предупреждение FixA4 фиксируется один раз, а не дважды (F-A9):
+        // прежде StripBackground возвращал накопленный список, и AddRange
+        // дублировал предупреждение принудительной печати A4.
+        Assert.Equal(1, итог.Warnings.Count(текст => текст == FixA4Mode.FixA4Warning));
+    }
+
+    [Fact]
     public async Task Печать_ПрерваннаяСессия_ВРеестреЕстьЗаписьСоСтатусомAborted()
     {
         var реестр = new РеестрЗаглушка();
