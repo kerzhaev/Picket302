@@ -36,6 +36,12 @@ public sealed class FormDistributionEditor : Form
     private IReadOnlyList<Category> _категорииСправочника = [];
 
     /// <summary>
+    /// Точка нажатия кнопки в списке доступных: до смещения за размер
+    /// перетаскивания системы drag не начинается (F-E2).
+    /// </summary>
+    private Point _точкаПеретаскивания;
+
+    /// <summary>
     /// Создаёт редактор рассылки.
     /// </summary>
     /// <param name="состав">Состав приложения.</param>
@@ -137,7 +143,8 @@ public sealed class FormDistributionEditor : Form
         _доступные.Columns[0].Width = 260;
         _доступные.Columns[1].Width = 70;
         _доступные.Columns[2].Width = 140;
-        _доступные.MouseDown += ОтправитьПеретаскивание;
+        _доступные.MouseDown += ЗапомнитьТочкуПеретаскивания;
+        _доступные.MouseMove += ОтправитьПеретаскивание;
         _доступные.CellDoubleClick += (_, _) => ДобавитьВыделенные();
 
         _получатели.Dock = DockStyle.Fill;
@@ -310,10 +317,14 @@ public sealed class FormDistributionEditor : Form
 
             var адрес = контрагент.GetAddress(контрагент.AddressMainType);
 
-            _доступные.Rows.Add(
+            var индекс = _доступные.Rows.Add(
                 контрагент.Name,
                 адрес?.Zip ?? string.Empty,
                 адрес?.Lines.ElementAtOrDefault(4) ?? string.Empty);
+
+            // Идентификатор хранится в Tag строки: первый столбец —
+            // наименование, разбирать его как число нельзя (F-E2).
+            _доступные.Rows[индекс].Tag = контрагент.Id;
         }
     }
 
@@ -347,7 +358,8 @@ public sealed class FormDistributionEditor : Form
     {
         foreach (DataGridViewRow строка in _доступные.SelectedRows)
         {
-            var идентификатор = Convert.ToInt64(строка.Cells[0].Value ?? 0L, CultureInfo.InvariantCulture);
+            // Идентификатор читается из Tag строки (F-E2).
+            var идентификатор = строка.Tag as long? ?? 0L;
             var контрагент = _всеКонтрагенты.FirstOrDefault(сущ => сущ.Id == идентификатор);
 
             if (контрагент is null || УжеДобавлен(контрагент.Id))
@@ -418,7 +430,21 @@ public sealed class FormDistributionEditor : Form
     }
 
     /// <summary>
-    /// Начинает перетаскивание выделенных строк списка доступных контрагентов.
+    /// Запоминает точку нажатия кнопки: перетаскивание начнётся только после
+    /// смещения курсора за размер перетаскивания системы (F-E2).
+    /// </summary>
+    private void ЗапомнитьТочкуПеретаскивания(object? отправитель, MouseEventArgs аргументы)
+    {
+        if (аргументы.Button == MouseButtons.Left)
+        {
+            _точкаПеретаскивания = аргументы.Location;
+        }
+    }
+
+    /// <summary>
+    /// Начинает перетаскивание выделенных строк списка доступных контрагентов,
+    /// когда курсор сместился за <see cref="SystemInformation.DragSize"/> от
+    /// точки нажатия.
     /// </summary>
     private void ОтправитьПеретаскивание(object? отправитель, MouseEventArgs аргументы)
     {
@@ -427,9 +453,19 @@ public sealed class FormDistributionEditor : Form
             return;
         }
 
+        var смещениеПоX = аргументы.X - _точкаПеретаскивания.X;
+        var смещениеПоY = аргументы.Y - _точкаПеретаскивания.Y;
+        var размер = SystemInformation.DragSize;
+
+        // Обычный щелчок без смещения перетаскиванием не считается (F-E2).
+        if (Math.Abs(смещениеПоX) < размер.Width && Math.Abs(смещениеПоY) < размер.Height)
+        {
+            return;
+        }
+
         var идентификаторы = _доступные.SelectedRows
             .Cast<DataGridViewRow>()
-            .Select(строка => Convert.ToInt64(строка.Cells[0].Value ?? 0L, CultureInfo.InvariantCulture))
+            .Select(строка => строка.Tag as long? ?? 0L)
             .ToList();
 
         _доступные.DoDragDrop(идентификаторы, DragDropEffects.Copy);
