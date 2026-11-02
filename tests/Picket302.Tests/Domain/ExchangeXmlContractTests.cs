@@ -323,6 +323,56 @@ public sealed class ExchangeXmlContractTests
         Assert.Equal(1, Occurrences(xml, "<EnvelopesData>"));
     }
 
+    /// <summary>
+    /// Регрессия F-D4: запись «..\out2\evil.exe» при каталоге распаковки
+    /// «…\out» пропускается — прежде сравнение по голому префиксу пропускало
+    /// соседний каталог «out2» (zip-slip).
+    /// </summary>
+    [Fact]
+    public void EmbeddedZipPackageExtractor_ЗаписьСоседнегоКаталога_Пропускается()
+    {
+        var archive = CreateArchive(@"..\out2\evil.exe", "вредоносное содержимое");
+
+        var buffer = new StringWriter();
+
+        using (var writer = ExchangeXmlWriter.CreateWriter(buffer, indent: false))
+        {
+            ExchangeXmlWriter.StartElement(writer, "EnvelopesData");
+            ExchangeXmlWriter.WriteZipPackage(writer, "pack.zip", archive);
+            ExchangeXmlWriter.EndElement(writer);
+        }
+
+        var directory = Path.Combine(
+            Path.GetTempPath(),
+            "picket302-out-" + Guid.NewGuid().ToString("N"));
+
+        var соседний = Path.Combine(
+            Path.GetTempPath(),
+            "picket302-out2-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var saved = EmbeddedZipPackageExtractor.ExtractFromXml(buffer.ToString(), directory);
+
+            Assert.Single(saved);
+            Assert.True(File.Exists(Path.Combine(directory, "pack.zip")));
+            Assert.False(Directory.Exists(соседний));
+            Assert.False(File.Exists(Path.Combine(соседний, "evil.exe")));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+
+            if (Directory.Exists(соседний))
+            {
+                Directory.Delete(соседний, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void EmbeddedZipPackageExtractor_ИзвлекаетВложенныйZip()
     {

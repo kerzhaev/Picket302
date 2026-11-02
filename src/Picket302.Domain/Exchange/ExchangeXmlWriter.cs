@@ -556,6 +556,16 @@ public static class EmbeddedZipPackageExtractor
     {
         try
         {
+            // Границы корня с завершающим разделителем: сравнение по голому
+            // префиксу пропускало запись «..\out2\evil.exe» при цели «...\out»
+            // — соседний каталог «out2» начинался тем же префиксом (F-D4).
+            var корень = Path.GetFullPath(targetDirectory);
+
+            if (!корень.EndsWith(Path.DirectorySeparatorChar))
+            {
+                корень += Path.DirectorySeparatorChar;
+            }
+
             using var archive = ZipFile.OpenRead(archivePath);
 
             foreach (var entry in archive.Entries)
@@ -567,9 +577,7 @@ public static class EmbeddedZipPackageExtractor
 
                 var entryPath = Path.GetFullPath(Path.Combine(targetDirectory, entry.FullName));
 
-                if (!entryPath.StartsWith(
-                        Path.GetFullPath(targetDirectory),
-                        StringComparison.OrdinalIgnoreCase))
+                if (!entryPath.StartsWith(корень, StringComparison.OrdinalIgnoreCase))
                 {
                     // Запись за пределами каталога распаковки не допускается.
                     continue;
