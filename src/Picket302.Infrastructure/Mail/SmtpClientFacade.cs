@@ -660,7 +660,9 @@ public sealed class SmtpClientFacade
 
         var ответДанных = сессия.Выполнить("DATA");
 
-        if (!ответДанных.IsSuccess)
+        // Ответ 354 — сервер готов принять тело письма (F-B1): промежуточный
+        // код не является отказом; любой другой ответ прерывает передачу.
+        if (ответДанных.Code != 354)
         {
             return [
                 .. результаты,
@@ -755,12 +757,19 @@ public sealed class SmtpClientFacade
         {
             var ответ = сессия.Выполнить("AUTH PLAIN");
 
-            if (ответ.IsSuccess)
+            // Ответ 334 — сервер ждёт токен авторизации (F-B1): промежуточный
+            // код не считается отказом и не уводит сессию в фолбэк LOGIN.
+            if (ответ.Code == 334)
             {
                 var токен = Convert.ToBase64String(
                     Encoding.UTF8.GetBytes(string.Create(CultureInfo.InvariantCulture, $"\0{логин}\0{пароль}")));
 
                 return сессия.Выполнить(токен);
+            }
+
+            if (ответ.IsSuccess)
+            {
+                return ответ;
             }
 
             // Фолбэк AUTH LOGIN (ТЗ §8.7, функции 93/100): часть серверов
@@ -770,7 +779,9 @@ public sealed class SmtpClientFacade
 
         var ответLogin = сессия.Выполнить("AUTH LOGIN");
 
-        if (!ответLogin.IsSuccess)
+        // Ответ 334 — сервер запросил имя пользователя (F-B1); готовый успех
+        // (235) или отказ возвращаются как есть.
+        if (ответLogin.Code != 334)
         {
             return ответLogin;
         }
@@ -778,7 +789,8 @@ public sealed class SmtpClientFacade
         var логин64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(логин));
         var ответЛогина = сессия.Выполнить(логин64);
 
-        if (!ответЛогина.IsSuccess)
+        // Ответ 334 — сервер запросил пароль (F-B1).
+        if (ответЛогина.Code != 334)
         {
             return ответЛогина;
         }
@@ -1214,28 +1226,53 @@ internal sealed class SmtpSession : IDisposable
         using var ограничение = CancellationTokenSource.CreateLinkedTokenSource(ct);
         ограничение.CancelAfter(_таймаут);
 
+        // При включённом прокси TCP-соединение устанавливается с самим
+        // прокси-сервером, а туннель CONNECT ведёт к SMTP-серверу (F-B2):
+        // прежде сокет подключался к SMTP-серверу напрямую, и CONNECT
+        // уходил не по адресу.
+        (string Хост, int Порт)? адресПрокси = _прокси is { Enabled: true } ? АдресПрокси() : null;
+        var хостСоединения = адресПрокси?.Хост ?? _сервер;
+        var портСоединения = адресПрокси?.Порт ?? _порт;
+
         try
         {
-            _клиент.ConnectAsync(_сервер, _порт, ограничение.Token).GetAwaiter().GetResult();
+            _клиент.ConnectAsync(хостСоединения, портСоединения, ограничение.Token).GetAwaiter().GetResult();
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             throw new TimeoutException(
                 string.Create(
                     CultureInfo.CurrentCulture,
-                    $"Превышено время ожидания соединения с сервером {_сервер}:{_порт}."));
+                    $"Превышено время ожидания соединения с сервером {хостСоединения}:{портСоединения}."));
         }
 
         _поток = _клиент.GetStream();
         _поток.ReadTimeout = (int)_таймаут.TotalMilliseconds;
         _поток.WriteTimeout = (int)_таймаут.TotalMilliseconds;
 
-        if (_прокси is { Enabled: true })
+        if (адресПрокси is not null)
         {
             ВыполнитьТуннельПрокси();
         }
 
         ИнициализироватьПотоки();
+    }
+
+    /// <summary>
+    /// Разбирает адрес прокси-сервера из настроек: хост и порт, к которым
+    /// устанавливается TCP-соединение (F-B2).
+    /// </summary>
+    /// <returns>Хост и порт прокси-сервера.</returns>
+    private (string Хост, int Порт) АдресПрокси()
+    {
+        var прокси = new ProxySettingsMapper(_опции.Секреты).BuildProxy(_прокси!);
+
+        if (прокси is null || прокси.Address is null)
+        {
+            throw new InvalidOperationException(ProxySettingsMapper.UnavailableMessage);
+        }
+
+        return (прокси.Address.Host, прокси.Address.Port);
     }
 
     /// <summary>
@@ -1423,9 +1460,16 @@ internal sealed class SmtpSession : IDisposable
 
         var ответ = ПрочитатьОтветПрокси();
 
-        if (!ответ.Contains(" 200 ", StringComparison.Ordinal))
+        // Статусная строка ответа прокси: «HTTP/1.1 200 …» (F-B2).
+        var строкаСтатуса = ответ.Split('\r', '\n')
+            .FirstOrDefault(строка => строка.Length > 0) ?? string.Empty;
+
+        if (!строкаСтатуса.Contains(" 200 ", StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(ProxySettingsMapper.UnavailableMessage);
+            throw new InvalidOperationException(
+                string.Create(
+                    CultureInfo.CurrentCulture,
+                    $"Прокси-сервер отказал в туннеле: {строкаСтатуса}. {ProxySettingsMapper.UnavailableMessage}"));
         }
     }
 
