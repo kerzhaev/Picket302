@@ -127,6 +127,11 @@ public static class GridAppearanceManager
         таблица.GridColor = SystemColors.Control;
         таблица.BorderStyle = BorderStyle.Fixed3D;
 
+        // Область грида вне строк и столбцов — белая «бумага», а не серый
+        // Control (аудит UX 2026-11-03, G3): пустая часть таблицы читается
+        // как рабочее поле, а не как неисправность.
+        таблица.BackgroundColor = SystemColors.Window;
+
         таблица.EnableHeadersVisualStyles = false;
         таблица.ColumnHeadersDefaultCellStyle.BackColor = SystemColors.Control;
         таблица.ColumnHeadersDefaultCellStyle.ForeColor = SystemColors.ControlText;
