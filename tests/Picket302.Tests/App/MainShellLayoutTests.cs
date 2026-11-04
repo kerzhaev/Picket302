@@ -96,8 +96,8 @@ public sealed class MainShellLayoutTests
     {
         using var окно = new MainShell();
 
-        Assert.Equal("Tahoma", окно.Font.Name);
-        Assert.Equal(8f, окно.Font.Size);
+        Assert.Equal(EnvelopeUiTheme.ШрифтСемейство, окно.Font.Name);
+        Assert.Equal(EnvelopeUiTheme.РазмерШрифта, окно.Font.Size);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class MainShellLayoutTests
 
         GridAppearanceManager.Применить(таблица, GridAppearance.Default);
 
-        Assert.Equal("Tahoma", таблица.Font.Name);
+        Assert.Equal(EnvelopeUiTheme.ШрифтСемейство, таблица.Font.Name);
         Assert.Equal(8f, таблица.Font.Size);
         Assert.Equal(17, таблица.RowTemplate.Height);
         Assert.Equal(

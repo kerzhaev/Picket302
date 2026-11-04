@@ -40,12 +40,12 @@ public sealed class MainShellMenuTests
     }
 
     [Fact]
-    public void MainShell_ИспользуетПлотныйШрифтОболочки8ptTahoma()
+    public void MainShell_ИспользуетЕдиныйШрифтОболочки()
     {
         using var окно = new MainShell();
 
-        Assert.Equal("Tahoma", окно.Font.Name);
-        Assert.Equal(8f, окно.Font.Size);
+        Assert.Equal("Segoe UI", окно.Font.Name);
+        Assert.Equal(9f, окно.Font.Size);
     }
 
     /// <summary>

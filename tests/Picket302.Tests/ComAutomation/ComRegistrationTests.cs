@@ -61,7 +61,10 @@ public sealed class ComRegistrationTests : IDisposable
         var библиотека = $@"{ТестовыйКорень}\TypeLib\{{{ComAutomationIds.TypeLibId}}}\{ComAutomationIds.TypeLibVersion}\0\win64";
 
         Assert.True(ComRegistration.KeyExists(progId));
+        Assert.True(ComRegistration.KeyExists($@"{progId}\CLSID"));
         Assert.True(ComRegistration.KeyExists(clsid));
+        Assert.True(ComRegistration.KeyExists($@"{clsid}\ProgID"));
+        Assert.True(ComRegistration.KeyExists($@"{clsid}\VersionIndependentProgID"));
         Assert.True(ComRegistration.KeyExists($@"{clsid}\LocalServer32"));
         Assert.True(ComRegistration.KeyExists(appId));
         Assert.True(ComRegistration.KeyExists(интерфейс));
@@ -69,7 +72,15 @@ public sealed class ComRegistrationTests : IDisposable
 
         Assert.Equal(
             $"{{{ComAutomationIds.ClassId}}}",
-            ComRegistration.ReadValue(progId, "CLSID"));
+            ComRegistration.ReadValue($@"{progId}\CLSID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
+            ComRegistration.ReadValue($@"{clsid}\ProgID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
+            ComRegistration.ReadValue($@"{clsid}\VersionIndependentProgID"));
 
         Assert.Equal(
             $"{{{ComAutomationIds.ClassId}}}",

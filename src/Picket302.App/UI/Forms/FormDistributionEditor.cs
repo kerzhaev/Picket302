@@ -57,7 +57,7 @@ public sealed class FormDistributionEditor : Form
         _рассылка = рассылка ?? new Distribution();
 
         Text = _создание ? "Новая рассылка" : "Рассылка";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
@@ -132,7 +132,7 @@ public sealed class FormDistributionEditor : Form
         };
 
         _доступные.Dock = DockStyle.Fill;
-        _доступные.Font = new Font("Tahoma", 8f);
+        _доступные.Font = new Font("Segoe UI", 8f);
         _доступные.ReadOnly = true;
         _доступные.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _доступные.MultiSelect = true;
@@ -148,7 +148,7 @@ public sealed class FormDistributionEditor : Form
         _доступные.CellDoubleClick += (_, _) => ДобавитьВыделенные();
 
         _получатели.Dock = DockStyle.Fill;
-        _получатели.Font = new Font("Tahoma", 8f);
+        _получатели.Font = new Font("Segoe UI", 8f);
         _получатели.View = View.Details;
         _получатели.FullRowSelect = true;
         _получатели.AllowDrop = true;
@@ -196,7 +196,7 @@ public sealed class FormDistributionEditor : Form
 
         _счётчикКонвертов.AutoSize = true;
         _счётчикКонвертов.Location = new Point(8, 10);
-        _счётчикКонвертов.Font = new Font("Tahoma", 8f, FontStyle.Bold);
+        _счётчикКонвертов.Font = new Font("Segoe UI", 8f, FontStyle.Bold);
         _счётчикКонвертов.Text = "Всего необходимо конвертов: 0";
 
         _сохранить.Text = "Сохранить";

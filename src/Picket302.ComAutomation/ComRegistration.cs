@@ -117,13 +117,42 @@ public sealed class ComRegistration
         using (var progId = Registry.CurrentUser.CreateSubKey($@"{_classesRoot}\{ComAutomationIds.ProgId}", writable: true))
         {
             progId?.SetValue(string.Empty, ServerDescription, RegistryValueKind.String);
-            progId?.SetValue("CLSID", FormatGuid(ComAutomationIds.ClassId), RegistryValueKind.String);
+            // COM expects CLSID to be a subkey whose default value contains
+            // the class identifier. A named value with the same name is
+            // visible in the registry but is not resolved by CLSIDFromProgID.
+            progId?.DeleteValue("CLSID", throwOnMissingValue: false);
+        }
+
+        using (var progIdClsid = Registry.CurrentUser.CreateSubKey(
+                   $@"{_classesRoot}\{ComAutomationIds.ProgId}\CLSID",
+                   writable: true))
+        {
+            progIdClsid?.SetValue(string.Empty, FormatGuid(ComAutomationIds.ClassId), RegistryValueKind.String);
         }
 
         using (var clsid = Registry.CurrentUser.CreateSubKey($@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}", writable: true))
         {
             clsid?.SetValue(string.Empty, ServerDescription, RegistryValueKind.String);
             clsid?.SetValue("AppID", FormatGuid(AppId), RegistryValueKind.String);
+            // Migrate the old malformed named values if this registration was
+            // created by an earlier build. COM reads both ProgID links as
+            // subkeys with their CLSID value in the default entry.
+            clsid?.DeleteValue("ProgID", throwOnMissingValue: false);
+            clsid?.DeleteValue("VersionIndependentProgID", throwOnMissingValue: false);
+        }
+
+        using (var clsidProgId = Registry.CurrentUser.CreateSubKey(
+                   $@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}\ProgID",
+                   writable: true))
+        {
+            clsidProgId?.SetValue(string.Empty, ComAutomationIds.ProgId, RegistryValueKind.String);
+        }
+
+        using (var clsidVersionIndependentProgId = Registry.CurrentUser.CreateSubKey(
+                   $@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}\VersionIndependentProgID",
+                   writable: true))
+        {
+            clsidVersionIndependentProgId?.SetValue(string.Empty, ComAutomationIds.ProgId, RegistryValueKind.String);
         }
 
         using (var localServer = Registry.CurrentUser.CreateSubKey(

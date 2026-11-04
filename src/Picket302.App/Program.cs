@@ -1,4 +1,5 @@
 using System.Windows.Forms;
+using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
 using Picket302.App.UI.Shell;
 using Picket302.Infrastructure;
@@ -20,6 +21,7 @@ internal static class Program
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        System.Windows.Forms.Application.SetDefaultFont(EnvelopeUiTheme.ШрифтТекста());
 
         // Глобальные обработчики исключений (F-E17): необработанная ошибка
         // интерфейса или фонового потока фиксируется в журнале и показывает

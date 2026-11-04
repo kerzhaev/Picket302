@@ -135,7 +135,7 @@ public sealed class FormImportWizard : Form
         _контроллер = контроллер ?? new ImportWizardController();
 
         Text = "Мастер импорта адресной книги";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
@@ -389,7 +389,7 @@ public sealed class FormImportWizard : Form
     private void ПостроитьШапку()
     {
         _заголовок.Location = new Point(12, 10);
-        _заголовок.Font = new Font("Tahoma", 9f, FontStyle.Bold);
+        _заголовок.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
         _заголовок.AutoSize = true;
 
         _описание.Location = new Point(12, 32);
@@ -606,7 +606,7 @@ public sealed class FormImportWizard : Form
         _экранПредпросмотр.Size = new Size(676, 380);
 
         _номерЗаписи.Location = new Point(12, 8);
-        _номерЗаписи.Font = new Font("Tahoma", 8f, FontStyle.Bold);
+        _номерЗаписи.Font = new Font("Segoe UI", 8f, FontStyle.Bold);
         _номерЗаписи.AutoSize = true;
 
         _статусЗаписи.Location = new Point(300, 8);
@@ -1306,7 +1306,7 @@ public sealed class FormImportWizard : Form
         using var диалог = new Form
         {
             Text = "Новая категория адресной книги",
-            Font = new Font("Tahoma", 8f),
+            Font = new Font("Segoe UI", 8f),
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MinimizeBox = false,

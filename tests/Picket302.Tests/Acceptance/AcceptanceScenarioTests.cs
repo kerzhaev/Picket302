@@ -640,8 +640,7 @@ public sealed class AcceptanceScenarioTests : IDisposable
                 Assert.Equal(
                     $"{{{ComAutomationIds.ClassId}}}",
                     ComRegistration.ReadValue(
-                        $@"Software\Classes\{ComAutomationIds.ProgId}",
-                        "CLSID"));
+                        $@"Software\Classes\{ComAutomationIds.ProgId}\CLSID"));
 
                 Assert.True(
                     ComRegistration.KeyExists(
@@ -652,6 +651,12 @@ public sealed class AcceptanceScenarioTests : IDisposable
                     ComRegistration.KeyExists(
                         $@"Software\Classes\TypeLib\{{{ComAutomationIds.TypeLibId}}}\{ComAutomationIds.TypeLibVersion}\0\win64"),
                     "В ветке классов отсутствует библиотека типов версии 2.2.");
+
+                // Запоминаем границу журнала непосредственно перед холодной
+                // активацией. Журнал append-only и содержит историю прошлых
+                // запусков; чтение только дельты не позволяет принять старый
+                // -Embedding за доказательство текущего запуска SCM.
+                var отметкаЖурналаДоАктивации = ПолучитьДлинуЖурнала();
 
                 // Активация out-of-proc: LocalServer32 запускает отдельный
                 // процесс сервера, фабрика классов создаёт PEProApplication.
@@ -691,7 +696,8 @@ public sealed class AcceptanceScenarioTests : IDisposable
                     "COM-сервер PEPro.Application не активирован. " + ОписатьСостояниеАктивации(
                         последнийКод,
                         источникТипа,
-                        попытокСделано));
+                        попытокСделано,
+                        отметкаЖурналаДоАктивации));
 
                 try
                 {
@@ -812,8 +818,13 @@ public sealed class AcceptanceScenarioTests : IDisposable
     /// <param name="hresult">Последний код активации; 0 — исключений не было.</param>
     /// <param name="источникТипа">Источник типа: ProgID или CLSID.</param>
     /// <param name="попыток">Число выполненных попыток активации.</param>
+    /// <param name="отметкаЖурнала">Размер журнала перед активацией.</param>
     /// <returns>Однострочная диагностика для сообщения проверки.</returns>
-    private static string ОписатьСостояниеАктивации(int hresult, string источникТипа, int попыток)
+    private static string ОписатьСостояниеАктивации(
+        int hresult,
+        string источникТипа,
+        int попыток,
+        long отметкаЖурнала)
     {
         var части = new List<string>();
 
@@ -826,8 +837,7 @@ public sealed class AcceptanceScenarioTests : IDisposable
         части.Add($"разрядность testhost: {(Environment.Is64BitProcess ? "x64" : "x86")}");
 
         var clsidПоПrogId = ComRegistration.ReadValue(
-            $@"Software\Classes\{ComAutomationIds.ProgId}",
-            "CLSID");
+            $@"Software\Classes\{ComAutomationIds.ProgId}\CLSID");
 
         части.Add(clsidПоПrogId is null
             ? "ProgID PEPro.Application не разрешился (ключ отсутствует)"
@@ -863,32 +873,37 @@ public sealed class AcceptanceScenarioTests : IDisposable
             // Диагностика не должна маскировать исходную ошибку активации.
         }
 
-        // Свежие строки журнала сервера: появился ли -Embedding и
-        // CoRegisterClassObject во время попыток активации.
+        // Только свежие строки журнала сервера: появился ли -Embedding и
+        // CoRegisterClassObject во время текущих попыток активации. Хвост
+        // общего журнала здесь непригоден: он может содержать успешный
+        // запуск из предыдущего прогона.
         try
         {
-            var журнал = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                ComAutomationEnvironment.ApplicationDirectoryName,
-                "com-automation.log");
+            var журнал = ПутьЖурнала();
 
             if (File.Exists(журнал))
             {
                 using var поток = new FileStream(журнал, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
-                поток.Seek(Math.Max(0, поток.Length - 16_384), SeekOrigin.Begin);
+                var начало = Math.Clamp(отметкаЖурнала, 0, поток.Length);
+                поток.Seek(начало, SeekOrigin.Begin);
 
                 using var читатель = new StreamReader(поток, System.Text.Encoding.UTF8);
 
-                var хвост = читатель.ReadToEnd();
-                var запуск = хвост.Contains("-Embedding", StringComparison.Ordinal);
-                var регистрация = хвост.Contains("CoRegisterClassObject", StringComparison.Ordinal);
-                var отзыв = хвост.Contains("CoRevokeClassObject", StringComparison.Ordinal);
+                var дельта = читатель.ReadToEnd();
+                var запуск = дельта.Contains("-Embedding", StringComparison.Ordinal);
+                var регистрация = дельта.Contains("CoRegisterClassObject", StringComparison.Ordinal);
+                var отзыв = дельта.Contains("CoRevokeClassObject", StringComparison.Ordinal);
 
                 части.Add(
-                    $"журнал (хвост 16К): -Embedding={(запуск ? "есть" : "НЕТ")}, " +
+                    $"журнал (новая дельта с {начало} байт): -Embedding={(запуск ? "есть" : "НЕТ")}, " +
                     $"CoRegisterClassObject={(регистрация ? "есть" : "НЕТ")}, " +
-                    $"CoRevokeClassObject={(отзыв ? "есть" : "НЕТ")}");
+                    $"CoRevokeClassObject={(отзыв ? "есть" : "НЕТ")}, " +
+                    $"строк={(дельта.Length == 0 ? "нет" : "есть")}");
+            }
+            else
+            {
+                части.Add("журнал отсутствует и новых строк запуска нет");
             }
         }
         catch (Exception)
@@ -898,6 +913,37 @@ public sealed class AcceptanceScenarioTests : IDisposable
 
         return "Диагностика: " + string.Join("; ", части) + ".";
     }
+
+    /// <summary>
+    /// Возвращает текущий размер append-only журнала COM перед запуском
+    /// холодной активации. Ноль означает, что журнала ещё нет либо его нельзя
+    /// прочитать; в обоих случаях последующая дельта читается с начала.
+    /// </summary>
+    private static long ПолучитьДлинуЖурнала()
+    {
+        try
+        {
+            var журнал = ПутьЖурнала();
+
+            return File.Exists(журнал)
+                ? new FileInfo(журнал).Length
+                : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>Возвращает путь append-only журнала COM-сервера.</summary>
+    private static string ПутьЖурнала() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        ComAutomationEnvironment.ApplicationDirectoryName,
+        "com-automation.log");
 
     /// <summary>
     /// Захватывает файл блокировки COM-приёмки на весь сценарий: одновременный

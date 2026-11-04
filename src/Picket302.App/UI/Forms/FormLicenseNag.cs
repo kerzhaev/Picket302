@@ -36,7 +36,7 @@ public sealed class FormLicenseNag : Form
         MessageText = статус.BuildNagMessage();
 
         Text = "Пробный период программы";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;

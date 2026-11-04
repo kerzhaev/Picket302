@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using Picket302.App.UI.Components;
 using Picket302.Domain.Entities;
 using Picket302.Printing;
 using Picket302.Printing.Devices;
@@ -178,6 +179,7 @@ public sealed class FormEnvelopePrint : Form
 
         ОбновитьВидимостьШаблонов();
         ОбновитьПредупреждениеРазлиновки();
+        EnvelopeUiTheme.ОформитьОкно(this);
     }
 
     /// <summary>

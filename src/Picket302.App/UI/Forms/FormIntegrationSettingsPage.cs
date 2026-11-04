@@ -65,7 +65,7 @@ public sealed class FormIntegrationSettingsPage : UserControl
 
         _интеграция = new ExplorerIntegration(путь);
 
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         Size = new Size(620, 400);
 
         ПостроитьПроводник();
@@ -230,7 +230,7 @@ public sealed class FormIntegrationSettingsPage : UserControl
             Text = "Проводник Windows",
             AutoSize = true,
             Location = new Point(10, 8),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         _пунктМеню.Text = "Проводник Windows: пункт в контекстном меню";
@@ -257,7 +257,7 @@ public sealed class FormIntegrationSettingsPage : UserControl
             Text = "Поиск по ИНН/УНН в интернете",
             AutoSize = true,
             Location = new Point(10, 96),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         var пояснение = new Label
@@ -285,7 +285,7 @@ public sealed class FormIntegrationSettingsPage : UserControl
             Text = "Утилита удалённого доступа (параметры задаёт администратор)",
             AutoSize = true,
             Location = new Point(10, 172),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         var метки = new (string Заголовок, TextBox Поле)[]

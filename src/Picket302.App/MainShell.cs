@@ -38,7 +38,7 @@ namespace Picket302.App;
 /// Внизу окна расположена строка состояния.
 /// </para>
 /// <para>
-/// Плотность рабочего режима: шрифт таблиц 8pt Tahoma, высота строки ~17px
+/// Плотность рабочего режима: шрифт таблиц 8pt Segoe UI, высота строки ~17px
 /// (ТЗ §7.10). Горячие клавиши описаны в ТЗ §7.4 и собраны в
 /// <see cref="ShellHotKeyMap"/>.
 /// </para>
@@ -190,7 +190,7 @@ public sealed class MainShell : Form
     public MainShell()
     {
         Text = "Picket302";
-        Font = new Font("Tahoma", 8f);
+        Font = EnvelopeUiTheme.ШрифтТекста();
         BackColor = EnvelopeUiTheme.WorkspaceBackground;
         StartPosition = FormStartPosition.WindowsDefaultLocation;
         WindowState = FormWindowState.Maximized;
@@ -205,6 +205,12 @@ public sealed class MainShell : Form
         Controls.Add(_меню);
         Controls.Add(_строкаСостояния);
         MainMenuStrip = _меню;
+
+        // Единая тема применяется после построения дерева контролов, поэтому
+        // одинаковый визуальный язык получают и основной экран, и ранее
+        // созданные панели/таблицы, без вмешательства в обработчики.
+        EnvelopeUiTheme.ОформитьОкно(this);
+        ПрименитьАкцентыТаблиц();
     }
 
     /// <summary>
@@ -630,7 +636,7 @@ public sealed class MainShell : Form
     /// </summary>
     private void ПостроитьМеню()
     {
-        _меню.Font = new Font("Tahoma", 8f);
+        _меню.Font = EnvelopeUiTheme.ШрифтТекста();
 
         var файл = new ToolStripMenuItem("Файл");
         файл.DropDownItems.Add("Открыть базу…", null, (_, _) => ОткрытьБазу());
@@ -744,7 +750,7 @@ public sealed class MainShell : Form
     private void ПостроитьВкладки()
     {
         _вкладки.Dock = DockStyle.Fill;
-        _вкладки.Font = new Font("Tahoma", 8f);
+        _вкладки.Font = EnvelopeUiTheme.ШрифтТекста();
 
         // Светлый нейтральный фон вместо серого Control (аудит UX 2026-11-03,
         // G3): пустые зоны экрана читаются как рабочее поле, а не как «поломка».
@@ -925,7 +931,7 @@ public sealed class MainShell : Form
         _превью.BackColor = SystemColors.Window;
         _превью.Paint += (_, событие) =>
         {
-            using var шрифт = new Font("Tahoma", 8f);
+            using var шрифт = EnvelopeUiTheme.ШрифтТекста(8.5f);
             событие.Graphics.DrawString(
                 "Превью конверта C5",
                 шрифт,
@@ -946,7 +952,7 @@ public sealed class MainShell : Form
         EnvelopeUiTheme.ОформитьГруппу(группаПримечания, EnvelopeUiTheme.NoteAccent);
 
         _примечание.Dock = DockStyle.Fill;
-        _примечание.Font = new Font("Tahoma", 8f);
+        _примечание.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
         _примечание.Margin = Padding.Empty;
         группаПримечания.Controls.Add(_примечание);
 
@@ -1009,7 +1015,7 @@ public sealed class MainShell : Form
             Dock = DockStyle.Top,
             AutoSize = true,
             Height = 16,
-            Font = new Font("Tahoma", 8f),
+            Font = EnvelopeUiTheme.ШрифтТекста(8.5f),
         };
 
         _поискОтправителя.Dock = DockStyle.Top;
@@ -1156,7 +1162,7 @@ public sealed class MainShell : Form
         _таблицаПолучателей.KeyDown += ОбработатьНаборВТаблице;
         _таблицаПолучателей.KeyPress += ОбработатьНаборВТаблицеПоСимволу;
 
-        var контекстноеМеню = new ContextMenuStrip { Font = new Font("Tahoma", 8f) };
+        var контекстноеМеню = new ContextMenuStrip { Font = EnvelopeUiTheme.ШрифтТекста(8.5f) };
         _пунктИзбранного.Checked = false;
         _пунктИзбранного.Click += (_, _) => ПереключитьФильтрИзбранного();
         _пунктОбъединить.Click += (_, _) => ОбъединитьВРассылку();
@@ -1202,7 +1208,7 @@ public sealed class MainShell : Form
         };
 
         _деревоПапок.Dock = DockStyle.Fill;
-        _деревоПапок.Font = new Font("Tahoma", 8f);
+        _деревоПапок.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
         _деревоПапок.AllowDrop = true;
         _деревоПапок.DragEnter += (_, аргументы) =>
         {
@@ -1217,7 +1223,7 @@ public sealed class MainShell : Form
             Text = "ПАПКИ ПИСЕМ:",
             Dock = DockStyle.Top,
             AutoSize = true,
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = EnvelopeUiTheme.ШрифтЗаголовка(8.5f),
         };
 
         // Подсказка пустого дерева (аудит UX 2026-11-03, D1): без папок
@@ -1225,7 +1231,7 @@ public sealed class MainShell : Form
         _подсказкаПапок.Text = "Папки не заданы.";
         _подсказкаПапок.Dock = DockStyle.Top;
         _подсказкаПапок.ForeColor = Color.FromArgb(71, 85, 105);
-        _подсказкаПапок.Font = new Font("Tahoma", 8f, FontStyle.Italic);
+        _подсказкаПапок.Font = EnvelopeUiTheme.ШрифтТекста(8.5f, FontStyle.Italic);
         _подсказкаПапок.Padding = new Padding(4, 2, 4, 2);
         _подсказкаПапок.Visible = false;
 
@@ -1396,13 +1402,14 @@ public sealed class MainShell : Form
         var полоса = new ToolStrip
         {
             GripStyle = ToolStripGripStyle.Hidden,
-            Font = new Font("Tahoma", 8f),
+            Font = EnvelopeUiTheme.ШрифтТекста(8.5f),
             AutoSize = true,
             Padding = new Padding(2, 1, 0, 1),
             TabIndex = 0,
         };
 
         полоса.Items.AddRange(пункты);
+        EnvelopeUiTheme.ОформитьПолосуДействий(полоса);
 
         return полоса;
     }
@@ -1420,6 +1427,7 @@ public sealed class MainShell : Form
         {
             ToolTipText = подсказка,
             DisplayStyle = ToolStripItemDisplayStyle.Text,
+            AccessibleName = текст,
         };
     }
 
@@ -1498,7 +1506,7 @@ public sealed class MainShell : Form
         {
             метка.Text = текст;
             метка.AutoSize = true;
-            метка.Font = new Font("Tahoma", 8f);
+            метка.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
             метка.Margin = new Padding(0, 0, 16, 0);
         }
 
@@ -1514,7 +1522,7 @@ public sealed class MainShell : Form
         _лицензия.Text = string.Empty;
         _лицензия.AutoSize = true;
         _лицензия.Dock = DockStyle.Right;
-        _лицензия.Font = new Font("Tahoma", 8f);
+        _лицензия.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
         _лицензия.Padding = new Padding(0, 5, 8, 0);
         _лицензия.TextAlign = ContentAlignment.MiddleRight;
 
@@ -2177,7 +2185,7 @@ public sealed class MainShell : Form
             AutoSize = true,
             Height = 24,
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Tahoma", 8f),
+            Font = EnvelopeUiTheme.ШрифтТекста(8.5f),
             BackColor = Color.FromArgb(248, 249, 251),
             ForeColor = Color.FromArgb(31, 41, 55),
             Margin = new Padding(1),
@@ -2964,7 +2972,7 @@ public sealed class MainShell : Form
         var категории = await _состав.СлужбаКатегорий.GetTreeAsync().ConfigureAwait(true);
 
         using var выбор = new Form();
-        выбор.Font = new Font("Tahoma", 8f);
+        EnvelopeUiTheme.ОформитьОкно(выбор);
         выбор.Text = "Переместить в категорию";
         выбор.StartPosition = FormStartPosition.CenterParent;
         выбор.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -3153,7 +3161,7 @@ public sealed class MainShell : Form
         }
 
         using var выбор = new Form();
-        выбор.Font = new Font("Tahoma", 8f);
+        EnvelopeUiTheme.ОформитьОкно(выбор);
         выбор.Text = "Пакетное редактирование";
         выбор.StartPosition = FormStartPosition.CenterParent;
         выбор.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -3393,7 +3401,7 @@ public sealed class MainShell : Form
     /// <returns>Контекстное меню заголовков столбцов.</returns>
     private ContextMenuStrip МенюСтолбцовАдреснойКниги()
     {
-        var меню = new ContextMenuStrip { Font = new Font("Tahoma", 8f) };
+        var меню = new ContextMenuStrip { Font = EnvelopeUiTheme.ШрифтТекста(8.5f) };
 
         var скрыть = new ToolStripMenuItem("Скрыть столбец")
         {

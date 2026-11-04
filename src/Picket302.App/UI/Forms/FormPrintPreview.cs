@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using Picket302.App.UI.Components;
 using Picket302.Printing.Preview;
 
 namespace Picket302.App.UI.Forms;
@@ -17,7 +18,7 @@ namespace Picket302.App.UI.Forms;
 public sealed class FormPrintPreview : Form
 {
     private readonly PreviewDocument _документ;
-    private readonly PictureBox _холст = new() { Dock = DockStyle.Fill, BackColor = Color.Gainsboro };
+    private readonly PictureBox _холст = new() { Dock = DockStyle.Fill, BackColor = EnvelopeUiTheme.WorkspaceBackground };
     private readonly ComboBox _зум = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 90 };
 
     /// <summary>
@@ -72,6 +73,7 @@ public sealed class FormPrintPreview : Form
 
         AcceptButton = кнопкаПечать;
         CancelButton = кнопкаЗакрыть;
+        EnvelopeUiTheme.ОформитьОкно(this);
     }
 
     /// <summary>Признак согласия оператора на печать.</summary>
@@ -148,7 +150,7 @@ public sealed class FormPrintPreview : Form
 
         if (!string.IsNullOrEmpty(_документ.BannerMessage))
         {
-            using var шрифт = new Font("Tahoma", 9f);
+            using var шрифт = EnvelopeUiTheme.ШрифтТекста(9f);
             событие.Graphics.DrawString(
                 _документ.BannerMessage,
                 шрифт,

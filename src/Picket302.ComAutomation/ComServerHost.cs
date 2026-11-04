@@ -801,7 +801,10 @@ public sealed class ComServerHost
     public const string ServerDescription = "Picket302 — COM-сервер автоматизации";
 
     private const uint ClsCtxLocalServer = 0x00000004;
-    private const uint RegClsMultipleUse = 0x00000002;
+    // REGCLS_MULTIPLEUSE. 0x2 is REGCLS_MULTI_SEPARATE and does not mean
+    // that one class factory can serve multiple clients.
+    private const uint RegClsMultipleUse = 0x00000001;
+    private const uint RegClsSuspended = 0x00000004;
     private const uint WmQuit = 0x0012;
     private const uint QsAllInput = 0x00FF;
     private const uint MwmoInputAvailable = 0x0001;
@@ -880,7 +883,7 @@ public sealed class ComServerHost
             ref classId,
             factory,
             ClsCtxLocalServer,
-            RegClsMultipleUse,
+            RegClsMultipleUse | RegClsSuspended,
             out var cookie);
 
         AutomationServerLog.Write(
@@ -893,6 +896,27 @@ public sealed class ComServerHost
                 $"Регистрация фабрики классов не удалась: 0x{результат:X8}, pid={Environment.ProcessId}.");
 
             return unchecked((int)результат);
+        }
+
+        // Publish all suspended class registrations atomically.  This is the
+        // canonical local-server handshake: the SCM must not observe a
+        // partially initialized factory while the STA/message channel is
+        // still being prepared.
+        var результатВозобновления = CoResumeClassObjects();
+
+        AutomationServerLog.Write(
+            $"CoResumeClassObjects: hresult=0x{результатВозобновления:X8}, " +
+            $"pid={Environment.ProcessId}.");
+
+        if (результатВозобновления < 0)
+        {
+            CoRevokeClassObject(cookie);
+
+            AutomationServerLog.Write(
+                $"Отмена фабрики после ошибки CoResumeClassObjects: cookie={cookie}, " +
+                $"pid={Environment.ProcessId}.");
+
+            return unchecked((int)результатВозобновления);
         }
 
         // Канал плавного завершения: взведение именованного события будит
@@ -1117,6 +1141,9 @@ public sealed class ComServerHost
         uint context,
         uint flags,
         out uint classCookie);
+
+    [DllImport("ole32.dll")]
+    private static extern int CoResumeClassObjects();
 
     [DllImport("ole32.dll")]
     private static extern int CoRevokeClassObject(uint classCookie);

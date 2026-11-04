@@ -38,7 +38,7 @@ public sealed class FormIntegrationSettings : Form
     public FormIntegrationSettings()
     {
         Text = "Настройки интеграции";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
@@ -63,7 +63,7 @@ public sealed class FormIntegrationSettings : Form
             Text = "COM-сервер автоматизации (ProgID PEPro.Application)",
             AutoSize = true,
             Location = new Point(10, 10),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         _состояние.AutoSize = false;
@@ -104,7 +104,7 @@ public sealed class FormIntegrationSettings : Form
             Text = "Настройки печати конвертов (HKCU\\Software\\Picket302\\PrintEnvelope)",
             AutoSize = true,
             Location = new Point(10, 104),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         Controls.Add(заголовок);

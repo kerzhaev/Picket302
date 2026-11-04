@@ -38,7 +38,7 @@ public sealed class FormClearDatabase : Form
         _состав = состав;
 
         Text = "Очистка базы";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

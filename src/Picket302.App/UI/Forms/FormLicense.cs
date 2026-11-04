@@ -57,7 +57,7 @@ public sealed class FormLicense : Form
         _машина = машина;
 
         Text = "Регистрация программы";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
@@ -379,7 +379,7 @@ public sealed class FormEditionAdvantages : Form
             + ". Переход открывает:";
 
         Text = "Преимущества редакции " + Редакции.Название(целеваяРедакция);
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;

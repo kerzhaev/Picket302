@@ -30,7 +30,7 @@ public sealed class FormErrorLog : Form
         _канал = канал;
 
         Text = "Журнал ошибок";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.Sizable;
         MinimizeBox = false;
