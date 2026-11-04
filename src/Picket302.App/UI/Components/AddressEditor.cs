@@ -21,24 +21,28 @@ public sealed class AddressEditor : UserControl
     private readonly RadioButton _переключательОсновного = new();
     private readonly Label _заголовок = new();
     private readonly ComboBox _историяИндексов = new();
+    private readonly bool _показыватьЗаголовок;
 
     /// <summary>
     /// Создаёт редактор адреса.
     /// </summary>
     /// <param name="заголовок">Заголовок блока адреса.</param>
-    public AddressEditor(string заголовок)
+    public AddressEditor(string заголовок, bool показыватьЗаголовок = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(заголовок);
 
+        _показыватьЗаголовок = показыватьЗаголовок;
         Dock = DockStyle.Top;
         AutoSize = false;
-        Height = 150;
-        Padding = new Padding(2);
+        Height = 180;
+        Padding = new Padding(4, 2, 4, 2);
+        BackColor = Color.Transparent;
 
         _заголовок.Text = заголовок;
         _заголовок.AutoSize = true;
         _заголовок.Font = new Font("Tahoma", 8f, FontStyle.Bold);
         _заголовок.Location = new Point(4, 2);
+        _заголовок.Visible = _показыватьЗаголовок;
 
         var сетка = new TableLayoutPanel
         {
@@ -46,10 +50,12 @@ public sealed class AddressEditor : UserControl
             ColumnCount = 3,
             RowCount = Address.LineCount + 1,
             AutoSize = true,
-            Padding = new Padding(0, 16, 0, 0),
+            Padding = new Padding(0, _показыватьЗаголовок ? 16 : 2, 0, 0),
         };
 
-        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
+        // Длинная подпись «Индекс:» должна оставаться одной строкой и на
+        // системном масштабе 100%, и на увеличенном шрифте Windows.
+        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
         сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 24));
 
@@ -112,7 +118,7 @@ public sealed class AddressEditor : UserControl
         _переключательОсновного.Text = "основной";
         _переключательОсновного.AutoSize = true;
         _переключательОсновного.Font = new Font("Tahoma", 8f);
-        _переключательОсновного.Location = new Point(60, 4);
+        _переключательОсновного.Location = new Point(60, _показыватьЗаголовок ? 4 : 2);
 
         _историяИндексов.Visible = false;
         _историяИндексов.DropDownStyle = ComboBoxStyle.DropDownList;

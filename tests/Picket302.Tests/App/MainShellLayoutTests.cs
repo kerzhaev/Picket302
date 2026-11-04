@@ -72,6 +72,26 @@ public sealed class MainShellLayoutTests
     }
 
     [Fact]
+    public void MainShell_РабочийЭкран_СодержитГруппыРеференса()
+    {
+        using var окно = new MainShell();
+
+        var заголовки = Обойти(окно)
+            .OfType<GroupBox>()
+            .Select(группа => группа.Text)
+            .ToArray();
+
+        Assert.Contains("ОТПРАВИТЕЛЬ:", заголовки);
+        Assert.Contains("ПОЛУЧАТЕЛЬ:", заголовки);
+        Assert.Contains("ВИД ЛОГОТИПА:", заголовки);
+        Assert.Contains("ПРИМЕЧАНИЕ К АДРЕСУ:", заголовки);
+        Assert.Contains("ОТ КОГО:", заголовки);
+        Assert.Contains("КОМУ:", заголовки);
+        Assert.True(окно.АдресОтправителя.Height >= 180);
+        Assert.True(окно.АдресПолучателя.Height >= 180);
+    }
+
+    [Fact]
     public void MainShell_ПлотныйШрифтТаблиц_СоответствуетСпецификации()
     {
         using var окно = new MainShell();

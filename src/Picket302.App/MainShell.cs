@@ -104,9 +104,10 @@ public sealed class MainShell : Form
     private readonly TabPage _страницаРассылок = new("Рассылки");
     private readonly TabPage _страницаОтправленных = new("Отправленные");
 
-    private readonly AddressEditor _адресОтправителя = new("ОТПРАВИТЕЛЬ:");
-    private readonly AddressEditor _адресПолучателя = new("ПОЛУЧАТЕЛЬ:");
+    private readonly AddressEditor _адресОтправителя = new("ОТПРАВИТЕЛЬ:", показыватьЗаголовок: false);
+    private readonly AddressEditor _адресПолучателя = new("ПОЛУЧАТЕЛЬ:", показыватьЗаголовок: false);
     private readonly TextBox _примечание = new();
+    private readonly ToolTip _подсказки = new();
 
     private readonly RadioButton _сЛоготипом = new() { Text = "С логотипом" };
     private readonly RadioButton _безЛоготипа = new() { Text = "Без логотипа" };
@@ -189,12 +190,14 @@ public sealed class MainShell : Form
     {
         Text = "Picket302";
         Font = new Font("Tahoma", 8f);
+        BackColor = EnvelopeUiTheme.WorkspaceBackground;
         StartPosition = FormStartPosition.WindowsDefaultLocation;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1000, 700);
 
         ПостроитьМеню();
         ПостроитьВкладки();
+        ПрименитьАкцентыТаблиц();
         ПостроитьСтрокуСостояния();
 
         Controls.Add(_вкладки);
@@ -551,6 +554,7 @@ public sealed class MainShell : Form
         GridAppearanceManager.Применить(_таблицаБланков, _оформление);
         GridAppearanceManager.Применить(_таблицаРассылок, _оформление);
         GridAppearanceManager.Применить(_таблицаОтправленных, _оформление);
+        ПрименитьАкцентыТаблиц();
 
         // Сортировка по любой колонке адресной книги и настройки вида таблицы:
         // цвета, заголовки столбцов, скрытие столбцов, «полосатая таблица»
@@ -759,16 +763,24 @@ public sealed class MainShell : Form
         var верх = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 175,
+            Height = 220,
             ColumnCount = 3,
+            Padding = new Padding(2, 2, 2, 0),
+            BackColor = EnvelopeUiTheme.WorkspaceBackground,
         };
 
         верх.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
         верх.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
         верх.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
 
-        верх.Controls.Add(_адресОтправителя, 0, 0);
-        верх.Controls.Add(_адресПолучателя, 1, 0);
+        верх.Controls.Add(ГруппаАдреса(
+            "ОТПРАВИТЕЛЬ:",
+            _адресОтправителя,
+            EnvelopeUiTheme.SenderAccent), 0, 0);
+        верх.Controls.Add(ГруппаАдреса(
+            "ПОЛУЧАТЕЛЬ:",
+            _адресПолучателя,
+            EnvelopeUiTheme.RecipientAccent), 1, 0);
         верх.Controls.Add(ПостроитьПанельОтображения(), 2, 0);
 
         // Подбор значения поля из имеющихся записей: пустое поле и BackSpace
@@ -776,27 +788,11 @@ public sealed class MainShell : Form
         _адресОтправителя.ТребуетсяПодборЗначения += (_, _) => ПодобратьЗначениеПоля(_адресОтправителя);
         _адресПолучателя.ТребуетсяПодборЗначения += (_, _) => ПодобратьЗначениеПоля(_адресПолучателя);
 
-        var панельПримечания = new Panel { Dock = DockStyle.Top, Height = 26 };
-
-        var меткаПримечания = new Label
-        {
-            Text = "ПРИМЕЧАНИЕ:",
-            AutoSize = true,
-            Location = new Point(6, 6),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
-        };
-
-        _примечание.Location = new Point(110, 3);
-        _примечание.Width = 600;
-        _примечание.Font = new Font("Tahoma", 8f);
-
-        панельПримечания.Controls.Add(меткаПримечания);
-        панельПримечания.Controls.Add(_примечание);
-
         var разделитель = new SplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Vertical,
+            BackColor = EnvelopeUiTheme.WorkspaceBackground,
         };
 
         // Граница панелей задаётся после создания дескриптора (аудит UX
@@ -816,10 +812,37 @@ public sealed class MainShell : Form
 
         var рабочаяОбласть = new Panel { Dock = DockStyle.Fill };
         рабочаяОбласть.Controls.Add(разделитель);
-        рабочаяОбласть.Controls.Add(панельПримечания);
         рабочаяОбласть.Controls.Add(верх);
+        рабочаяОбласть.BackColor = EnvelopeUiTheme.WorkspaceBackground;
 
         return рабочаяОбласть;
+    }
+
+    /// <summary>
+    /// Оборачивает редактор адреса в групповую рамку визуального рабочего
+    /// экрана. Сам редактор остаётся отдельным компонентом, поэтому его
+    /// поведение одинаково в главной форме и в карточках контрагентов.
+    /// </summary>
+    /// <param name="заголовок">Заголовок группы.</param>
+    /// <param name="редактор">Редактор адреса.</param>
+    /// <param name="акцент">Цвет заголовка.</param>
+    private static GroupBox ГруппаАдреса(string заголовок, AddressEditor редактор, Color акцент)
+    {
+        var группа = new GroupBox
+        {
+            Text = заголовок,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(2, 0, 2, 0),
+        };
+
+        EnvelopeUiTheme.ОформитьГруппу(группа, акцент);
+
+        редактор.Dock = DockStyle.Fill;
+        редактор.Margin = Padding.Empty;
+        редактор.ForeColor = SystemColors.ControlText;
+        группа.Controls.Add(редактор);
+
+        return группа;
     }
 
     /// <summary>
@@ -827,15 +850,20 @@ public sealed class MainShell : Form
     /// </summary>
     private Control ПостроитьПанельОтображения()
     {
-        var панель = new Panel { Dock = DockStyle.Fill };
-
-        var заголовок = new Label
+        var панель = new Panel
         {
-            Text = "ОТОБРАЖЕНИЕ:",
-            AutoSize = true,
-            Location = new Point(4, 4),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Dock = DockStyle.Fill,
+            Padding = new Padding(2, 0, 2, 0),
+            BackColor = EnvelopeUiTheme.WorkspaceBackground,
         };
+
+        var группаЛоготипа = new GroupBox
+        {
+            Text = "ВИД ЛОГОТИПА:",
+            Dock = DockStyle.Top,
+            Height = 116,
+        };
+        EnvelopeUiTheme.ОформитьГруппу(группаЛоготипа, EnvelopeUiTheme.DisplayAccent);
 
         // Каждая пара переключателей — собственная группа без рамки (F-E16):
         // в общем контейнере отметка «Адрес получателя» снимала «С логотипом».
@@ -862,9 +890,15 @@ public sealed class MainShell : Form
         группаАдрес.Controls.Add(_переключательАдресОтправителя);
         группаАдрес.Controls.Add(_переключательАдресПолучателя);
 
+        var контейнерПревью = new Panel
+        {
+            Dock = DockStyle.Right,
+            Width = 128,
+            Padding = new Padding(4, 4, 4, 4),
+        };
+
         _превью.BorderStyle = BorderStyle.FixedSingle;
-        _превью.Size = new Size(260, 120);
-        _превью.Location = new Point(10, 112);
+        _превью.Dock = DockStyle.Fill;
         _превью.BackColor = SystemColors.Window;
         _превью.Paint += (_, событие) =>
         {
@@ -876,10 +910,25 @@ public sealed class MainShell : Form
                 new Point(8, 8));
         };
 
-        панель.Controls.Add(заголовок);
-        панель.Controls.Add(группаЛоготип);
-        панель.Controls.Add(группаАдрес);
-        панель.Controls.Add(_превью);
+        контейнерПревью.Controls.Add(_превью);
+        группаЛоготипа.Controls.Add(контейнерПревью);
+        группаЛоготипа.Controls.Add(группаЛоготип);
+        группаЛоготипа.Controls.Add(группаАдрес);
+
+        var группаПримечания = new GroupBox
+        {
+            Text = "ПРИМЕЧАНИЕ К АДРЕСУ:",
+            Dock = DockStyle.Fill,
+        };
+        EnvelopeUiTheme.ОформитьГруппу(группаПримечания, EnvelopeUiTheme.NoteAccent);
+
+        _примечание.Dock = DockStyle.Fill;
+        _примечание.Font = new Font("Tahoma", 8f);
+        _примечание.Margin = Padding.Empty;
+        группаПримечания.Controls.Add(_примечание);
+
+        панель.Controls.Add(группаПримечания);
+        панель.Controls.Add(группаЛоготипа);
 
         return панель;
     }
@@ -889,13 +938,22 @@ public sealed class MainShell : Form
     /// </summary>
     private Control ПостроитьПанельОтправителей()
     {
-        var панель = new Panel { Dock = DockStyle.Fill };
+        var панель = new GroupBox
+        {
+            Text = "ОТ КОГО:",
+            Dock = DockStyle.Fill,
+            Margin = new Padding(2, 0, 2, 0),
+        };
+        EnvelopeUiTheme.ОформитьГруппу(панель, EnvelopeUiTheme.SenderAccent);
 
         var кнопки = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
             Height = 30,
             FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(1, 2, 1, 1),
+            BackColor = EnvelopeUiTheme.PanelBackground,
         };
 
         var добавить = Кнопка("Добавить", "Добавить отправителя");
@@ -910,14 +968,6 @@ public sealed class MainShell : Form
         кнопки.Controls.Add(добавить);
         кнопки.Controls.Add(изменить);
         кнопки.Controls.Add(удалить);
-
-        var заголовок = new Label
-        {
-            Text = "СПРАВОЧНИК ОТПРАВИТЕЛЕЙ:",
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
-        };
 
         _таблицаОтправителей.Columns.Add("Индекс", "Индекс");
         _таблицаОтправителей.Columns.Add("Наименование", "Наименование");
@@ -952,7 +1002,6 @@ public sealed class MainShell : Form
         панель.Controls.Add(_поискОтправителя);
         панель.Controls.Add(меткаПоиска);
         панель.Controls.Add(кнопки);
-        панель.Controls.Add(заголовок);
 
         return панель;
     }
@@ -1007,13 +1056,22 @@ public sealed class MainShell : Form
     /// </summary>
     private Control ПостроитьПанельПолучателей()
     {
-        var панель = new Panel { Dock = DockStyle.Fill };
+        var панель = new GroupBox
+        {
+            Text = "КОМУ:",
+            Dock = DockStyle.Fill,
+            Margin = new Padding(2, 0, 2, 0),
+        };
+        EnvelopeUiTheme.ОформитьГруппу(панель, EnvelopeUiTheme.RecipientAccent);
 
         var кнопки = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 30,
+            Height = 50,
             FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Padding = new Padding(1, 2, 1, 1),
+            BackColor = EnvelopeUiTheme.PanelBackground,
         };
 
         var добавить = Кнопка("Добавить", "Добавить получателя");
@@ -1051,14 +1109,6 @@ public sealed class MainShell : Form
         кнопки.Controls.Add(вExcel);
         кнопки.Controls.Add(сохранитьВид);
         кнопки.Controls.Add(видТаблиц);
-
-        var заголовок = new Label
-        {
-            Text = "АДРЕСНАЯ КНИГА / ПОЛУЧАТЕЛИ:",
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
-        };
 
         _таблицаПолучателей.Columns.Add("VIP", "VIP");
         _таблицаПолучателей.Columns.Add("Индекс", "Индекс");
@@ -1102,7 +1152,6 @@ public sealed class MainShell : Form
         _таблицаПолучателей.Dock = DockStyle.Fill;
         панель.Controls.Add(_таблицаПолучателей);
         панель.Controls.Add(кнопки);
-        панель.Controls.Add(заголовок);
 
         return панель;
     }
@@ -1353,7 +1402,24 @@ public sealed class MainShell : Form
 
     /// <summary>Нейтральный светлый фон рабочих областей (аудит UX 2026-11-03, G3).</summary>
     /// <returns>Цвет фона.</returns>
-    private static Color ЦветФона() => Color.FromArgb(248, 250, 252);
+    private static Color ЦветФона() => EnvelopeUiTheme.WorkspaceBackground;
+
+    /// <summary>
+    /// Возвращает таблицам адресной книги визуальную роль, как в прототипе:
+    /// отправители читаются по красному заголовку, получатели — по синему.
+    /// Остальные таблицы сохраняют нейтральное оформление настроек оператора.
+    /// </summary>
+    private void ПрименитьАкцентыТаблиц()
+    {
+        EnvelopeUiTheme.ОформитьЗаголовокТаблицы(
+            _таблицаОтправителей,
+            EnvelopeUiTheme.SenderHeaderBackground,
+            EnvelopeUiTheme.SenderAccent);
+        EnvelopeUiTheme.ОформитьЗаголовокТаблицы(
+            _таблицаПолучателей,
+            EnvelopeUiTheme.RecipientHeaderBackground,
+            EnvelopeUiTheme.RecipientAccent);
+    }
 
     /// <summary>
     /// Полоса действий вкладки «Конверты» (аудит UX 2026-11-03, B1: экран
@@ -2080,13 +2146,49 @@ public sealed class MainShell : Form
     /// <summary>
     /// Создаёт кнопку панели инструментов таблицы.
     /// </summary>
-    private static Button Кнопка(string текст, string подсказка) => new()
+    private Button Кнопка(string текст, string подсказка)
     {
-        Text = текст,
-        AutoSize = true,
-        Height = 24,
-        FlatStyle = FlatStyle.System,
-        Font = new Font("Tahoma", 8f),
+        var кнопка = new Button
+        {
+            Text = текст,
+            AutoSize = true,
+            Height = 24,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Tahoma", 8f),
+            BackColor = Color.FromArgb(248, 249, 251),
+            ForeColor = Color.FromArgb(31, 41, 55),
+            Margin = new Padding(1),
+            Padding = new Padding(3, 0, 4, 0),
+            Cursor = Cursors.Hand,
+            UseVisualStyleBackColor = false,
+        };
+
+        кнопка.FlatAppearance.BorderColor = EnvelopeUiTheme.Border;
+        кнопка.FlatAppearance.MouseOverBackColor = Color.FromArgb(232, 238, 248);
+        кнопка.FlatAppearance.MouseDownBackColor = Color.FromArgb(216, 226, 241);
+        кнопка.Image = EnvelopeUiTheme.СоздатьЗначок(ВидЗначка(текст));
+        кнопка.ImageAlign = ContentAlignment.MiddleLeft;
+        кнопка.TextAlign = ContentAlignment.MiddleRight;
+        кнопка.TextImageRelation = TextImageRelation.ImageBeforeText;
+        _подсказки.SetToolTip(кнопка, подсказка);
+
+        return кнопка;
+    }
+
+    /// <summary>
+    /// Возвращает тип небольшого векторного знака для кнопки панели действий.
+    /// </summary>
+    /// <param name="текст">Текст кнопки.</param>
+    private static string ВидЗначка(string текст) => текст switch
+    {
+        "Добавить" => "add",
+        "Изменить" => "edit",
+        "Удалить" => "delete",
+        "F5 Печать" => "print",
+        "F6 Превью" => "preview",
+        "Открыть список в Excel" => "export",
+        "Сохранить вид таблицы" or "Вид таблиц…" => "settings",
+        _ => "default",
     };
 
     /// <summary>
@@ -3169,6 +3271,7 @@ public sealed class MainShell : Form
         GridAppearanceManager.Применить(_таблицаБланков, _оформление);
         GridAppearanceManager.Применить(_таблицаРассылок, _оформление);
         GridAppearanceManager.Применить(_таблицаОтправленных, _оформление);
+        ПрименитьАкцентыТаблиц();
 
         // Переключатель заголовков столбцов действует на все таблицы
         // программы (ТЗ §8.11, функция 131).
