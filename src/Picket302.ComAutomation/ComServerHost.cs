@@ -160,8 +160,14 @@ public sealed class ForegroundWindowService : IForegroundWindowService, IDisposa
 
             System.Windows.Forms.Application.Run(форма);
         }
-        catch (Exception)
+        catch (Exception ошибка)
         {
+            // Ошибка создания вспомогательного окна не должна оставаться
+            // невидимой: без окна не работают ни активация работающего
+            // экземпляра, ни плавное завершение сервера.
+            AutomationServerLog.Write(
+                "Поток вспомогательного окна завершился с ошибкой: " + ошибка);
+
             _ready.Set();
         }
     }
@@ -330,10 +336,10 @@ public sealed class ForegroundWindowService : IForegroundWindowService, IDisposa
     private static extern int RegisterWindowMessage(string message);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern IntPtr FindWindow(string className, string? windowName);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool PostMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PostThreadMessage(int threadId, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
@@ -490,14 +496,36 @@ public sealed class ComServerHost
     /// </remarks>
     public const string SingleInstanceMutexName = @"Local\Picket302.ComAutomation.SingleInstance";
 
+    /// <summary>
+    /// Имя именованного события плавного завершения сервера: внешний
+    /// процесс взводит событие, сервер получает WM_QUIT в главный поток,
+    /// завершает цикл сообщений и отзывает фабрику классов через
+    /// CoRevokeClassObject. Жёсткий kill без отзыва фабрики оставляет в SCM
+    /// запись о сервере, который «ещё держит класс», и последующая холодная
+    /// активация может отказывать без попытки запуска.
+    /// </summary>
+    public const string ShutdownEventName = @"Local\Picket302.ComAutomation.Shutdown";
+
     /// <summary>Описание сервера, записываемое в реестр.</summary>
     public const string ServerDescription = "Picket302 — COM-сервер автоматизации";
 
     private const uint ClsCtxLocalServer = 0x00000004;
     private const uint RegClsMultipleUse = 0x00000002;
+    private const uint WmQuit = 0x0012;
+    private const uint QsAllInput = 0x00FF;
+    private const uint MwmoInputAvailable = 0x0001;
+    private const uint WaitObject0 = 0;
+    private const uint PmRemove = 0x0001;
 
     /// <summary>Время ожидания освобождения мьютекса предшественником.</summary>
     private static readonly TimeSpan ВремяОжиданияМьютекса = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Идентификатор главного потока сервера (регистрация фабрики и цикл
+    /// сообщений). Служба переднего плана доставляет на него WM_QUIT при
+    /// плавном завершении.
+    /// </summary>
+    internal static volatile int MainThreadId;
 
     private readonly ForegroundWindowService _foreground;
 
@@ -506,6 +534,8 @@ public sealed class ComServerHost
     /// </summary>
     public ComServerHost()
     {
+        MainThreadId = Environment.CurrentManagedThreadId;
+
         _foreground = new ForegroundWindowService();
     }
 
@@ -518,9 +548,15 @@ public sealed class ComServerHost
     {
         ForegroundWindowService.EnableDpiAwareness();
 
+        AutomationServerLog.Write(
+            $"Хост: exe={Environment.ProcessPath}, base={AppContext.BaseDirectory}, " +
+            $"архитектура={System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}, " +
+            $"pid={Environment.ProcessId}.");
+
         using var mutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var созданНовый);
 
         var владеем = созданНовый;
+        var полученОжиданием = false;
 
         if (!владеем)
         {
@@ -530,7 +566,11 @@ public sealed class ComServerHost
             // выхода «в никуда», из-за которого чистая активация клиента
             // не находит фабрику (ТЗ §9.1).
             владеем = ОжидатьМьютекс(mutex, ВремяОжиданияМьютекса);
+            полученОжиданием = владеем;
         }
+
+        AutomationServerLog.Write(
+            $"Мьютекс: созданНовый={созданНовый}, полученОжиданием={полученОжиданием}, pid={Environment.ProcessId}.");
 
         if (!владеем)
         {
@@ -564,13 +604,30 @@ public sealed class ComServerHost
             return unchecked((int)результат);
         }
 
+        // Канал плавного завершения: взведение именованного события будит
+        // цикл сообщений, который штатно завершается с отзывом фабрики
+        // классов. Жёсткий kill без отзыва фабрики оставляет в SCM запись
+        // о сервере, который «ещё держит класс», и последующая холодная
+        // активация может отказывать без попытки запуска.
+        using var сигналЗавершения = new EventWaitHandle(
+            initialState: false,
+            EventResetMode.ManualReset,
+            ShutdownEventName);
+
         try
         {
-            RunMessageLoop();
+            AutomationServerLog.Write($"Вход в цикл сообщений: pid={Environment.ProcessId}.");
+
+            RunMessageLoop(сигналЗавершения);
+
+            AutomationServerLog.Write($"Выход из цикла сообщений: pid={Environment.ProcessId}.");
         }
         finally
         {
             CoRevokeClassObject(cookie);
+
+            AutomationServerLog.Write(
+                $"CoRevokeClassObject выполнен: cookie={cookie}, pid={Environment.ProcessId}.");
         }
 
         return 0;
@@ -636,19 +693,42 @@ public sealed class ComServerHost
         return 0;
     }
 
-    private static void RunMessageLoop()
+    /// <summary>
+    /// Цикл сообщений сервера: обслуживает очередь сообщений и одновременно
+    /// ждёт взведения события плавного завершения (<c>MsgWaitForMultipleObjectsEx</c>
+    /// будит цикл и на сообщениях, и на событии, поэтому завершение не
+    /// зависит от доставки WM_QUIT в STA-поток с COM-насосом).
+    /// </summary>
+    /// <param name="сигналЗавершения">Событие плавного завершения.</param>
+    private static void RunMessageLoop(WaitHandle сигналЗавершения)
     {
+        var дескрипторы = new[] { сигналЗавершения.SafeWaitHandle.DangerousGetHandle() };
+
         while (true)
         {
-            var результат = GetMessage(out var message, IntPtr.Zero, 0, 0);
+            var ожидание = MsgWaitForMultipleObjectsEx(
+                дескрипторы.Length,
+                дескрипторы,
+                500,
+                QsAllInput,
+                MwmoInputAvailable);
 
-            if (результат <= 0)
+            if (ожидание == WaitObject0)
             {
-                break;
+                // Сигнал плавного завершения получен.
+                return;
             }
 
-            TranslateMessage(ref message);
-            DispatchMessage(ref message);
+            while (PeekMessage(out var message, IntPtr.Zero, 0, 0, PmRemove))
+            {
+                if (message.Message == WmQuit)
+                {
+                    return;
+                }
+
+                TranslateMessage(ref message);
+                DispatchMessage(ref message);
+            }
         }
     }
 
@@ -671,6 +751,22 @@ public sealed class ComServerHost
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool PostMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int MsgWaitForMultipleObjectsEx(
+        int count,
+        IntPtr[] handles,
+        uint timeout,
+        uint wakeMask,
+        uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool PeekMessage(
+        out NativeMessage message,
+        IntPtr window,
+        uint filterMin,
+        uint filterMax,
+        uint remove);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetMessage(out NativeMessage message, IntPtr window, uint filterMin, uint filterMax);

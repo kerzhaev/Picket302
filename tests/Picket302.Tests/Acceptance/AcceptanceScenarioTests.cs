@@ -56,6 +56,12 @@ namespace Picket302.Tests.Acceptance;
 [Collection("ПрофильПриложения")]
 public sealed class AcceptanceScenarioTests : IDisposable
 {
+    /// <summary>Имя файла блокировки сериализации COM-приёмки в %TEMP%:
+    /// регистрация и завершение сервера используют общие ключи
+    /// HKCU\Software\Classes, и два одновременных тестовых процесса
+    /// порождают гонки unregister/register.</summary>
+    private const string ФайлБлокировкиПриёмки = "Picket302.ComAcceptance.lock";
+
     private readonly string _каталог = Path.Combine(
         Path.GetTempPath(),
         "Picket302Acceptance_" + Guid.NewGuid().ToString("N"));
@@ -536,6 +542,13 @@ public sealed class AcceptanceScenarioTests : IDisposable
         var путьШаблона = Path.Combine(каталогПриложения, "Конверт_C6_COM.lbk");
         var телоВыполнено = false;
 
+        // Глобальная сериализация COM-приёмки между процессами тестов.
+        // Файловая блокировка вместо мьютекса: Mutex привязан к потоку,
+        // а async-тест продолжается после await на другом потоке, и
+        // ReleaseMutex падает. Внутри блокировки активация остаётся
+        // полностью холодной.
+        using var блокировка = ЗахватитьБлокировкуПриёмки(TimeSpan.FromSeconds(180));
+
         // Локальный COM-сервер держит файл базы профиля открытым, поэтому
         // его нужно остановить до переноса базы (иначе файл останется
         // занят завершающимся процессом).
@@ -731,11 +744,14 @@ public sealed class AcceptanceScenarioTests : IDisposable
             }
             finally
             {
-                регистрация.Unregister();
-
-                // Сервер держит файл базы: останавливаем процесс и дожидаемся
-                // его завершения, иначе файл остаётся заблокированным.
+                // Сначала плавная остановка сервера: фабрика отзывается через
+                // CoRevokeClassObject при живой регистрации, и в SCM не
+                // остаётся записи о «мёртвом» сервере, из-за которой следующий
+                // холодный запуск может получить 0x80040154 без попытки
+                // запуска LocalServer32.
                 ОстановитьСерверы();
+
+                регистрация.Unregister();
             }
         }
         finally
@@ -839,11 +855,82 @@ public sealed class AcceptanceScenarioTests : IDisposable
     }
 
     /// <summary>
-    /// Останавливает процессы локального COM-сервера и дожидается их
-    /// завершения: файл базы освобождается не мгновенно после kill.
+    /// Захватывает файл блокировки COM-приёмки на весь сценарий: одновременный
+    /// тестовый процесс ждёт освобождения в пределах указанного времени.
+    /// Блокировка не привязана к потоку и освобождается при закрытии потока,
+    /// в том числе при аварийном завершении процесса.
+    /// </summary>
+    /// <param name="ожидание">Полное время ожидания освобождения.</param>
+    /// <returns>Открытый поток блокировки.</returns>
+    private static FileStream ЗахватитьБлокировкуПриёмки(TimeSpan ожидание)
+    {
+        var путь = Path.Combine(Path.GetTempPath(), ФайлБлокировкиПриёмки);
+        var дедлайн = DateTime.UtcNow + ожидание;
+
+        while (true)
+        {
+            try
+            {
+                return new FileStream(
+                    путь,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None);
+            }
+            catch (IOException)
+            {
+                if (DateTime.UtcNow >= дедлайн)
+                {
+                    throw new IOException(
+                        "Блокировка COM-приёмки не освобождена за 180 секунд: " +
+                        "параллельный тестовый прогон выполняет собственный COM-сценарий.");
+                }
+
+                Thread.Sleep(500);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Останавливает процессы локального COM-сервера: сначала плавно — через
+    /// именованное событие завершения (сервер выходит из цикла сообщений и
+    /// отзывает фабрику через CoRevokeClassObject), затем принудительно
+    /// оставшиеся. Жёсткий kill без отзыва фабрики оставляет в SCM запись о
+    /// сервере, который «ещё держит класс», и следующий холодный запуск может
+    /// получить 0x80040154 без попытки запуска LocalServer32.
     /// </summary>
     private static void ОстановитьСерверы()
     {
+        var процессовДоПлавногоЗавершения = Process.GetProcessesByName("Picket302.ComAutomation").Length;
+
+        if (процессовДоПлавногоЗавершения > 0)
+        {
+            try
+            {
+                using var сигнал = EventWaitHandle.OpenExisting(ComServerHost.ShutdownEventName);
+
+                сигнал.Set();
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                // Сервер не создал событие (не дошёл до запуска хоста) —
+                // остаётся принудительная остановка.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Событие существует, но не для записи — принудительная остановка.
+            }
+
+            var дедлайн = DateTime.UtcNow.AddSeconds(5);
+
+            while (DateTime.UtcNow < дедлайн
+                && Process.GetProcessesByName("Picket302.ComAutomation").Length > 0)
+            {
+                Thread.Sleep(250);
+            }
+        }
+
+        // Фолбэк: процессы, не отреагировавшие на плавное завершение.
         foreach (var процесс in Process.GetProcessesByName("Picket302.ComAutomation"))
         {
             try
