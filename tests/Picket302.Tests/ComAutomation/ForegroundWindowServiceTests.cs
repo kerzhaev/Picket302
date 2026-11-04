@@ -163,9 +163,9 @@ public sealed class ForegroundWindowServiceTests
 
             Assert.Equal(0, второй.ExitCode);
 
-            // Первый останавливается штатно: сервер создаёт именованное
-            // событие завершения при старте хоста — ждём его появления.
-            using var сигнал = ДождатьсяСобытияЗавершения(TimeSpan.FromSeconds(5));
+            // Первый останавливается штатно: событие завершения уникально для
+            // процесса — ждём появления события именно первого PID.
+            using var сигнал = ДождатьсяСобытияЗавершения(первый!.Id, TimeSpan.FromSeconds(5));
 
             Assert.NotNull(сигнал);
 
@@ -221,11 +221,12 @@ public sealed class ForegroundWindowServiceTests
                 // предотвращает загрязнение SCM для соседних тестов.
                 try
                 {
-                    using var сигнал = EventWaitHandle.OpenExisting(ComServerHost.ShutdownEventName);
+                    using var сигнал = EventWaitHandle.OpenExisting(
+                        ComServerHost.ShutdownEventNameFor(первый!.Id));
 
                     сигнал.Set();
 
-                    первый!.WaitForExit(3000);
+                    первый.WaitForExit(3000);
                 }
                 catch (Exception)
                 {
@@ -253,11 +254,151 @@ public sealed class ForegroundWindowServiceTests
     }
 
     /// <summary>
-    /// Дожидается создания сервером именованного события завершения.
+    /// Регрессия гонки быстрого перезапуска: сигнальный ManualReset-объект
+    /// умершего сервера не должен убивать следующий сервер. Имя события
+    /// уникально для процесса, поэтому новый сервер получает чистый
+    /// несигнальный канал, даже когда тестовый держатель события первого
+    /// процесса ещё открыт (до исправления новый сервер умирал сразу после
+    /// CoRegisterClassObject от унаследованного WM_QUIT, и SCM отказывал
+    /// следующим активациям с 0x80040154 без запуска процесса).
     /// </summary>
+    [Fact]
+    public void ГонкаПерезапуска_СигналСтарогоСервера_НеУбиваетНовыйСервер()
+    {
+        Assert.True(File.Exists(ПутьСервера), "EXE COM-сервера не поставляется с тестами.");
+
+        var журнал = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            ComAutomationEnvironment.ApplicationDirectoryName,
+            "com-automation.log");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(журнал)!);
+
+        var доЭксперимента = File.Exists(журнал) ? new FileInfo(журнал).Length : 0;
+        Process? второй = null;
+
+        try
+        {
+            // Первый сервер: штатный запуск и остановка; тестовый держатель его
+            // события остаётся ОТКРЫТЫМ и сигнальным — худший случай гонки.
+            using var первый = Process.Start(new ProcessStartInfo(ПутьСервера)
+            {
+                UseShellExecute = false,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            });
+
+            Assert.NotNull(первый);
+
+            var событиеПервого = ДождатьсяСобытияЗавершения(первый!.Id, TimeSpan.FromSeconds(5));
+
+            Assert.NotNull(событиеПервого);
+
+            using (событиеПервого!)
+            {
+                событиеПервого.Set();
+
+                Assert.True(
+                    первый.WaitForExit(TimeSpan.FromSeconds(5)),
+                    "Первый сервер не завершился через ShutdownEventName.");
+
+                Assert.Equal(0, первый.ExitCode);
+
+                // Держатель события первого процесса жив, и событие сигнально.
+                Assert.True(событиеПервого.WaitOne(0), "Событие первого процесса должно оставаться сигнальным.");
+
+                // Новый сервер в худших условиях: без unregister, сразу.
+                второй = Process.Start(new ProcessStartInfo(ПутьСервера)
+                {
+                    UseShellExecute = false,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                });
+
+                Assert.NotNull(второй);
+
+                // Новый сервер обязан ЖИТЬ: унаследованный сигнал не доставляется.
+                Thread.Sleep(TimeSpan.FromSeconds(2));
+
+                Assert.False(
+                    второй!.HasExited,
+                    "Новый сервер умер сразу после запуска: унаследованный сигнал предыдущего " +
+                    "процесса достиг нового сервера (гонка быстрого перезапуска).");
+
+                var новые = ПрочитатьЖурналС(журнал, доЭксперимента);
+
+                // Доказательство отсутствия самопроизвольного выхода: фабрика
+                // зарегистрирована, но не отозвана до адресного сигнала.
+                Assert.True(
+                    ПодсчитатьСтроки(новые, "CoRegisterClassObject", $"pid={второй.Id}") == 1,
+                    "Новый сервер не зарегистрировал фабрику.");
+
+                Assert.True(
+                    ПодсчитатьСтроки(новые, "CoRevokeClassObject", $"pid={второй.Id}") == 0,
+                    "Новый сервер отозвал фабрику самопроизвольно: немедленный выход " +
+                    "сразу после запуска (до адресного сигнала завершения).");
+
+                // Штатная остановка нового сервера его собственным событием.
+                using var событиеВторого = ДождатьсяСобытияЗавершения(второй.Id, TimeSpan.FromSeconds(5));
+
+                Assert.NotNull(событиеВторого);
+
+                событиеВторого!.Set();
+
+                Assert.True(
+                    второй.WaitForExit(TimeSpan.FromSeconds(5)),
+                    "Новый сервер не завершился через собственное ShutdownEventName.");
+
+                Assert.Equal(0, второй.ExitCode);
+            }
+        }
+        finally
+        {
+            // Аварийная уборка провалившегося теста: сначала адресные события,
+            // затем Kill — чтобы соседние COM-тесты получили чистое состояние.
+            foreach (var процесс in Process.GetProcessesByName("Picket302.ComAutomation"))
+            {
+                using (процесс)
+                {
+                    try
+                    {
+                        using var сигнал = EventWaitHandle.OpenExisting(
+                            ComServerHost.ShutdownEventNameFor(процесс.Id));
+
+                        сигнал.Set();
+
+                        процесс.WaitForExit(3000);
+                    }
+                    catch (Exception)
+                    {
+                        // События нет — остаётся Kill ниже.
+                    }
+
+                    try
+                    {
+                        if (!процесс.HasExited)
+                        {
+                            процесс.Kill(entireProcessTree: true);
+                            процесс.WaitForExit(3000);
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Процесс уже завершён.
+                    }
+                }
+            }
+        }
+
+        Assert.Empty(Process.GetProcessesByName("Picket302.ComAutomation"));
+    }
+
+    /// <summary>
+    /// Дожидается создания сервером именованного события завершения
+    /// указанного процесса.
+    /// </summary>
+    /// <param name="pid">Идентификатор процесса сервера.</param>
     /// <param name="ожидание">Полное время ожидания.</param>
     /// <returns>Открытое событие либо <see langword="null"/>.</returns>
-    private static EventWaitHandle? ДождатьсяСобытияЗавершения(TimeSpan ожидание)
+    private static EventWaitHandle? ДождатьсяСобытияЗавершения(int pid, TimeSpan ожидание)
     {
         var дедлайн = DateTime.UtcNow + ожидание;
 
@@ -265,7 +406,7 @@ public sealed class ForegroundWindowServiceTests
         {
             try
             {
-                return EventWaitHandle.OpenExisting(ComServerHost.ShutdownEventName);
+                return EventWaitHandle.OpenExisting(ComServerHost.ShutdownEventNameFor(pid));
             }
             catch (WaitHandleCannotBeOpenedException)
             {

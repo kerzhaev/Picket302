@@ -658,16 +658,20 @@ public sealed class AcceptanceScenarioTests : IDisposable
                 // ProgID используется, когда среда разрешает его разрешение
                 // в CLSID; иначе (per-user регистрация не видна ole32)
                 // активация выполняется по идентификатору класса.
-                var тип = Type.GetTypeFromProgID(ComAutomationIds.ProgId, throwOnError: false)
-                          ?? Type.GetTypeFromCLSID(new Guid(ComAutomationIds.ClassId));
+                var типПрогид = Type.GetTypeFromProgID(ComAutomationIds.ProgId, throwOnError: false);
+                var тип = типПрогид ?? Type.GetTypeFromCLSID(new Guid(ComAutomationIds.ClassId));
+                var источникТипа = типПрогид is not null ? "ProgID" : "CLSID";
 
                 Assert.True(тип is not null, "COM-сервер PEPro.Application не зарегистрирован.");
 
                 object? приложение = null;
                 var последнийКод = 0;
+                var попытокСделано = 0;
 
                 for (var попытка = 0; попытка < 40 && приложение is null; попытка++)
                 {
+                    попытокСделано++;
+
                     try
                     {
                         приложение = Activator.CreateInstance(тип!);
@@ -684,7 +688,10 @@ public sealed class AcceptanceScenarioTests : IDisposable
 
                 Assert.True(
                     приложение is not null,
-                    "COM-сервер PEPro.Application не активирован. " + ОписатьСостояниеАктивации(последнийКод));
+                    "COM-сервер PEPro.Application не активирован. " + ОписатьСостояниеАктивации(
+                        последнийКод,
+                        источникТипа,
+                        попытокСделано));
 
                 try
                 {
@@ -803,8 +810,10 @@ public sealed class AcceptanceScenarioTests : IDisposable
     /// интерфейс.
     /// </summary>
     /// <param name="hresult">Последний код активации; 0 — исключений не было.</param>
+    /// <param name="источникТипа">Источник типа: ProgID или CLSID.</param>
+    /// <param name="попыток">Число выполненных попыток активации.</param>
     /// <returns>Однострочная диагностика для сообщения проверки.</returns>
-    private static string ОписатьСостояниеАктивации(int hresult)
+    private static string ОписатьСостояниеАктивации(int hresult, string источникТипа, int попыток)
     {
         var части = new List<string>();
 
@@ -812,6 +821,9 @@ public sealed class AcceptanceScenarioTests : IDisposable
         {
             части.Add($"последний HRESULT=0x{hresult:X8}");
         }
+
+        части.Add($"попыток: {попыток}; тип получен через {источникТипа}");
+        части.Add($"разрядность testhost: {(Environment.Is64BitProcess ? "x64" : "x86")}");
 
         var clsidПоПrogId = ComRegistration.ReadValue(
             $@"Software\Classes\{ComAutomationIds.ProgId}",
@@ -844,6 +856,39 @@ public sealed class AcceptanceScenarioTests : IDisposable
             foreach (var процесс in процессы)
             {
                 процесс.Dispose();
+            }
+        }
+        catch (Exception)
+        {
+            // Диагностика не должна маскировать исходную ошибку активации.
+        }
+
+        // Свежие строки журнала сервера: появился ли -Embedding и
+        // CoRegisterClassObject во время попыток активации.
+        try
+        {
+            var журнал = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                ComAutomationEnvironment.ApplicationDirectoryName,
+                "com-automation.log");
+
+            if (File.Exists(журнал))
+            {
+                using var поток = new FileStream(журнал, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+                поток.Seek(Math.Max(0, поток.Length - 16_384), SeekOrigin.Begin);
+
+                using var читатель = new StreamReader(поток, System.Text.Encoding.UTF8);
+
+                var хвост = читатель.ReadToEnd();
+                var запуск = хвост.Contains("-Embedding", StringComparison.Ordinal);
+                var регистрация = хвост.Contains("CoRegisterClassObject", StringComparison.Ordinal);
+                var отзыв = хвост.Contains("CoRevokeClassObject", StringComparison.Ordinal);
+
+                части.Add(
+                    $"журнал (хвост 16К): -Embedding={(запуск ? "есть" : "НЕТ")}, " +
+                    $"CoRegisterClassObject={(регистрация ? "есть" : "НЕТ")}, " +
+                    $"CoRevokeClassObject={(отзыв ? "есть" : "НЕТ")}");
             }
         }
         catch (Exception)
@@ -905,20 +950,31 @@ public sealed class AcceptanceScenarioTests : IDisposable
 
         if (процессовДоПлавногоЗавершения > 0)
         {
-            try
+            // Событие завершения уникально для каждого процесса сервера:
+            // сигнал адресуется по PID, поэтому не может задеть чужой или
+            // будущий сервер.
+            foreach (var процесс in Process.GetProcessesByName("Picket302.ComAutomation"))
             {
-                using var сигнал = EventWaitHandle.OpenExisting(ComServerHost.ShutdownEventName);
+                try
+                {
+                    using var сигнал = EventWaitHandle.OpenExisting(
+                        ComServerHost.ShutdownEventNameFor(процесс.Id));
 
-                сигнал.Set();
-            }
-            catch (WaitHandleCannotBeOpenedException)
-            {
-                // Сервер не создал событие (не дошёл до запуска хоста) —
-                // остаётся принудительная остановка.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Событие существует, но не для записи — принудительная остановка.
+                    сигнал.Set();
+                }
+                catch (WaitHandleCannotBeOpenedException)
+                {
+                    // Сервер не создал событие (не дошёл до запуска хоста) —
+                    // остаётся принудительная остановка.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Событие существует, но не для записи — принудительная остановка.
+                }
+                finally
+                {
+                    процесс.Dispose();
+                }
             }
 
             var дедлайн = DateTime.UtcNow.AddSeconds(5);
