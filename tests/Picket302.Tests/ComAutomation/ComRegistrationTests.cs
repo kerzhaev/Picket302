@@ -72,11 +72,23 @@ public sealed class ComRegistrationTests : IDisposable
 
         Assert.Equal(
             $"{{{ComAutomationIds.ClassId}}}",
+            ComRegistration.ReadValue(progId, "CLSID"));
+
+        Assert.Equal(
+            $"{{{ComAutomationIds.ClassId}}}",
             ComRegistration.ReadValue($@"{progId}\CLSID"));
 
         Assert.Equal(
             ComAutomationIds.ProgId,
+            ComRegistration.ReadValue(clsid, "ProgID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
             ComRegistration.ReadValue($@"{clsid}\ProgID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
+            ComRegistration.ReadValue(clsid, "VersionIndependentProgID"));
 
         Assert.Equal(
             ComAutomationIds.ProgId,
@@ -96,6 +108,10 @@ public sealed class ComRegistrationTests : IDisposable
         Assert.Equal(
             $"\"{_регистрация.ServerPath}\"",
             ComRegistration.ReadValue($@"{clsid}\LocalServer32"));
+
+        Assert.Equal(
+            _регистрация.ServerPath,
+            ComRegistration.ReadValue($@"{clsid}\LocalServer32", "ServerExecutable"));
 
         // Универсальный маршалер автоматизации назначается веткой
         // ProxyStubClsid32 со CLSID стандартного прокси oleaut32.dll (F-E19):

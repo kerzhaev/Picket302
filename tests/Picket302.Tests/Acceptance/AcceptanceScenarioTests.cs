@@ -640,12 +640,19 @@ public sealed class AcceptanceScenarioTests : IDisposable
                 Assert.Equal(
                     $"{{{ComAutomationIds.ClassId}}}",
                     ComRegistration.ReadValue(
-                        $@"Software\Classes\{ComAutomationIds.ProgId}\CLSID"));
+                        $@"Software\Classes\{ComAutomationIds.ProgId}",
+                        "CLSID"));
 
                 Assert.True(
                     ComRegistration.KeyExists(
                         $@"Software\Classes\CLSID\{{{ComAutomationIds.ClassId}}}\LocalServer32"),
                     "В ветке классов отсутствует запись LocalServer32.");
+
+                Assert.Equal(
+                    регистрация.ServerPath,
+                    ComRegistration.ReadValue(
+                        $@"Software\Classes\CLSID\{{{ComAutomationIds.ClassId}}}\LocalServer32",
+                        "ServerExecutable"));
 
                 Assert.True(
                     ComRegistration.KeyExists(
@@ -836,12 +843,17 @@ public sealed class AcceptanceScenarioTests : IDisposable
         части.Add($"попыток: {попыток}; тип получен через {источникТипа}");
         части.Add($"разрядность testhost: {(Environment.Is64BitProcess ? "x64" : "x86")}");
 
-        var clsidПоПrogId = ComRegistration.ReadValue(
+        var clsidПоProgId = ComRegistration.ReadValue(
+            $@"Software\Classes\{ComAutomationIds.ProgId}",
+            "CLSID");
+        var clsidПоСовместимости = ComRegistration.ReadValue(
             $@"Software\Classes\{ComAutomationIds.ProgId}\CLSID");
 
-        части.Add(clsidПоПrogId is null
-            ? "ProgID PEPro.Application не разрешился (ключ отсутствует)"
-            : $"ProgID → {clsidПоПrogId}");
+        части.Add(clsidПоProgId is not null
+            ? $"ProgID → {clsidПоProgId} (именованное значение CLSID)"
+            : clsidПоСовместимости is not null
+                ? $"ProgID → {clsidПоСовместимости} (совместимый подраздел CLSID)"
+                : "ProgID PEPro.Application не разрешился (ключ отсутствует)");
 
         var ветка = $@"Software\Classes\CLSID\{{{ComAutomationIds.ClassId}}}";
 
@@ -850,12 +862,21 @@ public sealed class AcceptanceScenarioTests : IDisposable
             : "CLSID не зарегистрирован");
 
         var сервер = ComRegistration.ReadValue($@"{ветка}\LocalServer32")?.Trim('"');
+        var serverExecutable = ComRegistration.ReadValue(
+            $@"{ветка}\LocalServer32",
+            "ServerExecutable");
 
         части.Add(сервер is null
             ? "LocalServer32 отсутствует"
             : File.Exists(сервер)
                 ? $"LocalServer32 → {сервер} (файл существует)"
                 : $"LocalServer32 указывает на отсутствующий файл: {сервер}");
+
+        части.Add(serverExecutable is null
+            ? "ServerExecutable отсутствует"
+            : File.Exists(serverExecutable)
+                ? $"ServerExecutable → {serverExecutable} (файл существует)"
+                : $"ServerExecutable указывает на отсутствующий файл: {serverExecutable}");
 
         try
         {

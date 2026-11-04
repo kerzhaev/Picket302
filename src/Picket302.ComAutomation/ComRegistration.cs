@@ -117,12 +117,15 @@ public sealed class ComRegistration
         using (var progId = Registry.CurrentUser.CreateSubKey($@"{_classesRoot}\{ComAutomationIds.ProgId}", writable: true))
         {
             progId?.SetValue(string.Empty, ServerDescription, RegistryValueKind.String);
-            // COM expects CLSID to be a subkey whose default value contains
-            // the class identifier. A named value with the same name is
-            // visible in the registry but is not resolved by CLSIDFromProgID.
-            progId?.DeleteValue("CLSID", throwOnMissingValue: false);
+            // The canonical ProgID -> CLSID link is a named REG_SZ value. A
+            // previous build also wrote a CLSID subkey; the compatibility
+            // form is retained below while this canonical link is restored.
+            progId?.SetValue("CLSID", FormatGuid(ComAutomationIds.ClassId), RegistryValueKind.String);
         }
 
+        // CLSIDFromProgID on the Windows builds used by the application
+        // resolves the traditional default value of the CLSID subkey. Keep
+        // that compatibility form alongside the documented named value.
         using (var progIdClsid = Registry.CurrentUser.CreateSubKey(
                    $@"{_classesRoot}\{ComAutomationIds.ProgId}\CLSID",
                    writable: true))
@@ -134,13 +137,16 @@ public sealed class ComRegistration
         {
             clsid?.SetValue(string.Empty, ServerDescription, RegistryValueKind.String);
             clsid?.SetValue("AppID", FormatGuid(AppId), RegistryValueKind.String);
-            // Migrate the old malformed named values if this registration was
-            // created by an earlier build. COM reads both ProgID links as
-            // subkeys with their CLSID value in the default entry.
-            clsid?.DeleteValue("ProgID", throwOnMissingValue: false);
-            clsid?.DeleteValue("VersionIndependentProgID", throwOnMissingValue: false);
+            // Both reverse links are named REG_SZ values on the CLSID key.
+            // Write the canonical values even when an older installation
+            // already contains the compatibility subkeys below.
+            clsid?.SetValue("ProgID", ComAutomationIds.ProgId, RegistryValueKind.String);
+            clsid?.SetValue("VersionIndependentProgID", ComAutomationIds.ProgId, RegistryValueKind.String);
         }
 
+        // Keep the old default-value subkeys too. They are harmless and make
+        // the registration readable by legacy COM tooling that expects the
+        // reverse links in subkey form.
         using (var clsidProgId = Registry.CurrentUser.CreateSubKey(
                    $@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}\ProgID",
                    writable: true))
@@ -160,6 +166,11 @@ public sealed class ComRegistration
                    writable: true))
         {
             localServer?.SetValue(string.Empty, Quote(_serverPath), RegistryValueKind.String);
+            // ServerExecutable is passed as lpApplicationName to
+            // CreateProcess, removing any ambiguity caused by spaces or
+            // arguments in LocalServer32's command line.
+            localServer?.SetValue("ServerExecutable", _serverPath, RegistryValueKind.String);
+            localServer?.Flush();
         }
 
         using (var appId = Registry.CurrentUser.CreateSubKey($@"{_classesRoot}\AppID\{FormatGuid(AppId)}", writable: true))
