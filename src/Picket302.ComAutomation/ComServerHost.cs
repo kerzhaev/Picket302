@@ -496,6 +496,9 @@ public sealed class ComServerHost
     private const uint ClsCtxLocalServer = 0x00000004;
     private const uint RegClsMultipleUse = 0x00000002;
 
+    /// <summary>Время ожидания освобождения мьютекса предшественником.</summary>
+    private static readonly TimeSpan ВремяОжиданияМьютекса = TimeSpan.FromSeconds(2);
+
     private readonly ForegroundWindowService _foreground;
 
     /// <summary>
@@ -517,10 +520,25 @@ public sealed class ComServerHost
 
         using var mutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var созданНовый);
 
-        if (!созданНовый)
+        var владеем = созданНовый;
+
+        if (!владеем)
+        {
+            // Мьютекс занят предыдущим экземпляром: он может быть в момент
+            // завершения — фабрика уже отозвана, а процесс ещё жив. Короткое
+            // ожидание позволяет новому запуску принять эстафету вместо
+            // выхода «в никуда», из-за которого чистая активация клиента
+            // не находит фабрику (ТЗ §9.1).
+            владеем = ОжидатьМьютекс(mutex, ВремяОжиданияМьютекса);
+        }
+
+        if (!владеем)
         {
             // Работающий экземпляр уже обслуживает запросы — активируем его
             // и завершаемся, не поднимая вторую копию сервера.
+            AutomationServerLog.Write(
+                $"Мьютекс занят работающим экземпляром, фабрика не регистрируется: pid={Environment.ProcessId}.");
+
             return ActivateRunningInstance();
         }
 
@@ -534,8 +552,15 @@ public sealed class ComServerHost
             RegClsMultipleUse,
             out var cookie);
 
+        AutomationServerLog.Write(
+            $"CoRegisterClassObject: hresult=0x{результат:X8}, cookie={cookie}, " +
+            $"pid={Environment.ProcessId}.");
+
         if (результат < 0)
         {
+            AutomationServerLog.Write(
+                $"Регистрация фабрики классов не удалась: 0x{результат:X8}, pid={Environment.ProcessId}.");
+
             return unchecked((int)результат);
         }
 
@@ -549,6 +574,40 @@ public sealed class ComServerHost
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Ждёт освобождения мьютекса единственного экземпляра: предыдущий
+    /// процесс может быть в момент завершения.
+    /// </summary>
+    /// <param name="mutex">Мьютекс единственного экземпляра.</param>
+    /// <param name="ожидание">Полное время ожидания.</param>
+    /// <returns><see langword="true"/> — владение получено.</returns>
+    private static bool ОжидатьМьютекс(Mutex mutex, TimeSpan ожидание)
+    {
+        var дедлайн = DateTime.UtcNow + ожидание;
+
+        while (true)
+        {
+            try
+            {
+                if (mutex.WaitOne(TimeSpan.FromMilliseconds(250)))
+                {
+                    return true;
+                }
+            }
+            catch (AbandonedMutexException)
+            {
+                // Предыдущий владелец завершился аварийно: владение перешло
+                // к текущему процессу.
+                return true;
+            }
+
+            if (DateTime.UtcNow >= дедлайн)
+            {
+                return false;
+            }
+        }
     }
 
     /// <summary>

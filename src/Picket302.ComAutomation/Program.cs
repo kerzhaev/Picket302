@@ -31,6 +31,13 @@ internal static class Program
     {
         var аргументы = args ?? Array.Empty<string>();
 
+        // Диагностика запуска (ТЗ §10.3): PID, командная строка и рабочий
+        // каталог позволяют отличить запуск SCM с «-Embedding» от ручного
+        // запуска и от регистрации.
+        AutomationServerLog.Write(
+            $"Запуск: pid={Environment.ProcessId}, аргументы=[{string.Join(" ", аргументы)}], " +
+            $"cwd={Environment.CurrentDirectory}, пользователь={Environment.UserName}.");
+
         if (Содержит(аргументы, "--register", "-register", "/register", "-RegServer"))
         {
             var регистрация = new ComRegistration();

@@ -319,8 +319,13 @@ public sealed class ComRegistration
 
     private static string FormatGuid(string value) => $"{{{value}}}";
 
-    private static string Quote(string path) =>
-        path.Contains(' ') && !path.StartsWith('"') ? $"\"{path}\"" : path;
+    /// <summary>
+    /// Заключает путь LocalServer32 в кавычки всегда: значение ветки читает
+    /// SCM при запуске сервера, и кавычки делают разбор пути независимым от
+    /// пробелов в каталоге установки (запуск из каталога без пробелов тоже
+    /// остаётся корректным).
+    /// </summary>
+    private static string Quote(string path) => $"\"{path}\"";
 
     /// <summary>
     /// Определяет путь к исполняемому файлу COM-сервера.

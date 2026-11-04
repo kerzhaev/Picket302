@@ -76,8 +76,11 @@ public sealed class ComRegistrationTests : IDisposable
             $"{{{ComAutomationIds.ClassId}}}",
             ComRegistration.ReadValue(appId, "CLSID"));
 
+        // Путь LocalServer32 всегда записывается в кавычках: SCM разбирает
+        // командную строку запуска сервера, и кавычки делают путь корректным
+        // и при пробелах в каталоге, и без них.
         Assert.Equal(
-            _регистрация.ServerPath,
+            $"\"{_регистрация.ServerPath}\"",
             ComRegistration.ReadValue($@"{clsid}\LocalServer32"));
 
         // Универсальный маршалер автоматизации назначается веткой
