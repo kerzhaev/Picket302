@@ -103,7 +103,16 @@ public sealed class ForegroundWindowService : IForegroundWindowService, IDisposa
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
 
+        AutomationServerLog.Write(
+            $"Helper: поток стартован: managedId={_thread.ManagedThreadId}, " +
+            $"состояние={_thread.ThreadState}, pid={Environment.ProcessId}.");
+
         _ready.Wait(TimeSpan.FromSeconds(5));
+
+        AutomationServerLog.Write(
+            $"Helper: ожидание готовности завершено: состояние={_thread.ThreadState}, " +
+            $"hwnd={HelperWindowHandle}, ошибка={(_ошибкаИнициализации?.Message ?? "нет")}, " +
+            $"pid={Environment.ProcessId}.");
     }
 
     /// <summary>Ошибка запуска потока окна; <see langword="null"/> — окно создано.</summary>
@@ -166,7 +175,13 @@ public sealed class ForegroundWindowService : IForegroundWindowService, IDisposa
         {
             _tid = Environment.CurrentManagedThreadId;
 
+            AutomationServerLog.Write(
+                $"Helper: поток запущен: tid={_tid}, pid={Environment.ProcessId}.");
+
             ЗарегистрироватьКлассОкна();
+
+            AutomationServerLog.Write(
+                $"Helper: класс зарегистрирован: tid={_tid}.");
 
             _activationMessage = RegisterWindowMessage(ActivationMessageName);
 
@@ -687,13 +702,31 @@ public interface IClassFactory
 /// <summary>
 /// Фабрика классов локального COM-сервера (ТЗ §9.1, функция 113).
 /// </summary>
+/// <remarks>
+/// Служба переднего плана создаётся хостом до запуска сервера
+/// (<c>ИнициализироватьОбщуюСлужбу</c>), а не в статическом инициализаторе:
+/// запуск STA-потока вспомогательного окна из контекста cctor приводил к
+/// зависанию <c>Thread.Start</c> (доказано журналом: строки
+/// «Helper: поток стартован» не появлялись).
+/// </remarks>
 [ComVisible(true)]
 public sealed class ComClassFactory : IClassFactory
 {
     /// <summary>Единственная служба переднего плана на процесс сервера (F-E24):
     /// каждый экземпляр PEProApplication получает один и тот же STA-поток
     /// вспомогательного окна, а не собственный.</summary>
-    private static readonly ForegroundWindowService ОбщаяСлужбаПереднегоПлана = new();
+    internal static ForegroundWindowService ОбщаяСлужбаПереднегоПлана { get; private set; }
+        = null!;
+
+    /// <summary>
+    /// Назначает общую службу переднего плана (вызывается хостом до Run).
+    /// </summary>
+    /// <param name="служба">Служба переднего плана.</param>
+    internal static void ИнициализироватьОбщуюСлужбу(ForegroundWindowService служба)
+    {
+        ОбщаяСлужбаПереднегоПлана = служба
+            ?? throw new ArgumentNullException(nameof(служба));
+    }
 
     /// <inheritdoc />
     public void CreateInstance(
@@ -760,22 +793,22 @@ public sealed class ComServerHost
     private static readonly TimeSpan ВремяОжиданияМьютекса = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Идентификатор главного потока сервера (регистрация фабрики и цикл
-    /// сообщений). Служба переднего плана доставляет на него WM_QUIT при
-    /// плавном завершении.
+    /// Win32-идентификатор главного потока сервера (регистрация фабрики и
+    /// цикл сообщений). Именно его ждёт PostThreadMessage; управляемый
+    /// Thread.CurrentManagedThreadId для этого не годится.
     /// </summary>
-    internal static volatile int MainThreadId;
-
-    private readonly ForegroundWindowService _foreground;
+    internal static volatile int MainWin32ThreadId;
 
     /// <summary>
-    /// Создаёт хост сервера.
+    /// Создаёт хост сервера: назначает общую службу переднего плана в
+    /// обычном контексте конструктора (вне статического инициализатора
+    /// фабрики), поэтому helper-окно в процессе ровно одно.
     /// </summary>
     public ComServerHost()
     {
-        MainThreadId = Environment.CurrentManagedThreadId;
+        MainWin32ThreadId = GetCurrentThreadId();
 
-        _foreground = new ForegroundWindowService();
+        ComClassFactory.ИнициализироватьОбщуюСлужбу(new ForegroundWindowService());
     }
 
     /// <summary>
@@ -983,33 +1016,73 @@ public sealed class ComServerHost
     /// <param name="сигналЗавершения">Событие плавного завершения.</param>
     private static void RunMessageLoop(WaitHandle сигналЗавершения)
     {
-        var дескрипторы = new[] { сигналЗавершения.SafeWaitHandle.DangerousGetHandle() };
-
-        while (true)
-        {
-            var ожидание = MsgWaitForMultipleObjectsEx(
-                дескрипторы.Length,
-                дескрипторы,
-                500,
-                QsAllInput,
-                MwmoInputAvailable);
-
-            if (ожидание == WaitObject0)
+        // Сторож: взведение события завершения доставляет WM_QUIT в очередь
+        // главного STA-потока (канонический механизм остановки локального
+        // COM-сервера; MsgWaitForMultipleObjectsEx на STA-потоке с
+        // зарегистрированной фабрикой классов событие не видит — проверено
+        // журналированием).
+        var ожиданиеСигнала = ThreadPool.RegisterWaitForSingleObject(
+            сигналЗавершения,
+            (state, истекло) =>
             {
-                // Сигнал плавного завершения получен.
-                return;
-            }
-
-            while (PeekMessage(out var message, IntPtr.Zero, 0, 0, PmRemove))
-            {
-                if (message.Message == WmQuit)
+                if (истекло)
                 {
                     return;
+                }
+
+                var доставлено = PostThreadMessage(MainWin32ThreadId, WmQuit, IntPtr.Zero, IntPtr.Zero);
+
+                AutomationServerLog.Write(
+                    $"Сигнал завершения: PostThreadMessage(tid={MainWin32ThreadId}, WmQuit)={доставлено}, " +
+                    $"pid={Environment.ProcessId}.");
+
+                if (!доставлено)
+                {
+                    // Очередь главного потока ещё не создана: повторяем до
+                    // доставки, чтобы завершение не потерялось.
+                    var попыток = 0;
+
+                    while (!PostThreadMessage(MainWin32ThreadId, WmQuit, IntPtr.Zero, IntPtr.Zero)
+                        && попыток < 40)
+                    {
+                        Thread.Sleep(250);
+                        попыток++;
+
+                        доставлено = PostThreadMessage(MainWin32ThreadId, WmQuit, IntPtr.Zero, IntPtr.Zero);
+
+                        if (доставлено)
+                        {
+                            AutomationServerLog.Write(
+                                $"Сигнал завершения доставлен повтором {попыток}: pid={Environment.ProcessId}.");
+
+                            break;
+                        }
+                    }
+                }
+            },
+            null,
+            Timeout.Infinite,
+            executeOnlyOnce: true);
+
+        try
+        {
+            while (true)
+            {
+                // GetMessage возвращает 0 при WM_QUIT и -1 при ошибке.
+                var результат = GetMessage(out var message, IntPtr.Zero, 0, 0);
+
+                if (результат <= 0)
+                {
+                    break;
                 }
 
                 TranslateMessage(ref message);
                 DispatchMessage(ref message);
             }
+        }
+        finally
+        {
+            ожиданиеСигнала.Unregister(null);
         }
     }
 
@@ -1024,11 +1097,17 @@ public sealed class ComServerHost
     [DllImport("ole32.dll")]
     private static extern int CoRevokeClassObject(uint classCookie);
 
+    [DllImport("kernel32.dll")]
+    private static extern int GetCurrentThreadId();
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int RegisterWindowMessage(string message);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool PostMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PostThreadMessage(int threadId, uint message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool GetClassName(IntPtr window, System.Text.StringBuilder className, int maxCount);
@@ -1041,22 +1120,6 @@ public sealed class ComServerHost
 
     /// <summary>Делегат обхода окон.</summary>
     private delegate bool EnumWindowsProc(IntPtr window, IntPtr parameter);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int MsgWaitForMultipleObjectsEx(
-        int count,
-        IntPtr[] handles,
-        uint timeout,
-        uint wakeMask,
-        uint flags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool PeekMessage(
-        out NativeMessage message,
-        IntPtr window,
-        uint filterMin,
-        uint filterMax,
-        uint remove);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetMessage(out NativeMessage message, IntPtr window, uint filterMin, uint filterMax);

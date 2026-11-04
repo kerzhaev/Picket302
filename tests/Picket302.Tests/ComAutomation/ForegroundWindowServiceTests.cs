@@ -12,6 +12,13 @@ namespace Picket302.Tests.ComAutomation;
 /// регистрируется и окно строится напрямую, а не через пользовательский
 /// CreateParams.ClassName в WinForms, который падал).
 /// </summary>
+/// <remarks>
+/// Тесты работают с глобальным COM-состоянием (ключи HKCU\Software\Classes,
+/// mutex и ShutdownEventName сервера, файл журнала профиля), поэтому
+/// выполняются последовательно с COM-приёмкой в коллекции
+/// «ПрофильПриложения».
+/// </remarks>
+[Collection("ПрофильПриложения")]
 public sealed class ForegroundWindowServiceTests
 {
     [DllImport("user32.dll")]
@@ -73,7 +80,7 @@ public sealed class ForegroundWindowServiceTests
     public void МеханизмПоискаРаботающегоЭкземпляра_НаходитОкноКлассаПоПолитикеКода()
     {
         // Класс окна службы и механизм его поиска согласованы: окно класса
-        // реально существует после запуска службы (ранее FindWindow по этому
+        // реально существует после запуска службы (раньше FindWindow по этому
         // классу всегда возвращал ноль — класс не регистрировался).
         using var служба = new ForegroundWindowService();
 
@@ -90,6 +97,14 @@ public sealed class ForegroundWindowServiceTests
         служба.Dispose();
     }
 
+    /// <summary>
+    /// Регрессия порядка запуска: второй процесс обязан найти работающий
+    /// экземпляр, доставить сообщение активации и завершиться, не регистрируя
+    /// вторую фабрику; первый процесс останавливается штатно через
+    /// <c>ShutdownEventName</c> и выполняет <c>CoRevokeClassObject</c> —
+    /// жёсткий Kill оставляет в SCM запись о «мёртвом» сервере и ломает
+    /// следующую холодную активацию (0x80040154).
+    /// </summary>
     [Fact]
     public void ПовторныйЗапуск_ВторойПроцесс_ЗавершаетШтатноБезВторойФабрики()
     {
@@ -101,6 +116,12 @@ public sealed class ForegroundWindowServiceTests
             "com-automation.log");
 
         Directory.CreateDirectory(Path.GetDirectoryName(журнал)!);
+
+        var запущенШтатно = false;
+
+        // Отметка длины журнала ДО запуска процессов: доказательства читаются
+        // только из записей текущего эксперимента.
+        var доЭксперимента = File.Exists(журнал) ? new FileInfo(журнал).Length : 0;
 
         // Первый экземпляр: отдельный процесс сервера (mutex и helper-окно).
         using var первый = Process.Start(new ProcessStartInfo(ПутьСервера)
@@ -126,9 +147,6 @@ public sealed class ForegroundWindowServiceTests
 
             Assert.NotEqual(IntPtr.Zero, helperПервого);
 
-            // Отметка длины журнала: доказательства читаются только после неё.
-            var доВторого = File.Exists(журнал) ? new FileInfo(журнал).Length : 0;
-
             // Второй экземпляр: обязан найти первый, отправить активацию и
             // завершиться, не регистрируя вторую фабрику классов.
             using var второй = Process.Start(new ProcessStartInfo(ПутьСервера)
@@ -145,16 +163,27 @@ public sealed class ForegroundWindowServiceTests
 
             Assert.Equal(0, второй.ExitCode);
 
-            // Доказательства по журналу (только новые записи после отметки).
+            // Первый останавливается штатно: сервер создаёт именованное
+            // событие завершения при старте хоста — ждём его появления.
+            using var сигнал = ДождатьсяСобытияЗавершения(TimeSpan.FromSeconds(5));
+
+            Assert.NotNull(сигнал);
+
+            сигнал!.Set();
+
+            Assert.True(
+                первый.WaitForExit(TimeSpan.FromSeconds(5)),
+                "Первый сервер не завершился через ShutdownEventName за 5 секунд — " +
+                "graceful shutdown не сработал.");
+
+            запущенШтатно = true;
+
+            Assert.Equal(0, первый.ExitCode);
+
+            // Доказательства по журналу (только записи после отметки).
             Assert.True(File.Exists(журнал), "Журнал сервера не создан.");
 
-            using var читатель = new FileStream(журнал, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-
-            читатель.Seek((long)доВторого, SeekOrigin.Begin);
-
-            using var текст = new StreamReader(читатель, System.Text.Encoding.UTF8);
-
-            var новые = текст.ReadToEnd();
+            var новые = ПрочитатьЖурналС(журнал, доЭксперимента);
 
             // Второй нашёл чужой helper и доставил активацию.
             Assert.Contains("Активация работающего экземпляра", новые, StringComparison.Ordinal);
@@ -164,18 +193,132 @@ public sealed class ForegroundWindowServiceTests
                 $"CoRegisterClassObject: hresult=0x00000000, cookie=16, pid={второй.Id}",
                 новые,
                 StringComparison.Ordinal);
+
+            // Первый выполнил CoRevokeClassObject перед завершением.
+            Assert.True(
+                ПодсчитатьСтроки(новые, "CoRevokeClassObject выполнен", $"pid={первый.Id}") >= 1,
+                "В журнале нет CoRevokeClassObject для первого сервера: " +
+                "фабрика не отозвана при штатном завершении.");
+
+            // В процессе сервера ровно одно helper-окно: дубль службы хоста
+            // устранён (регрессия на два helper HWND на процесс).
+            Assert.Equal(
+                1,
+                ПодсчитатьСтроки(новые, "Helper: hwnd=", $"pid={первый.Id}"));
+
+            // Ни один из процессов не оставил живых helper-окон.
+            Assert.Equal(IntPtr.Zero, FindWindow(ForegroundWindowService.HelperWindowClassName, null));
+
+            // Не осталось ни первого, ни второго процесса сервера.
+            Assert.Empty(Process.GetProcessesByName("Picket302.ComAutomation"));
         }
         finally
         {
-            try
+            if (!запущенШтатно)
             {
-                первый!.Kill(entireProcessTree: true);
-                первый.WaitForExit(5000);
-            }
-            catch (InvalidOperationException)
-            {
-                // Процесс уже завершён.
+                // Аварийная уборка уже провалившегося теста: сначала штатный
+                // сигнал, затем Kill. Провал фиксировался выше; cleanup
+                // предотвращает загрязнение SCM для соседних тестов.
+                try
+                {
+                    using var сигнал = EventWaitHandle.OpenExisting(ComServerHost.ShutdownEventName);
+
+                    сигнал.Set();
+
+                    первый!.WaitForExit(3000);
+                }
+                catch (Exception)
+                {
+                    // События нет или сервер не ответил — остаётся Kill.
+                }
+
+                try
+                {
+                    if (!первый!.HasExited)
+                    {
+                        первый.Kill(entireProcessTree: true);
+                        первый.WaitForExit(3000);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Процесс уже завершён.
+                }
             }
         }
+
+        // Контроль: следующий тест может выполнить холодную активацию —
+        // серверных процессов и их окон не осталось.
+        Assert.Empty(Process.GetProcessesByName("Picket302.ComAutomation"));
+    }
+
+    /// <summary>
+    /// Дожидается создания сервером именованного события завершения.
+    /// </summary>
+    /// <param name="ожидание">Полное время ожидания.</param>
+    /// <returns>Открытое событие либо <see langword="null"/>.</returns>
+    private static EventWaitHandle? ДождатьсяСобытияЗавершения(TimeSpan ожидание)
+    {
+        var дедлайн = DateTime.UtcNow + ожидание;
+
+        while (DateTime.UtcNow < дедлайн)
+        {
+            try
+            {
+                return EventWaitHandle.OpenExisting(ComServerHost.ShutdownEventName);
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                // Сервер ещё не дошёл до создания события — повторяем.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Событие другого вида доступа — повторная попытка бессмысленна.
+                return null;
+            }
+
+            Thread.Sleep(100);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Читает записи журнала, записанные начиная с указанного смещения:
+    /// исторические строки прежних прогонов не участвуют в проверках.
+    /// </summary>
+    /// <param name="путь">Путь к журналу.</param>
+    /// <param name="смещение">Смещение в байтах.</param>
+    /// <returns>Текст новой части журнала.</returns>
+    private static string ПрочитатьЖурналС(string путь, long смещение)
+    {
+        using var поток = new FileStream(путь, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+        поток.Seek(смещение, SeekOrigin.Begin);
+
+        using var читатель = new StreamReader(поток, System.Text.Encoding.UTF8);
+
+        return читатель.ReadToEnd();
+    }
+
+    /// <summary>Считает строки, содержащие обе подстроки.</summary>
+    /// <param name="текст">Текст.</param>
+    /// <param name="первая">Первая подстрока.</param>
+    /// <param name="вторая">Вторая подстрока.</param>
+    /// <returns>Число совпавших строк.</returns>
+    private static int ПодсчитатьСтроки(string текст, string первая, string вторая)
+    {
+        var счёт = 0;
+
+        foreach (var строка in текст.Split('\n'))
+        {
+            if (строка.Contains(первая, StringComparison.Ordinal)
+                && строка.Contains(вторая, StringComparison.Ordinal))
+            {
+                счёт++;
+            }
+        }
+
+        return счёт;
     }
 }
