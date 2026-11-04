@@ -66,16 +66,27 @@ public sealed class AcceptanceScenarioTests : IDisposable
 
     public void Dispose()
     {
-        try
+        // Пул соединений может ещё держать файл базы в момент Dispose:
+        // сбрасываем пул и повторяем удаление, чтобы временные каталоги
+        // приёмки не накапливались в %TEMP% (ТЗ §11.5).
+        SqliteConnection.ClearAllPools();
+
+        for (var попытка = 0; попытка < 5; попытка++)
         {
-            if (Directory.Exists(_каталог))
+            try
             {
-                Directory.Delete(_каталог, recursive: true);
+                if (Directory.Exists(_каталог))
+                {
+                    Directory.Delete(_каталог, recursive: true);
+                }
+
+                break;
             }
-        }
-        catch (IOException)
-        {
-            // Временный каталог не удалён — на результат теста не влияет.
+            catch (IOException)
+            {
+                // Каталог ещё занят завершающимися соединениями — повторяем.
+                Thread.Sleep(200);
+            }
         }
 
         GC.SuppressFinalize(this);
@@ -633,6 +644,7 @@ public sealed class AcceptanceScenarioTests : IDisposable
                 Assert.True(тип is not null, "COM-сервер PEPro.Application не зарегистрирован.");
 
                 object? приложение = null;
+                var последнийКод = 0;
 
                 for (var попытка = 0; попытка < 40 && приложение is null; попытка++)
                 {
@@ -640,14 +652,19 @@ public sealed class AcceptanceScenarioTests : IDisposable
                     {
                         приложение = Activator.CreateInstance(тип!);
                     }
-                    catch (COMException)
+                    catch (COMException ошибка)
                     {
-                        // Сервер ещё не зарегистрировал фабрику классов.
+                        // Сервер ещё не зарегистрировал фабрику классов: код
+                        // сохраняется для диагностики причины (ТЗ §10.3).
+                        последнийКод = ошибка.HResult;
+
                         await Task.Delay(500);
                     }
                 }
 
-                Assert.True(приложение is not null, "COM-сервер PEPro.Application не активирован.");
+                Assert.True(
+                    приложение is not null,
+                    "COM-сервер PEPro.Application не активирован. " + ОписатьСостояниеАктивации(последнийКод));
 
                 try
                 {
@@ -753,6 +770,65 @@ public sealed class AcceptanceScenarioTests : IDisposable
                     ошибкаОчистки);
             }
         }
+    }
+
+    /// <summary>
+    /// Собирает диагностику чистой COM-активации и различает причины сбоя:
+    /// ProgID не разрешился; CLSID не зарегистрирован; LocalServer32
+    /// отсутствует или указывает на несуществующий файл; процесс сервера
+    /// запустился, но фабрика не зарегистрирована; фабрика не вернула
+    /// интерфейс.
+    /// </summary>
+    /// <param name="hresult">Последний код активации; 0 — исключений не было.</param>
+    /// <returns>Однострочная диагностика для сообщения проверки.</returns>
+    private static string ОписатьСостояниеАктивации(int hresult)
+    {
+        var части = new List<string>();
+
+        if (hresult != 0)
+        {
+            части.Add($"последний HRESULT=0x{hresult:X8}");
+        }
+
+        var clsidПоПrogId = ComRegistration.ReadValue(
+            $@"Software\Classes\{ComAutomationIds.ProgId}",
+            "CLSID");
+
+        части.Add(clsidПоПrogId is null
+            ? "ProgID PEPro.Application не разрешился (ключ отсутствует)"
+            : $"ProgID → {clsidПоПrogId}");
+
+        var ветка = $@"Software\Classes\CLSID\{{{ComAutomationIds.ClassId}}}";
+
+        части.Add(ComRegistration.KeyExists(ветка)
+            ? "CLSID зарегистрирован"
+            : "CLSID не зарегистрирован");
+
+        var сервер = ComRegistration.ReadValue($@"{ветка}\LocalServer32")?.Trim('"');
+
+        части.Add(сервер is null
+            ? "LocalServer32 отсутствует"
+            : File.Exists(сервер)
+                ? $"LocalServer32 → {сервер} (файл существует)"
+                : $"LocalServer32 указывает на отсутствующий файл: {сервер}");
+
+        try
+        {
+            var процессы = Process.GetProcessesByName("Picket302.ComAutomation");
+
+            части.Add($"процессов Picket302.ComAutomation: {процессы.Length}");
+
+            foreach (var процесс in процессы)
+            {
+                процесс.Dispose();
+            }
+        }
+        catch (Exception)
+        {
+            // Диагностика не должна маскировать исходную ошибку активации.
+        }
+
+        return "Диагностика: " + string.Join("; ", части) + ".";
     }
 
     /// <summary>
