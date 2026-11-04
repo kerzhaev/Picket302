@@ -1,6 +1,7 @@
 using System.Windows.Forms;
 using Picket302.App.UI.Forms;
 using Picket302.App.UI.Shell;
+using Picket302.Infrastructure;
 using Picket302.Infrastructure.Logging;
 using Picket302.Infrastructure.Persistence;
 
@@ -83,7 +84,7 @@ internal static class Program
     {
         try
         {
-            new LogHub(LogHub.ПутьЖурналовПоУмолчанию())
+            new LogHub(Picket302ProfilePaths.ПоУмолчанию().LogsDirectory)
                 .LogError(исключение);
         }
         catch

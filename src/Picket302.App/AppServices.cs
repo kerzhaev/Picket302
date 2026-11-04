@@ -4,6 +4,7 @@ using Picket302.Domain.Common;
 using Picket302.Domain.Licensing;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.Services;
+using Picket302.Infrastructure;
 using Picket302.Infrastructure.Data;
 using Picket302.Infrastructure.Fonts;
 using Picket302.Infrastructure.Licensing;
@@ -44,8 +45,12 @@ public sealed class AppServices : IAsyncDisposable
 
     private readonly SqliteUnitOfWork _сессия;
 
-    private AppServices(SqliteUnitOfWork сессия, string путьБазы)
+    private AppServices(SqliteUnitOfWork сессия, string путьБазы, Picket302ProfilePaths? пути = null)
     {
+        // Пути профиля: производственный код использует каталог по умолчанию
+        // (%AppData%\Picket302), изолированные проверки — временный корень.
+        var профиль = пути ?? Picket302ProfilePaths.ПоУмолчанию();
+
         _сессия = сессия;
         ПутьБазы = путьБазы;
 
@@ -58,19 +63,19 @@ public sealed class AppServices : IAsyncDisposable
         Папки = new FolderRepository(сессия);
         Обслуживание = new DatabaseMaintenanceRepository(сессия);
 
-        ХранилищеНастроек = new JsonUiSettingsStore();
+        ХранилищеНастроек = new JsonUiSettingsStore(профиль.UiSettingsPath);
         НастройкиОтображения = new UiSettingsStorage(ХранилищеНастроек);
         СчётчикиНумерации = new ParameterRegistrationNumberStore(сессия);
 
         // Журнал приложения с независимыми каналами (ТЗ §10.3; §8.11,
-        // функция 111). Каталог журналов — <AppData>\Picket302\logs.
-        Журнал = new LogHub(LogHub.ПутьЖурналовПоУмолчанию());
+        // функция 111). Каталог журналов — <данные профиля>\logs.
+        Журнал = new LogHub(профиль.LogsDirectory);
 
         // Лицензирование (ТЗ §8.10, функции 119–126): автомат состояний
         // вычисляется при старте, проверка ведётся в одной точке.
         Машина = new MachineIdentity(сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
         ХранилищеЛицензии = new LicenseStore(
-            LicenseStore.ПутьФайлаПоУмолчанию(),
+            профиль.LicensePath,
             null,
             Машина,
             сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
@@ -118,7 +123,8 @@ public sealed class AppServices : IAsyncDisposable
         РежимРазлиновки = new PreprintedMode(Параметры);
         СлужбаПринтеров = new PrinterManager();
 
-        var каталогАудита = Path.GetDirectoryName(Path.GetFullPath(путьБазы))
+        var каталогАудита = Path.GetDirectoryName(профиль.PrintAuditPath)
+            ?? Path.GetDirectoryName(Path.GetFullPath(путьБазы))
             ?? AppContext.BaseDirectory;
 
         var контрольШрифта = new ZipcodeFontGuard();
@@ -157,8 +163,11 @@ public sealed class AppServices : IAsyncDisposable
 
         // Реквизиты подключения к базе и справочник серверов (ТЗ §8.8,
         // функции 101 и 102; §8.11, функция 127).
-        МенеджерПодключения = new ConnectionManager();
-        РеестрСерверов = new ServerRegistry();
+        МенеджерПодключения = new ConnectionManager(
+            профиль.ConnectionSettingsPath,
+            профиль.SecretsDirectory,
+            профиль.DatabasePath);
+        РеестрСерверов = new ServerRegistry(профиль.ServerRegistryPath);
 
         // Менеджер локализации: переключение языка без перезапуска (ТЗ §8.11,
         // функция 112). Проблемы локализации попадают в журнал ошибок.
@@ -352,8 +361,7 @@ public sealed class AppServices : IAsyncDisposable
     /// <c>%AppData%\Picket302\picket302.db</c>.
     /// </summary>
     public static string ПутьБазыПоУмолчанию() => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        КаталогПриложения,
+        Picket302ProfilePaths.КаталогДанныхПоУмолчанию(),
         ИмяФайлаБазы);
 
     /// <summary>
@@ -365,10 +373,41 @@ public sealed class AppServices : IAsyncDisposable
     /// </param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Готовый состав приложения.</returns>
-    public static async Task<AppServices> СоздатьAsync(
+    public static Task<AppServices> СоздатьAsync(
         string путьБазы,
         bool создатьДемоБазу = false,
         CancellationToken cancellationToken = default)
+        => СоздатьЯдроAsync(null, путьБазы, создатьДемоБазу, cancellationToken);
+
+    /// <summary>
+    /// Создаёт состав приложения в указанном профиле путей и применяет
+    /// миграции схемы: изолированные проверки передают временный профиль.
+    /// </summary>
+    /// <param name="пути">Пути профиля приложения.</param>
+    /// <param name="создатьДемоБазу">
+    /// Наполнять ли базу демонстрационными данными, если адресная книга пуста.
+    /// </param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Готовый состав приложения.</returns>
+    public static Task<AppServices> СоздатьAsync(
+        Picket302ProfilePaths пути,
+        bool создатьДемоБазу = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(пути);
+
+        return СоздатьЯдроAsync(пути, пути.DatabasePath, создатьДемоБазу, cancellationToken);
+    }
+
+    /// <summary>
+    /// Общая цепочка создания состава: подготовка каталога, миграции схемы
+    /// и сборка служб по путям профиля.
+    /// </summary>
+    private static async Task<AppServices> СоздатьЯдроAsync(
+        Picket302ProfilePaths? пути,
+        string путьБазы,
+        bool создатьДемоБазу,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(путьБазы);
 
@@ -393,7 +432,7 @@ public sealed class AppServices : IAsyncDisposable
             await new MigrationRunner().ApplyAsync(сессия.Connection, cancellationToken)
                 .ConfigureAwait(false);
 
-            var состав = new AppServices(сессия, Path.GetFullPath(путьБазы));
+            var состав = new AppServices(сессия, Path.GetFullPath(путьБазы), пути);
 
             if (создатьДемоБазу)
             {

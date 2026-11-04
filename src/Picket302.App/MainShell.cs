@@ -11,6 +11,7 @@ using Picket302.Domain.Email;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Licensing;
 using Picket302.Domain.Services;
+using Picket302.Infrastructure;
 using Picket302.Infrastructure.Export;
 using Picket302.Infrastructure.Integration;
 using Picket302.Infrastructure.Mail;
@@ -499,7 +500,7 @@ public sealed class MainShell : Form
     public Task ИнициализироватьAsync(
         AppServices? состав = null,
         CancellationToken cancellationToken = default)
-        => ИнициализироватьЯдроAsync(состав, AppServices.ПутьБазыПоУмолчанию(), cancellationToken);
+        => ИнициализироватьЯдроAsync(состав, AppServices.ПутьБазыПоУмолчанию(), null, cancellationToken);
 
     /// <summary>
     /// Инициализирует окно с составом, созданным по указанному пути базы
@@ -511,7 +512,20 @@ public sealed class MainShell : Form
     public Task ИнициализироватьAsync(
         string путьБазы,
         CancellationToken cancellationToken = default)
-        => ИнициализироватьЯдроAsync(null, путьБазы, cancellationToken);
+        => ИнициализироватьЯдроAsync(null, путьБазы, null, cancellationToken);
+
+    /// <summary>
+    /// Инициализирует окно с составом, созданным по указанному профилю путей:
+    /// точка изолированных автоматических проверок — все файлы профиля
+    /// создаются под переданным корнем, реальные файлы пользователя не
+    /// затрагиваются.
+    /// </summary>
+    /// <param name="пути">Пути профиля приложения.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    public Task ИнициализироватьAsync(
+        Picket302ProfilePaths пути,
+        CancellationToken cancellationToken = default)
+        => ИнициализироватьЯдроAsync(null, пути.DatabasePath, пути, cancellationToken);
 
     /// <summary>
     /// Общая цепочка инициализации: получает состав (создаёт при
@@ -520,10 +534,15 @@ public sealed class MainShell : Form
     /// <param name="состав">Переданный состав; при <see langword="null"/> состав
     /// создаётся по <paramref name="путьБазы"/>.</param>
     /// <param name="путьБазы">Путь к файлу базы данных.</param>
+    /// <param name="пути">
+    /// Пути профиля для создаваемого состава; <see langword="null"/> —
+    /// производственный профиль по умолчанию.
+    /// </param>
     /// <param name="cancellationToken">Токен отмены.</param>
     private async Task ИнициализироватьЯдроAsync(
         AppServices? состав,
         string путьБазы,
+        Picket302ProfilePaths? пути,
         CancellationToken cancellationToken)
     {
         if (состав is not null)
@@ -534,9 +553,13 @@ public sealed class MainShell : Form
         }
         else if (_состав is null)
         {
-            _состав = await AppServices
-                .СоздатьAsync(путьБазы, true, cancellationToken)
-                .ConfigureAwait(true);
+            _состав = пути is null
+                ? await AppServices
+                    .СоздатьAsync(путьБазы, true, cancellationToken)
+                    .ConfigureAwait(true)
+                : await AppServices
+                    .СоздатьAsync(пути, true, cancellationToken)
+                    .ConfigureAwait(true);
             _составСозданоВнутри = true;
         }
 
