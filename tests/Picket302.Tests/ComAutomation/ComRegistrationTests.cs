@@ -16,7 +16,6 @@ namespace Picket302.Tests.ComAutomation;
 public sealed class ComRegistrationTests : IDisposable
 {
     private const string ТестовыйКорень = @"Software\Picket302.Tests\Classes";
-    private const string ТестовыйКореньПродукта = @"Software\Picket302.Tests";
 
     private readonly ComRegistration _регистрация;
 
@@ -38,7 +37,11 @@ public sealed class ComRegistrationTests : IDisposable
 
         try
         {
-            Registry.CurrentUser.DeleteSubKeyTree(ТестовыйКореньПродукта, throwOnMissingSubKey: false);
+            // Удаляется только собственная ветка «Classes»: под родителем
+            // «Software\Picket302.Tests» параллельные тесты (TestRegistryScope)
+            // держат свои ключи, и удаление всего дерева порождает редкий
+            // плавающий сбой соседней коллекции.
+            Registry.CurrentUser.DeleteSubKeyTree(ТестовыйКорень, throwOnMissingSubKey: false);
         }
         catch (Exception)
         {
