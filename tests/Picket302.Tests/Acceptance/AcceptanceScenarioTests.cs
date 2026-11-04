@@ -47,6 +47,13 @@ namespace Picket302.Tests.Acceptance;
 /// PrintEnvelope (out-of-proc, код 0, запись mails) → BackupNow → Restore
 /// на чистую базу (записи на месте).
 /// </summary>
+/// <remarks>
+/// Тест работает с реальным каталогом профиля (<c>%AppData%\Picket302</c>):
+/// пользовательская база переносится в резервную копию и возвращается,
+/// сервер пишет аудит печати. Коллекция «ПрофильПриложения» выполняет его
+/// последовательно с защитными проверками изоляции профиля.
+/// </remarks>
+[Collection("ПрофильПриложения")]
 public sealed class AcceptanceScenarioTests : IDisposable
 {
     private readonly string _каталог = Path.Combine(
