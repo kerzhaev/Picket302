@@ -33,17 +33,32 @@ public static class EnvelopeUiTheme
     /// <summary>Фон групповых панелей.</summary>
     public static Color PanelBackground => Color.FromArgb(232, 232, 232);
 
+    /// <summary>Синоним фона поверхностей карточек (единая система токенов).</summary>
+    public static Color SurfaceBackground => CardBackground;
+
+    /// <summary>Синоним фона приподнятых панелей и лент действий.</summary>
+    public static Color SurfaceRaised => PanelBackground;
+
     /// <summary>Основной цвет текста.</summary>
     public static Color Text => Color.FromArgb(32, 32, 32);
 
     /// <summary>Вторичный цвет подписей и вспомогательных сведений.</summary>
     public static Color MutedText => Color.FromArgb(86, 86, 86);
 
+    /// <summary>Синоним вторичного текста (единая система токенов).</summary>
+    public static Color TextMuted => MutedText;
+
+    /// <summary>Цвет недоступного текста и неактивных состояний.</summary>
+    public static Color TextDisabled => SystemColors.GrayText;
+
     /// <summary>Основной синий цвет действий и фокуса.</summary>
     public static Color Primary => Color.FromArgb(0, 102, 153);
 
     /// <summary>Синий цвет наведения.</summary>
     public static Color PrimaryHover => Color.FromArgb(0, 82, 130);
+
+    /// <summary>Синий цвет нажатого состояния основной кнопки.</summary>
+    public static Color PrimaryPressed => Color.FromArgb(0, 64, 102);
 
     /// <summary>Янтарный цвет предупреждений и вторичного акцента.</summary>
     public static Color Accent => Color.FromArgb(190, 115, 0);
@@ -57,8 +72,14 @@ public static class EnvelopeUiTheme
     /// <summary>Акцент заголовка отправителя.</summary>
     public static Color SenderAccent => Color.FromArgb(180, 0, 0);
 
+    /// <summary>Синоним акцента отправителя (единая система токенов).</summary>
+    public static Color Sender => SenderAccent;
+
     /// <summary>Акцент заголовка получателя.</summary>
     public static Color RecipientAccent => Color.FromArgb(0, 82, 160);
+
+    /// <summary>Синоним акцента получателя (единая система токенов).</summary>
+    public static Color Recipient => RecipientAccent;
 
     /// <summary>Акцент параметров отображения.</summary>
     public static Color DisplayAccent => Color.FromArgb(80, 80, 80);
@@ -77,6 +98,15 @@ public static class EnvelopeUiTheme
 
     /// <summary>Более заметная рамка фокуса и разделителей.</summary>
     public static Color StrongBorder => Color.FromArgb(128, 128, 128);
+
+    /// <summary>Синоним заметной рамки (единая система токенов).</summary>
+    public static Color BorderStrong => StrongBorder;
+
+    /// <summary>Фон выделенной строки таблиц и выбора.</summary>
+    public static Color Selection => Color.FromArgb(232, 241, 252);
+
+    /// <summary>Рамка фокуса ввода.</summary>
+    public static Color Focus => Primary;
 
     /// <summary>Создаёт базовый шрифт обычного текста.</summary>
     public static Font ШрифтТекста(float? размер = null, FontStyle стиль = FontStyle.Regular) =>
@@ -145,6 +175,50 @@ public static class EnvelopeUiTheme
         группа.ForeColor = акцент;
         группа.BackColor = CardBackground;
         группа.Padding = new Padding(8, 17, 8, 4);
+    }
+
+    /// <summary>
+    /// Оформляет основную кнопку раздела: заполненная основным цветом, с
+    /// белым текстом и заметными состояниями наведения и нажатия. Основное
+    /// действие экрана читается сразу, второстепенные остаются светлыми
+    /// (аудит UX 2026-11-03, §5: различие первичных и вторичных действий).
+    /// </summary>
+    /// <param name="кнопка">Кнопка основного действия.</param>
+    public static void ОформитьОсновнуюКнопку(Button кнопка)
+    {
+        ArgumentNullException.ThrowIfNull(кнопка);
+
+        кнопка.FlatStyle = FlatStyle.Flat;
+        кнопка.BackColor = Primary;
+        кнопка.ForeColor = SystemColors.Window;
+        кнопка.FlatAppearance.BorderColor = Primary;
+        кнопка.FlatAppearance.MouseOverBackColor = PrimaryHover;
+        кнопка.FlatAppearance.MouseDownBackColor = PrimaryPressed;
+        кнопка.UseVisualStyleBackColor = false;
+        кнопка.Padding = new Padding(12, 4, 12, 4);
+        кнопка.Font = ШрифтТекста(8.5f, кнопка.Font.Style);
+        кнопка.Cursor = Cursors.Hand;
+    }
+
+    /// <summary>
+    /// Оформляет опасную кнопку: светлый фон, красная рамка и текст — цвет
+    /// зарезервирован за удалением и необратимыми действиями
+    /// (аудит UX 2026-11-03, §5: красный только для опасных действий).
+    /// </summary>
+    /// <param name="кнопка">Кнопка опасного действия.</param>
+    public static void ОформитьОпаснуюКнопку(Button кнопка)
+    {
+        ArgumentNullException.ThrowIfNull(кнопка);
+
+        кнопка.FlatStyle = FlatStyle.Flat;
+        кнопка.BackColor = CardBackground;
+        кнопка.ForeColor = Danger;
+        кнопка.FlatAppearance.BorderColor = Danger;
+        кнопка.FlatAppearance.MouseOverBackColor = Color.FromArgb(252, 238, 238);
+        кнопка.FlatAppearance.MouseDownBackColor = Color.FromArgb(248, 222, 222);
+        кнопка.UseVisualStyleBackColor = false;
+        кнопка.Padding = new Padding(8, 4, 8, 4);
+        кнопка.Font = ШрифтТекста(8.5f, кнопка.Font.Style);
     }
 
     /// <summary>

@@ -21,7 +21,22 @@ public sealed class AddressEditor : UserControl
     private readonly RadioButton _переключательОсновного = new();
     private readonly Label _заголовок = new();
     private readonly ComboBox _историяИндексов = new();
+    private readonly ToolTip _подсказки = new();
     private readonly bool _показыватьЗаголовок;
+
+    /// <summary>
+    /// Подсказки к строкам адреса (аудит UX 2026-11-03, A3): подписи «Строка N»
+    /// дополнены всплывающими пояснениями общепринятого смысла строк.
+    /// </summary>
+    private static readonly string[] ПодсказкиСтрок =
+    [
+        "Наименование организации или фамилия",
+        "Подразделение, управление, отдел",
+        "Улица и дом",
+        "Корпус, строение, офис",
+        "Город или населённый пункт",
+        "Область, республика, край",
+    ];
 
     /// <summary>
     /// Создаёт редактор адреса.
@@ -48,7 +63,7 @@ public sealed class AddressEditor : UserControl
         var сетка = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 3,
+            ColumnCount = 4,
             RowCount = Address.LineCount + 1,
             AutoSize = true,
             Padding = new Padding(0, _показыватьЗаголовок ? 16 : 2, 0, 0),
@@ -60,6 +75,7 @@ public sealed class AddressEditor : UserControl
         сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
         сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 24));
+        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         for (var строка = 0; строка <= Address.LineCount; строка++)
         {
@@ -126,24 +142,34 @@ public sealed class AddressEditor : UserControl
                 Tag = строка,
             };
 
+            _подсказки.SetToolTip(поле, ПодсказкиСтрок[строка]);
+            поле.AccessibleName = $"Строка {строка + 1} адреса — {ПодсказкиСтрок[строка]}";
+
             _поляСтрок[строка] = поле;
 
             сетка.Controls.Add(метка, 0, строка + 1);
             сетка.Controls.Add(поле, 1, строка + 1);
         }
 
+        // Переключатель основного адреса живёт в таблице рядом с индексом:
+        // координатное размещение накладывалось на поле индекса (аудит UX
+        // 2026-11-03, G2).
         _переключательОсновного.Text = "основной";
         _переключательОсновного.AutoSize = true;
         _переключательОсновного.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
         _переключательОсновного.ForeColor = EnvelopeUiTheme.MutedText;
-        _переключательОсновного.Location = new Point(76, _показыватьЗаголовок ? 4 : 2);
+        _переключательОсновного.Anchor = AnchorStyles.Left;
+        _переключательОсновного.Margin = new Padding(6, 2, 0, 2);
+        _подсказки.SetToolTip(_переключательОсновного, "Считать этот адрес основным для контрагента");
+        сетка.Controls.Add(_переключательОсновного, 3, 0);
+
+        _подсказки.SetToolTip(_полеИндекса, "Почтовый индекс (6 цифр)");
 
         _историяИндексов.Visible = false;
         _историяИндексов.DropDownStyle = ComboBoxStyle.DropDownList;
 
         Controls.Add(сетка);
         Controls.Add(_заголовок);
-        Controls.Add(_переключательОсновного);
         Controls.Add(_историяИндексов);
     }
 

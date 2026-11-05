@@ -238,6 +238,12 @@ public sealed class MainShell : Form
     private readonly Label _состояниеПечати = new();
 
     /// <summary>
+    /// Локальный каталог клипартов (ТЗ §8.10, функция 158): встроенные
+    /// элементы, вычерчиваемые кодом, без сети и внешних файлов.
+    /// </summary>
+    private readonly Picket302.Infrastructure.Templates.ClipartLibrary _клипарты = new();
+
+    /// <summary>
     /// Метка срока пробного периода в строке состояния (ТЗ §8.10, функция 119:
     /// «индикатор остатка дней»).
     /// </summary>
@@ -723,6 +729,8 @@ public sealed class MainShell : Form
 
         var рассылки = new ToolStripMenuItem("Рассылки");
         рассылки.DropDownItems.Add("Новая рассылка…", null, (_, _) => СоздатьРассылку());
+        рассылки.DropDownItems.Add("Изменить рассылку…", null, (_, _) => ИзменитьРассылку());
+        рассылки.DropDownItems.Add("Печать рассылки…", null, (_, _) => ПечатьРассылок());
         рассылки.DropDownItems.Add("Повторная отправка…", null, (_, _) => ПовторнаяОтправка());
         рассылки.DropDownItems.Add("Объединить выделенные в рассылку", null, (_, _) => ОбъединитьВРассылку());
         рассылки.DropDownItems.Add(new ToolStripSeparator());
@@ -768,6 +776,7 @@ public sealed class MainShell : Form
             _таблицаРассылок,
             ПолосаДействийРассылок(),
             "Рассылок пока нет. Нажмите «Новая рассылка…», чтобы собрать получателей в рассылку."));
+        _таблицаРассылок.CellDoubleClick += (_, _) => ИзменитьРассылку();
         _страницаОтправленных.Controls.Add(ПостроитьПанельОтправленных());
 
         _вкладки.TabPages.Add(_страницаАдреснойКниги);
@@ -876,6 +885,9 @@ public sealed class MainShell : Form
 
     /// <summary>
     /// Строит панель «ОТОБРАЖЕНИЕ» с параметрами печати и превью конверта.
+    /// Пары переключателей разложены таблицей по двум подписанным строкам —
+    /// «Логотип» и «Адрес на конверте» — вместо координатной раскладки
+    /// (аудит UX 2026-11-03, A4/G2).
     /// </summary>
     private Control ПостроитьПанельОтображения()
     {
@@ -890,34 +902,122 @@ public sealed class MainShell : Form
         {
             Text = "ВИД ЛОГОТИПА:",
             Dock = DockStyle.Top,
-            Height = 116,
+            Height = 150,
         };
         EnvelopeUiTheme.ОформитьГруппу(группаЛоготипа, EnvelopeUiTheme.DisplayAccent);
 
-        // Каждая пара переключателей — собственная группа без рамки (F-E16):
-        // в общем контейнере отметка «Адрес получателя» снимала «С логотипом».
-        var группаЛоготип = new Panel { Location = new Point(8, 20), Size = new Size(140, 44) };
-        var группаАдрес = new Panel { Location = new Point(8, 66), Size = new Size(170, 44) };
+        // Каждая пара переключателей — собственная строка таблицы без рамки
+        // (F-E16): в общем контейнере отметка «Адрес получателя» снимала
+        // «С логотипом».
+        var переключатели = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            AutoSize = true,
+            Padding = new Padding(4, 2, 4, 2),
+        };
 
-        _сЛоготипом.Location = new Point(6, 2);
-        _сЛоготипом.AutoSize = true;
-        _безЛоготипа.Location = new Point(6, 22);
-        _безЛоготипа.AutoSize = true;
-        _переключательАдресОтправителя.Location = new Point(6, 2);
+        переключатели.RowCount = 5;
+        for (var строка = 0; строка < 5; строка++)
+        {
+            переключатели.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+
+        var подписьЛоготипа = new Label
+        {
+            Text = "Логотип:",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = EnvelopeUiTheme.ШрифтЗаголовка(8f),
+            ForeColor = EnvelopeUiTheme.MutedText,
+            Margin = new Padding(2, 2, 2, 0),
+            AutoSize = true,
+        };
+
+        var рядЛоготипа = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(2, 0, 2, 4),
+        };
+
+        var подписьАдреса = new Label
+        {
+            Text = "Адрес на конверте:",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = EnvelopeUiTheme.ШрифтЗаголовка(8f),
+            ForeColor = EnvelopeUiTheme.MutedText,
+            Margin = new Padding(2, 2, 2, 0),
+            AutoSize = true,
+        };
+
+        var рядАдреса = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(2, 0, 2, 4),
+        };
 
         // AutoSize устанавливается переключателям, а не составным редакторам
         // адреса (F-E23).
+        _сЛоготипом.AutoSize = true;
+        _сЛоготипом.Margin = new Padding(2, 1, 12, 1);
+        _сЛоготипом.Text = "С логотипом";
+        _сЛоготипом.AccessibleName = "Печать с логотипом получателя";
+
+        _безЛоготипа.AutoSize = true;
+        _безЛоготипа.Margin = new Padding(2, 1, 12, 1);
+        _безЛоготипа.Text = "Без логотипа";
+        _безЛоготипа.AccessibleName = "Печать без логотипа";
+
         _переключательАдресОтправителя.AutoSize = true;
-        _переключательАдресПолучателя.Location = new Point(6, 22);
+        _переключательАдресОтправителя.Margin = new Padding(2, 1, 12, 1);
+        _переключательАдресОтправителя.Text = "Отправителя";
+        _переключательАдресОтправителя.AccessibleName = "Печатать адрес отправителя";
+
         _переключательАдресПолучателя.AutoSize = true;
+        _переключательАдресПолучателя.Margin = new Padding(2, 1, 12, 1);
+        _переключательАдресПолучателя.Text = "Получателя";
+        _переключательАдресПолучателя.AccessibleName = "Печатать адрес получателя";
 
         _сЛоготипом.Checked = true;
         _переключательАдресОтправителя.Checked = true;
 
-        группаЛоготип.Controls.Add(_сЛоготипом);
-        группаЛоготип.Controls.Add(_безЛоготипа);
-        группаАдрес.Controls.Add(_переключательАдресОтправителя);
-        группаАдрес.Controls.Add(_переключательАдресПолучателя);
+        рядЛоготипа.Controls.Add(_сЛоготипом);
+        рядЛоготипа.Controls.Add(_безЛоготипа);
+        рядАдреса.Controls.Add(_переключательАдресОтправителя);
+        рядАдреса.Controls.Add(_переключательАдресПолучателя);
+
+        // Локальный каталог клипартов (ТЗ §8.10, функция 158): выбор
+        // графического элемента для выбранного получателя и его удаление.
+        var рядКлипарта = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(2, 2, 2, 0),
+        };
+
+        var клипарт = Кнопка("Клипарт…", "Выбрать графический элемент из локального каталога и назначить его логотипом получателя");
+        клипарт.Click += (_, _) => ВыбратьКлипартПолучателя();
+
+        var убратьЛоготип = Кнопка("Убрать логотип", "Удалить логотип у выбранного получателя");
+        убратьЛоготип.Click += (_, _) => УбратьЛоготипПолучателя();
+
+        рядКлипарта.Controls.Add(клипарт);
+        рядКлипарта.Controls.Add(убратьЛоготип);
+
+        переключатели.Controls.Add(подписьЛоготипа, 0, 0);
+        переключатели.Controls.Add(рядЛоготипа, 0, 1);
+        переключатели.Controls.Add(подписьАдреса, 0, 2);
+        переключатели.Controls.Add(рядАдреса, 0, 3);
+        переключатели.Controls.Add(рядКлипарта, 0, 4);
 
         var контейнерПревью = new Panel
         {
@@ -940,9 +1040,8 @@ public sealed class MainShell : Form
         };
 
         контейнерПревью.Controls.Add(_превью);
+        группаЛоготипа.Controls.Add(переключатели);
         группаЛоготипа.Controls.Add(контейнерПревью);
-        группаЛоготипа.Controls.Add(группаЛоготип);
-        группаЛоготипа.Controls.Add(группаАдрес);
 
         var группаПримечания = new GroupBox
         {
@@ -1008,10 +1107,11 @@ public sealed class MainShell : Form
         _таблицаОтправителей.SelectionChanged += (_, _) => ОбновитьВыделенное();
 
         // Выбор отправителя по первым буквам наименования
-        // (ТЗ §8.1, функция 16).
+        // (ТЗ §8.1, функция 16). Подпись называет действие прямо, а не
+        // дублирует назначение раздела (аудит UX 2026-11-03, A7).
         var меткаПоиска = new Label
         {
-            Text = "Быстрый выбор:",
+            Text = "Поиск по названию:",
             Dock = DockStyle.Top,
             AutoSize = true,
             Height = 16,
@@ -1028,6 +1128,14 @@ public sealed class MainShell : Form
         // поэтому заполняющая таблица добавляется первой.
         _таблицаОтправителей.Dock = DockStyle.Fill;
         панель.Controls.Add(_таблицаОтправителей);
+
+        // Подсказка пустого справочника (аудит UX 2026-11-03, G5): без
+        // записей таблица объясняет первое действие.
+        var подсказкаОтправителей = UI.Components.EmptyStateHint.Создать(
+            _таблицаОтправителей,
+            "Справочник отправителей пуст. Нажмите «Добавить», чтобы завести первого отправителя.");
+        подсказкаОтправителей.Dock = DockStyle.Fill;
+        панель.Controls.Add(подсказкаОтправителей);
         панель.Controls.Add(_поискОтправителя);
         панель.Controls.Add(меткаПоиска);
         панель.Controls.Add(кнопки);
@@ -1180,6 +1288,13 @@ public sealed class MainShell : Form
         // панели отправителей (аудит UX 2026-11-03, A2).
         _таблицаПолучателей.Dock = DockStyle.Fill;
         панель.Controls.Add(_таблицаПолучателей);
+
+        // Подсказка пустой адресной книги (аудит UX 2026-11-03, G5).
+        var подсказкаПолучателей = UI.Components.EmptyStateHint.Создать(
+            _таблицаПолучателей,
+            "В адресной книге нет записей. Нажмите «Добавить», чтобы создать первого получателя.");
+        подсказкаПолучателей.Dock = DockStyle.Fill;
+        панель.Controls.Add(подсказкаПолучателей);
         панель.Controls.Add(кнопки);
 
         return панель;
@@ -1464,10 +1579,13 @@ public sealed class MainShell : Form
     /// <summary>
     /// Полоса действий вкладки «Рассылки» (аудит UX 2026-11-03, C1: создать
     /// рассылку с экрана было невозможно — команды жили только в меню).
+    /// Правка и печать выбранной рассылки — ТЗ §8.12, функция 156.
     /// </summary>
     /// <returns>Полоса инструментов рассылок.</returns>
     private ToolStrip ПолосаДействийРассылок() => ПолосаДействий(
         ПунктДействия("Новая рассылка…", "Создать рассылку (ТЗ §8.4)", (_, _) => СоздатьРассылку()),
+        ПунктДействия("Изменить…", "Изменить выбранную рассылку без создания дубликата (ТЗ §8.12)", (_, _) => ИзменитьРассылку()),
+        ПунктДействия("Печать…", "Напечатать письма выбранных рассылок (ТЗ §8.12)", (_, _) => ПечатьРассылок()),
         ПунктДействия("Повторная отправка…", "Повторно отправить существующую рассылку", (_, _) => ПовторнаяОтправка()),
         ПунктДействия("Объединить выделенные", "Собрать выделенные рассылки в одну", (_, _) => ОбъединитьВРассылку()),
         new ToolStripSeparator(),
@@ -1480,6 +1598,8 @@ public sealed class MainShell : Form
     /// </summary>
     /// <returns>Полоса инструментов отправленных писем.</returns>
     private ToolStrip ПолосаДействийОтправленных() => ПолосаДействий(
+        ПунктДействия("Печать выделенных…", "Напечатать письма, выбранные в списке (ТЗ §8.12)", (_, _) => ПечатьВыделенныхОтправленных()),
+        new ToolStripSeparator(),
         ПунктДействия("Обновить", "Перезагрузить данные всех таблиц", (_, _) => ОбновитьВсе()));
 
     /// <summary>
@@ -3089,6 +3209,210 @@ public sealed class MainShell : Form
     }
 
     /// <summary>
+    /// Открывает редактор выбранной рассылки: сохранение правит ту же запись,
+    /// не создавая дубликат (ТЗ §8.12, функция 156 — правка рассылки).
+    /// </summary>
+    private async void ИзменитьРассылку()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var идентификатор = ВыбраннаяРассылка();
+
+        if (идентификатор is null)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите рассылку в списке.",
+                "Рассылки",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        var рассылка = await _состав.Рассылки
+            .GetByIdAsync(идентификатор.Value)
+            .ConfigureAwait(true);
+
+        if (рассылка is null)
+        {
+            MessageBox.Show(
+                this,
+                "Рассылка не найдена — возможно, она была удалена.",
+                "Рассылки",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var форма = new FormDistributionEditor(_состав, рассылка);
+
+        if (форма.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        await ЗагрузитьРассылкиAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+        await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Печатает письма выбранных рассылок (ТЗ §8.12, функция 156 — печать
+    /// рассылки). Пустые рассылки пропускаются с предупреждением; выбранные
+    /// строки не меняются, новых записей печать не создаёт.
+    /// </summary>
+    private async void ПечатьРассылок()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var идентификаторы = ИдентификаторыВыбранныхСтрок(_таблицаРассылок);
+
+        if (идентификаторы.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Не выбрано ни одной рассылки. Отметьте строки в списке (Ctrl+щелчок или Shift+щелчок) и повторите печать.",
+                "Печать рассылок",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var сборка = await СобратьПисьмаРассылокAsync(_состав, идентификаторы).ConfigureAwait(true);
+
+        if (сборка.ПропущенныеРассылки.Count > 0)
+        {
+            MessageBox.Show(
+                this,
+                "Пропущены рассылки без писем: "
+                + string.Join(", ", сборка.ПропущенныеРассылки) + ".",
+                "Печать рассылок",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        if (сборка.MailIds.Count == 0)
+        {
+            return;
+        }
+
+        _состояниеПечати.Text = $"Печать рассылок: отправлений {сборка.MailIds.Count}…";
+
+        try
+        {
+            await ВыполнитьПечатьAsync(сборка.MailIds, сПредпросмотром: true, пакетнаяПечать: true)
+                .ConfigureAwait(true);
+        }
+        finally
+        {
+            _состояниеПечати.Text = string.Empty;
+        }
+
+        await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+        ОбновитьСтрокуСостояния(_состав);
+    }
+
+    /// <summary>
+    /// Идентификаторы выбранных строк таблицы: без выбора список пуст, повторные
+    /// выборы одной записи сводятся к одному идентификатору.
+    /// </summary>
+    /// <param name="таблица">Таблица с идентификаторами в <see cref="DataGridViewRow.Tag"/>.</param>
+    /// <returns>Уникальные идентификаторы выбранных строк.</returns>
+    internal static IReadOnlyList<long> ИдентификаторыВыбранныхСтрок(DataGridView таблица)
+    {
+        ArgumentNullException.ThrowIfNull(таблица);
+
+        return таблица.SelectedRows
+            .Cast<DataGridViewRow>()
+            .Where(строка => строка.Tag is long)
+            .Select(строка => (long)строка.Tag!)
+            .Distinct()
+            .ToList();
+    }
+
+    /// <summary>
+    /// Собирает письма выбранных рассылок для печати (ТЗ §8.12, функция 156):
+    /// отсутствующие и пустые рассылки пропускаются и перечисляются по
+    /// имени, печать идёт только по готовым письмам.
+    /// </summary>
+    /// <param name="состав">Состав приложения.</param>
+    /// <param name="идентификаторы">Идентификаторы рассылок.</param>
+    /// <returns>Идентификаторы писем и перечень пропущенных рассылок.</returns>
+    internal static async Task<ПисьмаРассылокДляПечати> СобратьПисьмаРассылокAsync(
+        AppServices состав,
+        IReadOnlyList<long> идентификаторы)
+    {
+        ArgumentNullException.ThrowIfNull(состав);
+        ArgumentNullException.ThrowIfNull(идентификаторы);
+
+        var письма = new List<long>();
+        var пропущенные = new List<string>();
+
+        foreach (var идентификатор in идентификаторы)
+        {
+            var рассылка = await состав.Рассылки
+                .GetByIdAsync(идентификатор)
+                .ConfigureAwait(true);
+
+            if (рассылка is null)
+            {
+                пропущенные.Add($"№{идентификатор} (не найдена)");
+                continue;
+            }
+
+            var письмаРассылки = await состав.Письма
+                .GetByDistributionAsync(идентификатор)
+                .ConfigureAwait(true);
+
+            if (письмаРассылки.Count == 0)
+            {
+                пропущенные.Add($"«{рассылка.Name}» (нет писем)");
+                continue;
+            }
+
+            письма.AddRange(письмаРассылки.Select(письмо => письмо.Id));
+        }
+
+        return new ПисьмаРассылокДляПечати(письма, пропущенные);
+    }
+
+    /// <summary>
+    /// Печатает письма, выбранные в списке «Отправленные» (ТЗ §8.12,
+    /// функция 156): печать идёт по готовым отправлениям без создания новых.
+    /// </summary>
+    private async void ПечатьВыделенныхОтправленных()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        var идентификаторы = ИдентификаторыВыбранныхСтрок(_таблицаОтправленных);
+
+        if (идентификаторы.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Не выбрано ни одного письма. Отметьте строки в списке (Ctrl+щелчок или Shift+щелчок) и повторите печать.",
+                "Печать",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        await ВыполнитьПечатьAsync(идентификаторы, сПредпросмотром: true, пакетнаяПечать: true)
+            .ConfigureAwait(true);
+
+        await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+        ОбновитьСтрокуСостояния(_состав);
+    }
+
+    /// <summary>
     /// Создаёт копию выбранной рассылки для повторной отправки (ТЗ §8.11,
     /// функция 142).
     /// </summary>
@@ -3146,6 +3470,135 @@ public sealed class MainShell : Form
             && _таблицаРассылок.SelectedRows[0].Tag is long выбранная
                 ? выбранная
                 : null;
+    }
+
+    /// <summary>
+    /// Открывает локальный каталог клипартов и назначает выбранный элемент
+    /// логотипом получателя (ТЗ §8.10, функция 158). Каталог локальный:
+    /// сеть и внешние файлы не используются.
+    /// </summary>
+    private async void ВыбратьКлипартПолучателя()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        long? идентификатор = _таблицаПолучателей.CurrentRow?.Tag is long выбранный
+            ? выбранный
+            : null;
+
+        if (идентификатор is null)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите получателя в таблице «КОМУ:» — клипарт назначается логотипом получателя.",
+                "Клипарт",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        using var диалог = new UI.Forms.FormClipartPicker(_клипарты);
+
+        if (диалог.ShowDialog(this) != DialogResult.OK || диалог.ВыбранныйPng is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var контрагент = await _состав.Контрагенты
+                .GetByIdAsync(идентификатор.Value)
+                .ConfigureAwait(true);
+
+            if (контрагент is null)
+            {
+                MessageBox.Show(
+                    this,
+                    "Получатель не найден — возможно, запись была удалена.",
+                    "Клипарт",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            контрагент.Logo = диалог.ВыбранныйPng;
+
+            await _состав.Контрагенты.UpdateAsync(контрагент).ConfigureAwait(true);
+
+            _сЛоготипом.Checked = true;
+            _состояниеПечати.Text = "Клипарт применён: логотип получателя обновлён.";
+        }
+        catch (Exception исключение) when (исключение is SqliteException or InvalidOperationException or IOException)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось назначить клипарт: {исключение.Message}",
+                "Клипарт",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Удаляет логотип у выбранного получателя (ТЗ §8.10, функция 158:
+    /// удаление графического элемента).
+    /// </summary>
+    private async void УбратьЛоготипПолучателя()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        long? идентификатор = _таблицаПолучателей.CurrentRow?.Tag is long выбранный
+            ? выбранный
+            : null;
+
+        if (идентификатор is null)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите получателя в таблице «КОМУ:».",
+                "Клипарт",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            var контрагент = await _состав.Контрагенты
+                .GetByIdAsync(идентификатор.Value)
+                .ConfigureAwait(true);
+
+            if (контрагент?.Logo is null || контрагент.Logo.Length == 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "У выбранного получателя логотипа нет.",
+                    "Клипарт",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            контрагент.Logo = null;
+
+            await _состав.Контрагенты.UpdateAsync(контрагент).ConfigureAwait(true);
+
+            _состояниеПечати.Text = "Логотип получателя удалён.";
+        }
+        catch (Exception исключение) when (исключение is SqliteException or InvalidOperationException or IOException)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось удалить логотип: {исключение.Message}",
+                "Клипарт",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     /// <summary>
@@ -4509,3 +4962,13 @@ public sealed class MainShell : Form
         base.Dispose(disposing);
     }
 }
+
+/// <summary>
+/// Результат сбора писем выбранных рассылок для печати (ТЗ §8.12,
+/// функция 156).
+/// </summary>
+/// <param name="MailIds">Идентификаторы писем к печати.</param>
+/// <param name="ПропущенныеРассылки">Наименования пропущенных рассылок.</param>
+internal sealed record ПисьмаРассылокДляПечати(
+    IReadOnlyList<long> MailIds,
+    IReadOnlyList<string> ПропущенныеРассылки);
