@@ -33,6 +33,7 @@ public sealed class FormDistributionEditor : Form
     private readonly TextBox _наименование = new();
     private readonly ComboBox _видРассылки = new();
     private readonly Label _подсказкаПолучателей = new();
+    private readonly ToolTip _подсказки = new();
 
     private IReadOnlyList<Counterparty> _всеКонтрагенты = [];
     private IReadOnlyList<Category> _категорииСправочника = [];
@@ -128,6 +129,18 @@ public sealed class FormDistributionEditor : Form
         _видРассылки.Items.Add("Один ко многим");
         _видРассылки.Items.Add("Многие к одному");
         _видРассылки.SelectedIndex = 0;
+
+        // Вид существующей рассылки не меняется: роли писем («один ко многим»
+        // и «многие к одному») имеют разную семантику, и смена вида без
+        // пересоздания состава молча переориентировала бы письма. Для другого
+        // вида создаётся новая рассылка.
+        if (!_создание)
+        {
+            _видРассылки.Enabled = false;
+            _подсказки.SetToolTip(
+                _видРассылки,
+                "Вид существующей рассылки нельзя изменить без пересоздания состава писем. Создайте новую рассылку нужного вида.");
+        }
 
         var меткаКатегории = new Label
         {
@@ -566,23 +579,17 @@ public sealed class FormDistributionEditor : Form
     /// существующая изменяется без создания дублирующей записи (ТЗ §8.12,
     /// функция 156).
     /// </summary>
+    /// <remarks>
+    /// Отправитель: для новой рассылки обязателен текущий глобальный
+    /// отправитель; для правки значение по умолчанию — сохранённый отправитель
+    /// рассылки (<c>_рассылка.SenderId</c>), и только при его отсутствии
+    /// берётся текущий. Случайная замена сохранённого отправителя текущим
+    /// глобальным не выполняется.
+    /// </remarks>
     private async void Сохранить()
     {
         try
         {
-            var отправитель = _состав.ТекущийОтправитель.CurrentSenderId;
-
-            if (отправитель is null or <= 0)
-            {
-                MessageBox.Show(
-                    this,
-                    "Не выбран текущий отправитель — укажите его в верхней части главного окна.",
-                    "Рассылка",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
             if (_получатели.Items.Count == 0)
             {
                 MessageBox.Show(
@@ -598,19 +605,34 @@ public sealed class FormDistributionEditor : Form
                 .Select(элемент => (long)элемент.Tag!)
                 .ToList();
 
+            var имя = string.IsNullOrWhiteSpace(_наименование.Text)
+                ? "Рассылка"
+                : _наименование.Text.Trim();
+
             var вид = _видРассылки.SelectedIndex == 1
                 ? DistributionKind.ManyToOne
                 : DistributionKind.OneToMany;
 
             if (_создание)
             {
+                var текущий = _состав.ТекущийОтправитель.CurrentSenderId;
+
+                if (текущий is null or <= 0)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Не выбран текущий отправитель — укажите его в верхней части главного окна.",
+                        "Рассылка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
                 var план = new DistributionPlan
                 {
-                    Name = string.IsNullOrWhiteSpace(_наименование.Text)
-                        ? "Рассылка"
-                        : _наименование.Text.Trim(),
+                    Name = имя,
                     Kind = вид,
-                    SenderId = отправитель.Value,
+                    SenderId = текущий.Value,
                     CounterpartyIds = идентификаторы,
                 };
 
@@ -630,11 +652,32 @@ public sealed class FormDistributionEditor : Form
                 return;
             }
 
+            // Правка: сохранённый отправитель рассылки — значение по
+            // умолчанию; текущий глобальный используется только если
+            // сохранённого нет.
+            var отправительРассылки = _рассылка.SenderId is > 0
+                ? _рассылка.SenderId
+                : _состав.ТекущийОтправитель.CurrentSenderId;
+
+            if (отправительРассылки is null or <= 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "У рассылки не указан отправитель, и текущий отправитель не выбран — укажите отправителя в верхней части главного окна.",
+                    "Рассылка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Вид заблокирован при правке (см. ПостроитьИнтерфейс); в запрос
+            // передаётся вид самой рассылки, а не прочитанное из
+            // заблокированного списка значение.
             var запрос = new DistributionUpdateRequest(
                 _рассылка.Id,
-                string.IsNullOrWhiteSpace(_наименование.Text) ? "Рассылка" : _наименование.Text.Trim(),
-                вид,
-                отправитель,
+                имя,
+                _рассылка.Kind,
+                отправительРассылки,
                 идентификаторы);
 
             var правка = await _состав.СлужбаРассылок

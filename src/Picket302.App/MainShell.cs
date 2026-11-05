@@ -136,6 +136,13 @@ public sealed class MainShell : Form
     private readonly Label _копий = new();
     private readonly Label _состояниеБазы = new();
 
+    /// <summary>
+    /// Подсказки строки состояния: полный путь базы данных виден при
+    /// наведении, в самой строке остаётся только имя файла (аудит UX
+    /// 2026-11-03, F3).
+    /// </summary>
+    private readonly ToolTip _подсказкиСтрокиСостояния = new();
+
     private readonly TreeView _деревоКатегорий = new();
     private readonly ToolStripMenuItem _пунктИзбранного = new("Избранное (VIP)");
     private readonly ToolStripMenuItem _пунктОбъединить = new("Объединить в рассылку");
@@ -2613,13 +2620,25 @@ public sealed class MainShell : Form
     /// Обновляет строку состояния: «Выведено» и «Копий» считаются по письмам
     /// выбранных получателей.
     /// </summary>
+    /// <summary>
+    /// Показывает имя файла базы в строке состояния, а полный путь —
+    /// всплывающей подсказкой (аудит UX 2026-11-03, F3).
+    /// </summary>
+    /// <param name="состав">Состав приложения.</param>
+    private void ЗадатьСостояниеБазы(AppServices состав)
+    {
+        _состояниеБазы.Text = $"База: {Path.GetFileName(состав.ПутьБазы)}";
+        _подсказкиСтрокиСостояния.SetToolTip(_состояниеБазы, состав.ПутьБазы);
+        _состояниеБазы.AccessibleName = $"База данных: {состав.ПутьБазы}";
+    }
+
     private async void ОбновитьСтрокуСостояния(AppServices состав)
     {
         if (!_инициализировано || _выбранныеПолучатели.Count == 0)
         {
             _выведено.Text = "Выведено: 0";
             _копий.Text = "Копий: 0";
-            _состояниеБазы.Text = $"База: {Path.GetFileName(состав.ПутьБазы)}";
+            ЗадатьСостояниеБазы(состав);
             return;
         }
 
@@ -2652,7 +2671,7 @@ public sealed class MainShell : Form
             _копий.Text = "Копий: 0";
         }
 
-        _состояниеБазы.Text = $"База: {Path.GetFileName(состав.ПутьБазы)}";
+        ЗадатьСостояниеБазы(состав);
     }
 
     /// <summary>
@@ -3261,7 +3280,8 @@ public sealed class MainShell : Form
     /// <summary>
     /// Печатает письма выбранных рассылок (ТЗ §8.12, функция 156 — печать
     /// рассылки). Пустые рассылки пропускаются с предупреждением; выбранные
-    /// строки не меняются, новых записей печать не создаёт.
+    /// строки не меняются, новых записей печать не создаёт. Сбор писем и
+    /// запуск операции выполняет <see cref="Printing.DistributionPrintScenario"/>.
     /// </summary>
     private async void ПечатьРассылок()
     {
@@ -3283,38 +3303,69 @@ public sealed class MainShell : Form
             return;
         }
 
-        var сборка = await СобратьПисьмаРассылокAsync(_состав, идентификаторы).ConfigureAwait(true);
+        var итог = await Printing.DistributionPrintScenario.ВыполнитьAsync(
+            _состав,
+            идентификаторы,
+            ЗапуститьПечатьРассылокAsync,
+            статус: текст => _состояниеПечати.Text = текст)
+            .ConfigureAwait(true);
 
-        if (сборка.ПропущенныеРассылки.Count > 0)
+        if (итог.ПредупреждениеБезПринтера is not null)
+        {
+            MessageBox.Show(
+                this,
+                итог.ПредупреждениеБезПринтера,
+                "Печать рассылок",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (итог.ПропущенныеРассылки.Count > 0)
         {
             MessageBox.Show(
                 this,
                 "Пропущены рассылки без писем: "
-                + string.Join(", ", сборка.ПропущенныеРассылки) + ".",
+                + string.Join(", ", итог.ПропущенныеРассылки) + ".",
                 "Печать рассылок",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
         }
 
-        if (сборка.MailIds.Count == 0)
+        if (итог.Ошибка is not null)
+        {
+            MessageBox.Show(this, итог.Ошибка, "Печать рассылок", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        if (!итог.ПечатьЗапущена)
         {
             return;
         }
 
-        _состояниеПечати.Text = $"Печать рассылок: отправлений {сборка.MailIds.Count}…";
-
-        try
-        {
-            await ВыполнитьПечатьAsync(сборка.MailIds, сПредпросмотром: true, пакетнаяПечать: true)
-                .ConfigureAwait(true);
-        }
-        finally
-        {
-            _состояниеПечати.Text = string.Empty;
-        }
-
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         ОбновитьСтрокуСостояния(_состав);
+    }
+
+    /// <summary>
+    /// Запускает печатную операцию рассылок через общий конвейер печати:
+    /// диалог, предпросмотр и спулер. Ошибки конвейера показываются
+    /// оператору внутри конвейера; сюда возвращается лишь итог.
+    /// </summary>
+    /// <param name="mailIds">Идентификаторы писем.</param>
+    /// <returns>Итог операции.</returns>
+    private async Task<Printing.ПечатьИтог> ЗапуститьПечатьРассылокAsync(IReadOnlyList<long> mailIds)
+    {
+        try
+        {
+            var успех = await ВыполнитьПечатьAsync(mailIds, сПредпросмотром: true, пакетнаяПечать: true)
+                .ConfigureAwait(true);
+
+            return успех ? Printing.ПечатьИтог.Выполнено : Printing.ПечатьИтог.Отменено;
+        }
+        catch (Exception исключение) when (исключение is SqliteException or InvalidOperationException or IOException)
+        {
+            return new Printing.ПечатьИтог(Printing.ПечатьКод.Ошибка, исключение.Message);
+        }
     }
 
     /// <summary>
@@ -3333,52 +3384,6 @@ public sealed class MainShell : Form
             .Select(строка => (long)строка.Tag!)
             .Distinct()
             .ToList();
-    }
-
-    /// <summary>
-    /// Собирает письма выбранных рассылок для печати (ТЗ §8.12, функция 156):
-    /// отсутствующие и пустые рассылки пропускаются и перечисляются по
-    /// имени, печать идёт только по готовым письмам.
-    /// </summary>
-    /// <param name="состав">Состав приложения.</param>
-    /// <param name="идентификаторы">Идентификаторы рассылок.</param>
-    /// <returns>Идентификаторы писем и перечень пропущенных рассылок.</returns>
-    internal static async Task<ПисьмаРассылокДляПечати> СобратьПисьмаРассылокAsync(
-        AppServices состав,
-        IReadOnlyList<long> идентификаторы)
-    {
-        ArgumentNullException.ThrowIfNull(состав);
-        ArgumentNullException.ThrowIfNull(идентификаторы);
-
-        var письма = new List<long>();
-        var пропущенные = new List<string>();
-
-        foreach (var идентификатор in идентификаторы)
-        {
-            var рассылка = await состав.Рассылки
-                .GetByIdAsync(идентификатор)
-                .ConfigureAwait(true);
-
-            if (рассылка is null)
-            {
-                пропущенные.Add($"№{идентификатор} (не найдена)");
-                continue;
-            }
-
-            var письмаРассылки = await состав.Письма
-                .GetByDistributionAsync(идентификатор)
-                .ConfigureAwait(true);
-
-            if (письмаРассылки.Count == 0)
-            {
-                пропущенные.Add($"«{рассылка.Name}» (нет писем)");
-                continue;
-            }
-
-            письма.AddRange(письмаРассылки.Select(письмо => письмо.Id));
-        }
-
-        return new ПисьмаРассылокДляПечати(письма, пропущенные);
     }
 
     /// <summary>
@@ -4168,7 +4173,12 @@ public sealed class MainShell : Form
     /// <param name="mailIds">Идентификаторы отправлений.</param>
     /// <param name="сПредпросмотром">Признак показа интерактивного предпросмотра.</param>
     /// <param name="пакетнаяПечать">Признак пакетной печати (F6 / F7).</param>
-    private async Task ВыполнитьПечатьAsync(
+    /// <returns>
+    /// <see langword="true"/> — сессия завершилась успешно;
+    /// <see langword="false"/> — отменена оператором, заблокирована или
+    /// завершена с ошибкой (ошибка уже показана оператору).
+    /// </returns>
+    private async Task<bool> ВыполнитьПечатьAsync(
         IReadOnlyList<long> mailIds,
         bool сПредпросмотром,
         bool пакетнаяПечать = false)
@@ -4177,7 +4187,7 @@ public sealed class MainShell : Form
 
         if (состав is null || mailIds.Count == 0)
         {
-            return;
+            return false;
         }
 
         // ТЗ §8.6, функция 78: без принтера по умолчанию печать блокируется.
@@ -4190,7 +4200,7 @@ public sealed class MainShell : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
 
-            return;
+            return false;
         }
 
         var запрос = await ПоказатьДиалогПечатиAsync(mailIds, сПредпросмотром, пакетнаяПечать)
@@ -4198,7 +4208,7 @@ public sealed class MainShell : Form
 
         if (запрос is null)
         {
-            return;
+            return false;
         }
 
         if (await состав.ПодсказкаПодачи.ShouldShowAsync().ConfigureAwait(true))
@@ -4207,7 +4217,7 @@ public sealed class MainShell : Form
 
             if (подсказка.ShowDialog(this) != DialogResult.OK)
             {
-                return;
+                return false;
             }
 
             if (подсказка.ПодавитьПредупреждение)
@@ -4222,7 +4232,7 @@ public sealed class MainShell : Form
             // задания в спулер; отказ оператора отменяет печать.
             if (сПредпросмотром && !await ПоказатьПредпросмотрAsync(запрос).ConfigureAwait(true))
             {
-                return;
+                return false;
             }
 
             var итог = await ЗапуститьПечатьAsync(mailIds, запрос).ConfigureAwait(true);
@@ -4239,14 +4249,14 @@ public sealed class MainShell : Form
                         MessageBoxIcon.Warning);
                 }
 
-                return;
+                return итог.IsSuccess;
             }
 
             var решение = await ПоказатьДиалогРазмераAsync(запрос).ConfigureAwait(true);
 
             if (решение == PaperSizeBlockedDecision.Отмена)
             {
-                return;
+                return false;
             }
 
             if (решение == PaperSizeBlockedDecision.ЗафиксироватьA4)
@@ -4260,11 +4270,14 @@ public sealed class MainShell : Form
 
             if (новыйЗапрос is null)
             {
-                return;
+                return false;
             }
 
             запрос = новыйЗапрос;
         }
+
+        // После трёх попыток блокировка размера сохраняется — успеха нет.
+        return false;
     }
 
     /// <summary>
@@ -4962,13 +4975,3 @@ public sealed class MainShell : Form
         base.Dispose(disposing);
     }
 }
-
-/// <summary>
-/// Результат сбора писем выбранных рассылок для печати (ТЗ §8.12,
-/// функция 156).
-/// </summary>
-/// <param name="MailIds">Идентификаторы писем к печати.</param>
-/// <param name="ПропущенныеРассылки">Наименования пропущенных рассылок.</param>
-internal sealed record ПисьмаРассылокДляПечати(
-    IReadOnlyList<long> MailIds,
-    IReadOnlyList<string> ПропущенныеРассылки);

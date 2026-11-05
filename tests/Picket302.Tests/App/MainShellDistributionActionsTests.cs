@@ -109,30 +109,15 @@ public sealed class MainShellDistributionActionsTests
             await состав.Письма.DeleteAsync(письмо.Id);
         }
 
-        var метод = typeof(MainShell).GetMethod(
-            "СобратьПисьмаРассылокAsync",
-            BindingFlags.Static | BindingFlags.NonPublic);
-
-        Assert.NotNull(метод);
-
-        var задача = (Task)метод!.Invoke(
-            null,
-            [состав, (object)new List<long> { сПисьмами.Value.Id, пустая.Value.Id, 404L }])!;
-
-        await задача;
-
-        var сборка = задача.GetType().GetProperty("Result")!.GetValue(задача)!;
-
-        var письма = (IReadOnlyList<long>)сборка.GetType().GetProperty("MailIds")!.GetValue(сборка)!;
-        var пропущенные = (IReadOnlyList<string>)сборка.GetType().GetProperty("ПропущенныеРассылки")!
-            .GetValue(сборка)!;
+        var сборка = await Picket302.App.Printing.DistributionPrintScenario
+            .СобратьПисьмаРассылокAsync(состав, [сПисьмами.Value.Id, пустая.Value.Id, 404L]);
 
         var письмаРассылки = await состав.Письма.GetByDistributionAsync(сПисьмами.Value.Id);
 
-        Assert.Equal(письмаРассылки.Select(письмо => письмо.Id).ToList(), письма.ToList());
-        Assert.Equal(2, пропущенные.Count);
-        Assert.Contains(пропущенные, имя => имя.Contains("Без писем", StringComparison.Ordinal));
-        Assert.Contains(пропущенные, имя => имя.Contains("404", StringComparison.Ordinal));
+        Assert.Equal(письмаРассылки.Select(письмо => письмо.Id).ToList(), сборка.MailIds.ToList());
+        Assert.Equal(2, сборка.ПропущенныеРассылки.Count);
+        Assert.Contains(сборка.ПропущенныеРассылки, имя => имя.Contains("Без писем", StringComparison.Ordinal));
+        Assert.Contains(сборка.ПропущенныеРассылки, имя => имя.Contains("404", StringComparison.Ordinal));
     }
 
     private static Counterparty НовыйКонтрагент(string имя) => new()

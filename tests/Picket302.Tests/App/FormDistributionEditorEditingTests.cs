@@ -185,4 +185,83 @@ public sealed class FormDistributionEditorEditingTests
 
         Assert.Equal(2, письма.Count);
     }
+
+    /// <summary>
+    /// Правка не требует выбранного глобального отправителя: используется
+    /// сохранённый отправитель рассылки, и он не заменяется текущим.
+    /// </summary>
+    [Fact]
+    public async Task ПравкаБезТекущегоОтправителя_ИспользуетСохранённогоИНеСоздаётДубля()
+    {
+        using var профиль = new ИзолированныйПрофиль();
+
+        await using var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
+
+        var (рассылка, первый, второй, _) = await Подготовить(состав);
+
+        // Глобальный отправитель сброшен: правка обязана работать через
+        // сохранённого отправителя рассылки.
+        состав.ТекущийОтправитель.ClearGlobalSender();
+        Assert.Null(состав.ТекущийОтправитель.CurrentSenderId);
+
+        using var форма = new FormDistributionEditor(состав, рассылка);
+        var получатели = НайтиКонтрол<ListView>(форма);
+
+        await Дождаться(() => получатели.Items.Count == 2, "Письма рассылки должны загрузиться в список.");
+
+        var поле = (TextBox)typeof(FormDistributionEditor)
+            .GetField("_наименование", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(форма)!;
+
+        поле.Text = "Правка без отправителя";
+
+        Вызвать(форма, "Сохранить");
+
+        await Дождаться(() => форма.Результат is not null, "Сохранение правки должно завершиться.");
+
+        // Идентификатор сохранён, имя изменено, отправитель прежний.
+        Assert.Equal(рассылка.Id, форма.Результат!.Id);
+        Assert.Equal("Правка без отправителя", форма.Результат.Name);
+        Assert.Equal(рассылка.SenderId, форма.Результат.SenderId);
+
+        var перечень = await состав.СлужбаРассылок.ListDistributionsAsync();
+        var единственная = Assert.Single(перечень);
+
+        Assert.Equal(рассылка.Id, единственная.Id);
+        Assert.Equal(рассылка.SenderId, единственная.SenderId);
+
+        // Письма не продублировались, состав прежний.
+        var письма = await состав.Письма.GetByDistributionAsync(рассылка.Id);
+
+        Assert.Equal(2, письма.Count);
+        Assert.Contains(письма, письмо => письмо.CounterpartyId == первый);
+        Assert.Contains(письма, письмо => письмо.CounterpartyId == второй);
+    }
+
+    /// <summary>
+    /// Вид существующей рассылки заблокирован: смена вида без пересоздания
+    /// состава молча переориентировала бы письма.
+    /// </summary>
+    [Fact]
+    public async Task ПравкаСуществующей_ВидРассылкиЗаблокирован()
+    {
+        using var профиль = new ИзолированныйПрофиль();
+
+        await using var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
+
+        var (рассылка, _, _, _) = await Подготовить(состав);
+
+        using var правка = new FormDistributionEditor(состав, рассылка);
+        using var создание = new FormDistributionEditor(состав);
+
+        var видПравки = (ComboBox)typeof(FormDistributionEditor)
+            .GetField("_видРассылки", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(правка)!;
+        var видСоздания = (ComboBox)typeof(FormDistributionEditor)
+            .GetField("_видРассылки", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(создание)!;
+
+        Assert.False(видПравки.Enabled);
+        Assert.True(видСоздания.Enabled);
+    }
 }
