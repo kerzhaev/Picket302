@@ -3410,8 +3410,12 @@ public sealed class MainShell : Form
             return;
         }
 
-        await ВыполнитьПечатьAsync(идентификаторы, сПредпросмотром: true, пакетнаяПечать: true)
+        var итогПечати = await ВыполнитьПечатьAsync(идентификаторы, сПредпросмотром: true, пакетнаяПечать: true)
             .ConfigureAwait(true);
+
+        // Обновление таблиц показывает уже созданные записи, но ошибкой не
+        // маскируется: при ошибке итог показан, успехом не объявляется.
+        ПоказатьОшибкуПечатиЕслиНужно(итогПечати);
 
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         ОбновитьСтрокуСостояния(_состав);
@@ -4055,7 +4059,10 @@ public sealed class MainShell : Form
             return;
         }
 
-        await ВыполнитьПечатьAsync(new[] { письмо.Id }, сПредпросмотром: true).ConfigureAwait(true);
+        var итогПечати = await ВыполнитьПечатьAsync(new[] { письмо.Id }, сПредпросмотром: true)
+            .ConfigureAwait(true);
+
+        ПоказатьОшибкуПечатиЕслиНужно(итогПечати);
 
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         ОбновитьСтрокуСостояния(_состав);
@@ -4160,7 +4167,10 @@ public sealed class MainShell : Form
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
 
-        await ВыполнитьПечатьAsync(идентификаторы, сПредпросмотром, пакетнаяПечать: true).ConfigureAwait(true);
+        var итогПечати = await ВыполнитьПечатьAsync(идентификаторы, сПредпросмотром, пакетнаяПечать: true)
+            .ConfigureAwait(true);
+
+        ПоказатьОшибкуПечатиЕслиНужно(итогПечати);
 
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         ОбновитьСтрокуСостояния(_состав);
@@ -4235,63 +4245,123 @@ public sealed class MainShell : Form
         for (var попытка = 0; попытка < 3; попытка++)
         {
             // ТЗ §8.6, функция 80: предпросмотр показывается до передачи
-            // задания в спулер; отказ оператора отменяет печать.
-            if (сПредпросмотром && !await ПоказатьПредпросмотрAsync(запрос).ConfigureAwait(true))
+            // задания в спулер; отказ оператора отменяет печать, сбой
+            // построения — ошибка, которая не превращается в отмену.
+            if (сПредпросмотром)
             {
-                return Printing.ПечатьИтог.Отменено;
+                var предпросмотр = await ПоказатьПредпросмотрAsync(запрос).ConfigureAwait(true);
+
+                if (предпросмотр.Код == Printing.ПредпросмотрКод.Ошибка)
+                {
+                    if (!предпросмотр.СообщениеПоказано)
+                    {
+                        MessageBox.Show(
+                            this,
+                            предпросмотр.Сообщение!,
+                            "Печать",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                    }
+
+                    return new Printing.ПечатьИтог(
+                        Printing.ПечатьКод.Ошибка,
+                        предпросмотр.Сообщение,
+                        СообщениеПоказано: true);
+                }
+
+                if (предпросмотр.Код == Printing.ПредпросмотрКод.Отменено)
+                {
+                    return Printing.ПечатьИтог.Отменено;
+                }
             }
 
             var итог = await ЗапуститьПечатьAsync(mailIds, запрос).ConfigureAwait(true);
 
-            if (!string.Equals(итог.Status, PrintJobStatus.BlockedSize, StringComparison.Ordinal))
+            // Блокировка размера обрабатывается диалогом и повторными
+            // попытками; остальные статусы проходят единый маппинг, где
+            // отмена оператора (ABORTED, в том числе с текстом «Печать
+            // прервана оператором.») ошибкой не считается.
+            if (string.Equals(итог.Status, PrintJobStatus.BlockedSize, StringComparison.Ordinal))
             {
-                if (!итог.IsSuccess && !string.IsNullOrEmpty(итог.ErrorMessage))
-                {
-                    MessageBox.Show(
-                        this,
-                        итог.ErrorMessage!,
-                        "Печать",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                var решение = await ПоказатьДиалогРазмераAsync(запрос).ConfigureAwait(true);
 
-                    return new Printing.ПечатьИтог(
-                        Printing.ПечатьКод.Ошибка,
-                        итог.ErrorMessage,
-                        СообщениеПоказано: true);
+                if (решение == PaperSizeBlockedDecision.Отмена)
+                {
+                    return Printing.ПечатьИтог.Отменено;
                 }
 
-                return Printing.ПечатьИтог.ИзРезультатаКонвейера(итог);
-            }
+                if (решение == PaperSizeBlockedDecision.ЗафиксироватьA4)
+                {
+                    запрос = запрос with { FixA4 = true };
+                    continue;
+                }
 
-            var решение = await ПоказатьДиалогРазмераAsync(запрос).ConfigureAwait(true);
+                var новыйЗапрос = await ПоказатьДиалогПечатиAsync(mailIds, сПредпросмотром, пакетнаяПечать)
+                    .ConfigureAwait(true);
 
-            if (решение == PaperSizeBlockedDecision.Отмена)
-            {
-                return Printing.ПечатьИтог.Отменено;
-            }
+                if (новыйЗапрос is null)
+                {
+                    return Printing.ПечатьИтог.Отменено;
+                }
 
-            if (решение == PaperSizeBlockedDecision.ЗафиксироватьA4)
-            {
-                запрос = запрос with { FixA4 = true };
+                запрос = новыйЗапрос;
+
                 continue;
             }
 
-            var новыйЗапрос = await ПоказатьДиалогПечатиAsync(mailIds, сПредпросмотром, пакетнаяПечать)
-                .ConfigureAwait(true);
+            // Остальные статусы: единый маппинг. Отмена оператора
+            // возвращается без окна; ошибка показывается один раз.
+            var результат = Printing.ПечатьИтог.ИзРезультатаКонвейера(итог);
 
-            if (новыйЗапрос is null)
+            if (результат.Код == Printing.ПечатьКод.Ошибка)
             {
-                return Printing.ПечатьИтог.Отменено;
+                MessageBox.Show(
+                    this,
+                    результат.Сообщение!,
+                    "Печать",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
+                return результат with { СообщениеПоказано = true };
             }
 
-            запрос = новыйЗапрос;
+            return результат;
         }
 
-        // После трёх попыток блокировка размера сохраняется: оператору
-        // показывают причину, успех не заявляется.
-        return new Printing.ПечатьИтог(
+        // После трёх попыток блокировка размера сохраняется: оператор
+        // видит причину, итог не теряется и успехом не объявляется.
+        var блокировка = new Printing.ПечатьИтог(
             Printing.ПечатьКод.Ошибка,
-            "Печать не выполнена: размер конверта не помещается на выбранный лист.");
+            Printing.ПечатьИтог.ТекстБлокировкиРазмера);
+
+        MessageBox.Show(
+            this,
+            блокировка.Сообщение!,
+            "Печать",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+
+        return блокировка with { СообщениеПоказано = true };
+    }
+
+    /// <summary>
+    /// Показывает ошибку печати ровно один раз — только если её ещё не
+    /// показал печатный конвейер
+    /// (<see cref="Printing.ПечатьИтог.СообщениеПоказано"/>). Отмена и
+    /// успех окном не сопровождаются.
+    /// </summary>
+    /// <param name="итог">Итог печатной операции.</param>
+    private void ПоказатьОшибкуПечатиЕслиНужно(Printing.ПечатьИтог итог)
+    {
+        if (итог.Код == Printing.ПечатьКод.Ошибка && !итог.СообщениеПоказано)
+        {
+            MessageBox.Show(
+                this,
+                итог.Сообщение ?? Printing.ПечатьИтог.ОбщийТекстОшибки,
+                "Печать",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     /// <summary>
@@ -4387,13 +4457,21 @@ public sealed class MainShell : Form
     /// </summary>
     /// <param name="запрос">Параметры печати.</param>
     /// <returns><see langword="false"/>, если оператор отказался от печати.</returns>
-    private async Task<bool> ПоказатьПредпросмотрAsync(PrintRequest запрос)
+    /// <summary>
+    /// Показывает интерактивный предпросмотр. Отказ оператора и сбой
+    /// построения различаются: сбой возвращает <see cref="Printing.ПредпросмотрКод.Ошибка"/>
+    /// с текстом и признаком показа — ошибка предпросмотра не превращается
+    /// в отмену и не теряется.
+    /// </summary>
+    /// <param name="запрос">Параметры печати.</param>
+    /// <returns>Итог показа предпросмотра.</returns>
+    private async Task<Printing.ПредпросмотрИтог> ПоказатьПредпросмотрAsync(PrintRequest запрос)
     {
         var состав = _состав;
 
         if (состав is null)
         {
-            return false;
+            return Printing.ПредпросмотрИтог.Отменено;
         }
 
         var сборщик = new PrintPreviewBuilder(
@@ -4413,20 +4491,26 @@ public sealed class MainShell : Form
         catch (Exception ex)
 #pragma warning restore CA1031
         {
+            // Сбой построения — ошибка, а не отмена: текст показывается
+            // здесь ровно один раз.
+            var сбой = Printing.ПредпросмотрИтог.ИзИсключения(ex);
+
             MessageBox.Show(
                 this,
-                $"Не удалось построить предпросмотр: {ex.Message}",
+                сбой.Сообщение,
                 "Печать",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
 
-            return false;
+            return сбой with { СообщениеПоказано = true };
         }
 
         using (документ)
         using (var окно = new FormPrintPreview(документ))
         {
-            return окно.ShowDialog(this) == DialogResult.OK;
+            return окно.ShowDialog(this) == DialogResult.OK
+                ? Printing.ПредпросмотрИтог.Разрешено
+                : Printing.ПредпросмотрИтог.Отменено;
         }
     }
 
