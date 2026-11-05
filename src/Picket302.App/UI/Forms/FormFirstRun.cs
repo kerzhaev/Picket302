@@ -40,7 +40,7 @@ public sealed class FormFirstRun : Form
     public FormFirstRun()
     {
         Text = "Первый запуск программы";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

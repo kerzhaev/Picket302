@@ -10,8 +10,9 @@ namespace Picket302.App.UI.Components;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Плотность рабочего режима: кегль таблиц 8pt, высота строки ~17px, классический
-/// Windows-вид без анимации.
+/// Плотность рабочего режима сохраняется совместимой с настройками ТЗ:
+/// кегль таблиц 8pt и высота строки ~17px. Визуальный слой при этом использует
+/// Segoe UI, светлую карточку, тонкий разделитель и контрастное выделение.
 /// </para>
 /// <para>
 /// Три независимых настраиваемых цвета: фокус, выделение и подсказка; «зебра»
@@ -116,7 +117,11 @@ public static class GridAppearanceManager
         ArgumentNullException.ThrowIfNull(таблица);
         ArgumentNullException.ThrowIfNull(оформление);
 
-        таблица.Font = new Font("Tahoma", оформление.FontSize, FontStyle.Regular, GraphicsUnit.Point);
+        таблица.Font = new Font(
+            EnvelopeUiTheme.ШрифтСемейство,
+            оформление.FontSize,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
         таблица.RowTemplate.Height = оформление.RowHeight;
         таблица.RowHeadersVisible = false;
         таблица.AllowUserToOrderColumns = true;
@@ -124,23 +129,27 @@ public static class GridAppearanceManager
         таблица.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         таблица.MultiSelect = true;
         таблица.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        таблица.GridColor = SystemColors.Control;
-        таблица.BorderStyle = BorderStyle.Fixed3D;
+        таблица.GridColor = EnvelopeUiTheme.Border;
+        таблица.BorderStyle = BorderStyle.FixedSingle;
 
         // Область грида вне строк и столбцов — белая «бумага», а не серый
         // Control (аудит UX 2026-11-03, G3): пустая часть таблицы читается
         // как рабочее поле, а не как неисправность.
-        таблица.BackgroundColor = SystemColors.Window;
+        таблица.BackgroundColor = EnvelopeUiTheme.CardBackground;
 
         таблица.EnableHeadersVisualStyles = false;
-        таблица.ColumnHeadersDefaultCellStyle.BackColor = SystemColors.Control;
-        таблица.ColumnHeadersDefaultCellStyle.ForeColor = SystemColors.ControlText;
-        таблица.ColumnHeadersDefaultCellStyle.Font = new Font("Tahoma", оформление.FontSize, FontStyle.Regular);
+        таблица.ColumnHeadersDefaultCellStyle.BackColor = EnvelopeUiTheme.PanelBackground;
+        таблица.ColumnHeadersDefaultCellStyle.ForeColor = EnvelopeUiTheme.Text;
+        таблица.ColumnHeadersDefaultCellStyle.Font = new Font(
+            EnvelopeUiTheme.ШрифтСемейство,
+            оформление.FontSize,
+            FontStyle.Bold,
+            GraphicsUnit.Point);
 
         таблица.DefaultCellStyle.SelectionBackColor = Цвет(оформление.SelectedColor);
-        таблица.DefaultCellStyle.SelectionForeColor = SystemColors.ControlText;
-        таблица.DefaultCellStyle.BackColor = SystemColors.Window;
-        таблица.DefaultCellStyle.ForeColor = SystemColors.WindowText;
+        таблица.DefaultCellStyle.SelectionForeColor = Color.White;
+        таблица.DefaultCellStyle.BackColor = EnvelopeUiTheme.CardBackground;
+        таблица.DefaultCellStyle.ForeColor = EnvelopeUiTheme.Text;
         таблица.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
 
         ПрименитьЗебру(таблица, оформление.ZebraEnabled);
@@ -157,12 +166,12 @@ public static class GridAppearanceManager
 
         if (!включена)
         {
-            таблица.AlternatingRowsDefaultCellStyle.BackColor = SystemColors.Window;
+            таблица.AlternatingRowsDefaultCellStyle.BackColor = EnvelopeUiTheme.CardBackground;
             return;
         }
 
         таблица.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(240, 240, 240);
-        таблица.RowsDefaultCellStyle.BackColor = SystemColors.Window;
+        таблица.RowsDefaultCellStyle.BackColor = EnvelopeUiTheme.CardBackground;
         таблица.AlternatingRowsDefaultCellStyle.SelectionBackColor = таблица.DefaultCellStyle.SelectionBackColor;
     }
 

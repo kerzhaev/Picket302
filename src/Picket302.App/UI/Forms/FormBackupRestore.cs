@@ -91,7 +91,7 @@ public sealed class FormBackupRestore : Form
             ПутьНастроекПоУмолчанию());
 
         Text = "Архивация и восстановление базы адресов";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

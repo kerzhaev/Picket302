@@ -38,8 +38,8 @@ public static class EmptyStateHint
         {
             Text = текст,
             TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(71, 85, 105),
-            Font = new Font("Tahoma", 8f, FontStyle.Italic),
+            ForeColor = EnvelopeUiTheme.MutedText,
+            Font = EnvelopeUiTheme.ШрифтТекста(8.5f, FontStyle.Italic),
             Visible = false,
         };
 

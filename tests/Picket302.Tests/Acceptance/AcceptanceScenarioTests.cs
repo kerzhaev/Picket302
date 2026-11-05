@@ -47,8 +47,21 @@ namespace Picket302.Tests.Acceptance;
 /// PrintEnvelope (out-of-proc, код 0, запись mails) → BackupNow → Restore
 /// на чистую базу (записи на месте).
 /// </summary>
+/// <remarks>
+/// Тест работает с реальным каталогом профиля (<c>%AppData%\Picket302</c>):
+/// пользовательская база переносится в резервную копию и возвращается,
+/// сервер пишет аудит печати. Коллекция «ПрофильПриложения» выполняет его
+/// последовательно с защитными проверками изоляции профиля.
+/// </remarks>
+[Collection("ПрофильПриложения")]
 public sealed class AcceptanceScenarioTests : IDisposable
 {
+    /// <summary>Имя файла блокировки сериализации COM-приёмки в %TEMP%:
+    /// регистрация и завершение сервера используют общие ключи
+    /// HKCU\Software\Classes, и два одновременных тестовых процесса
+    /// порождают гонки unregister/register.</summary>
+    private const string ФайлБлокировкиПриёмки = "Picket302.ComAcceptance.lock";
+
     private readonly string _каталог = Path.Combine(
         Path.GetTempPath(),
         "Picket302Acceptance_" + Guid.NewGuid().ToString("N"));
@@ -66,16 +79,27 @@ public sealed class AcceptanceScenarioTests : IDisposable
 
     public void Dispose()
     {
-        try
+        // Пул соединений может ещё держать файл базы в момент Dispose:
+        // сбрасываем пул и повторяем удаление, чтобы временные каталоги
+        // приёмки не накапливались в %TEMP% (ТЗ §11.5).
+        SqliteConnection.ClearAllPools();
+
+        for (var попытка = 0; попытка < 5; попытка++)
         {
-            if (Directory.Exists(_каталог))
+            try
             {
-                Directory.Delete(_каталог, recursive: true);
+                if (Directory.Exists(_каталог))
+                {
+                    Directory.Delete(_каталог, recursive: true);
+                }
+
+                break;
             }
-        }
-        catch (IOException)
-        {
-            // Временный каталог не удалён — на результат теста не влияет.
+            catch (IOException)
+            {
+                // Каталог ещё занят завершающимися соединениями — повторяем.
+                Thread.Sleep(200);
+            }
         }
 
         GC.SuppressFinalize(this);
@@ -518,6 +542,13 @@ public sealed class AcceptanceScenarioTests : IDisposable
         var путьШаблона = Path.Combine(каталогПриложения, "Конверт_C6_COM.lbk");
         var телоВыполнено = false;
 
+        // Глобальная сериализация COM-приёмки между процессами тестов.
+        // Файловая блокировка вместо мьютекса: Mutex привязан к потоку,
+        // а async-тест продолжается после await на другом потоке, и
+        // ReleaseMutex падает. Внутри блокировки активация остаётся
+        // полностью холодной.
+        using var блокировка = ЗахватитьБлокировкуПриёмки(TimeSpan.FromSeconds(180));
+
         // Локальный COM-сервер держит файл базы профиля открытым, поэтому
         // его нужно остановить до переноса базы (иначе файл останется
         // занят завершающимся процессом).
@@ -617,37 +648,63 @@ public sealed class AcceptanceScenarioTests : IDisposable
                         $@"Software\Classes\CLSID\{{{ComAutomationIds.ClassId}}}\LocalServer32"),
                     "В ветке классов отсутствует запись LocalServer32.");
 
+                Assert.Equal(
+                    регистрация.ServerPath,
+                    ComRegistration.ReadValue(
+                        $@"Software\Classes\CLSID\{{{ComAutomationIds.ClassId}}}\LocalServer32",
+                        "ServerExecutable"));
+
                 Assert.True(
                     ComRegistration.KeyExists(
                         $@"Software\Classes\TypeLib\{{{ComAutomationIds.TypeLibId}}}\{ComAutomationIds.TypeLibVersion}\0\win64"),
                     "В ветке классов отсутствует библиотека типов версии 2.2.");
+
+                // Запоминаем границу журнала непосредственно перед холодной
+                // активацией. Журнал append-only и содержит историю прошлых
+                // запусков; чтение только дельты не позволяет принять старый
+                // -Embedding за доказательство текущего запуска SCM.
+                var отметкаЖурналаДоАктивации = ПолучитьДлинуЖурнала();
 
                 // Активация out-of-proc: LocalServer32 запускает отдельный
                 // процесс сервера, фабрика классов создаёт PEProApplication.
                 // ProgID используется, когда среда разрешает его разрешение
                 // в CLSID; иначе (per-user регистрация не видна ole32)
                 // активация выполняется по идентификатору класса.
-                var тип = Type.GetTypeFromProgID(ComAutomationIds.ProgId, throwOnError: false)
-                          ?? Type.GetTypeFromCLSID(new Guid(ComAutomationIds.ClassId));
+                var типПрогид = Type.GetTypeFromProgID(ComAutomationIds.ProgId, throwOnError: false);
+                var тип = типПрогид ?? Type.GetTypeFromCLSID(new Guid(ComAutomationIds.ClassId));
+                var источникТипа = типПрогид is not null ? "ProgID" : "CLSID";
 
                 Assert.True(тип is not null, "COM-сервер PEPro.Application не зарегистрирован.");
 
                 object? приложение = null;
+                var последнийКод = 0;
+                var попытокСделано = 0;
 
                 for (var попытка = 0; попытка < 40 && приложение is null; попытка++)
                 {
+                    попытокСделано++;
+
                     try
                     {
                         приложение = Activator.CreateInstance(тип!);
                     }
-                    catch (COMException)
+                    catch (COMException ошибка)
                     {
-                        // Сервер ещё не зарегистрировал фабрику классов.
+                        // Сервер ещё не зарегистрировал фабрику классов: код
+                        // сохраняется для диагностики причины (ТЗ §10.3).
+                        последнийКод = ошибка.HResult;
+
                         await Task.Delay(500);
                     }
                 }
 
-                Assert.True(приложение is not null, "COM-сервер PEPro.Application не активирован.");
+                Assert.True(
+                    приложение is not null,
+                    "COM-сервер PEPro.Application не активирован. " + ОписатьСостояниеАктивации(
+                        последнийКод,
+                        источникТипа,
+                        попытокСделано,
+                        отметкаЖурналаДоАктивации));
 
                 try
                 {
@@ -707,11 +764,14 @@ public sealed class AcceptanceScenarioTests : IDisposable
             }
             finally
             {
-                регистрация.Unregister();
-
-                // Сервер держит файл базы: останавливаем процесс и дожидаемся
-                // его завершения, иначе файл остаётся заблокированным.
+                // Сначала плавная остановка сервера: фабрика отзывается через
+                // CoRevokeClassObject при живой регистрации, и в SCM не
+                // остаётся записи о «мёртвом» сервере, из-за которой следующий
+                // холодный запуск может получить 0x80040154 без попытки
+                // запуска LocalServer32.
                 ОстановитьСерверы();
+
+                регистрация.Unregister();
             }
         }
         finally
@@ -756,11 +816,244 @@ public sealed class AcceptanceScenarioTests : IDisposable
     }
 
     /// <summary>
-    /// Останавливает процессы локального COM-сервера и дожидается их
-    /// завершения: файл базы освобождается не мгновенно после kill.
+    /// Собирает диагностику чистой COM-активации и различает причины сбоя:
+    /// ProgID не разрешился; CLSID не зарегистрирован; LocalServer32
+    /// отсутствует или указывает на несуществующий файл; процесс сервера
+    /// запустился, но фабрика не зарегистрирована; фабрика не вернула
+    /// интерфейс.
+    /// </summary>
+    /// <param name="hresult">Последний код активации; 0 — исключений не было.</param>
+    /// <param name="источникТипа">Источник типа: ProgID или CLSID.</param>
+    /// <param name="попыток">Число выполненных попыток активации.</param>
+    /// <param name="отметкаЖурнала">Размер журнала перед активацией.</param>
+    /// <returns>Однострочная диагностика для сообщения проверки.</returns>
+    private static string ОписатьСостояниеАктивации(
+        int hresult,
+        string источникТипа,
+        int попыток,
+        long отметкаЖурнала)
+    {
+        var части = new List<string>();
+
+        if (hresult != 0)
+        {
+            части.Add($"последний HRESULT=0x{hresult:X8}");
+        }
+
+        части.Add($"попыток: {попыток}; тип получен через {источникТипа}");
+        части.Add($"разрядность testhost: {(Environment.Is64BitProcess ? "x64" : "x86")}");
+
+        var clsidПоProgId = ComRegistration.ReadValue(
+            $@"Software\Classes\{ComAutomationIds.ProgId}",
+            "CLSID");
+        var clsidПоСовместимости = ComRegistration.ReadValue(
+            $@"Software\Classes\{ComAutomationIds.ProgId}\CLSID");
+
+        части.Add(clsidПоProgId is not null
+            ? $"ProgID → {clsidПоProgId} (именованное значение CLSID)"
+            : clsidПоСовместимости is not null
+                ? $"ProgID → {clsidПоСовместимости} (совместимый подраздел CLSID)"
+                : "ProgID PEPro.Application не разрешился (ключ отсутствует)");
+
+        var ветка = $@"Software\Classes\CLSID\{{{ComAutomationIds.ClassId}}}";
+
+        части.Add(ComRegistration.KeyExists(ветка)
+            ? "CLSID зарегистрирован"
+            : "CLSID не зарегистрирован");
+
+        var сервер = ComRegistration.ReadValue($@"{ветка}\LocalServer32")?.Trim('"');
+        var serverExecutable = ComRegistration.ReadValue(
+            $@"{ветка}\LocalServer32",
+            "ServerExecutable");
+
+        части.Add(сервер is null
+            ? "LocalServer32 отсутствует"
+            : File.Exists(сервер)
+                ? $"LocalServer32 → {сервер} (файл существует)"
+                : $"LocalServer32 указывает на отсутствующий файл: {сервер}");
+
+        части.Add(serverExecutable is null
+            ? "ServerExecutable отсутствует"
+            : File.Exists(serverExecutable)
+                ? $"ServerExecutable → {serverExecutable} (файл существует)"
+                : $"ServerExecutable указывает на отсутствующий файл: {serverExecutable}");
+
+        try
+        {
+            var процессы = Process.GetProcessesByName("Picket302.ComAutomation");
+
+            части.Add($"процессов Picket302.ComAutomation: {процессы.Length}");
+
+            foreach (var процесс in процессы)
+            {
+                процесс.Dispose();
+            }
+        }
+        catch (Exception)
+        {
+            // Диагностика не должна маскировать исходную ошибку активации.
+        }
+
+        // Только свежие строки журнала сервера: появился ли -Embedding и
+        // CoRegisterClassObject во время текущих попыток активации. Хвост
+        // общего журнала здесь непригоден: он может содержать успешный
+        // запуск из предыдущего прогона.
+        try
+        {
+            var журнал = ПутьЖурнала();
+
+            if (File.Exists(журнал))
+            {
+                using var поток = new FileStream(журнал, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+                var начало = Math.Clamp(отметкаЖурнала, 0, поток.Length);
+                поток.Seek(начало, SeekOrigin.Begin);
+
+                using var читатель = new StreamReader(поток, System.Text.Encoding.UTF8);
+
+                var дельта = читатель.ReadToEnd();
+                var запуск = дельта.Contains("-Embedding", StringComparison.Ordinal);
+                var регистрация = дельта.Contains("CoRegisterClassObject", StringComparison.Ordinal);
+                var отзыв = дельта.Contains("CoRevokeClassObject", StringComparison.Ordinal);
+
+                части.Add(
+                    $"журнал (новая дельта с {начало} байт): -Embedding={(запуск ? "есть" : "НЕТ")}, " +
+                    $"CoRegisterClassObject={(регистрация ? "есть" : "НЕТ")}, " +
+                    $"CoRevokeClassObject={(отзыв ? "есть" : "НЕТ")}, " +
+                    $"строк={(дельта.Length == 0 ? "нет" : "есть")}");
+            }
+            else
+            {
+                части.Add("журнал отсутствует и новых строк запуска нет");
+            }
+        }
+        catch (Exception)
+        {
+            // Диагностика не должна маскировать исходную ошибку активации.
+        }
+
+        return "Диагностика: " + string.Join("; ", части) + ".";
+    }
+
+    /// <summary>
+    /// Возвращает текущий размер append-only журнала COM перед запуском
+    /// холодной активации. Ноль означает, что журнала ещё нет либо его нельзя
+    /// прочитать; в обоих случаях последующая дельта читается с начала.
+    /// </summary>
+    private static long ПолучитьДлинуЖурнала()
+    {
+        try
+        {
+            var журнал = ПутьЖурнала();
+
+            return File.Exists(журнал)
+                ? new FileInfo(журнал).Length
+                : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>Возвращает путь append-only журнала COM-сервера.</summary>
+    private static string ПутьЖурнала() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        ComAutomationEnvironment.ApplicationDirectoryName,
+        "com-automation.log");
+
+    /// <summary>
+    /// Захватывает файл блокировки COM-приёмки на весь сценарий: одновременный
+    /// тестовый процесс ждёт освобождения в пределах указанного времени.
+    /// Блокировка не привязана к потоку и освобождается при закрытии потока,
+    /// в том числе при аварийном завершении процесса.
+    /// </summary>
+    /// <param name="ожидание">Полное время ожидания освобождения.</param>
+    /// <returns>Открытый поток блокировки.</returns>
+    private static FileStream ЗахватитьБлокировкуПриёмки(TimeSpan ожидание)
+    {
+        var путь = Path.Combine(Path.GetTempPath(), ФайлБлокировкиПриёмки);
+        var дедлайн = DateTime.UtcNow + ожидание;
+
+        while (true)
+        {
+            try
+            {
+                return new FileStream(
+                    путь,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None);
+            }
+            catch (IOException)
+            {
+                if (DateTime.UtcNow >= дедлайн)
+                {
+                    throw new IOException(
+                        "Блокировка COM-приёмки не освобождена за 180 секунд: " +
+                        "параллельный тестовый прогон выполняет собственный COM-сценарий.");
+                }
+
+                Thread.Sleep(500);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Останавливает процессы локального COM-сервера: сначала плавно — через
+    /// именованное событие завершения (сервер выходит из цикла сообщений и
+    /// отзывает фабрику через CoRevokeClassObject), затем принудительно
+    /// оставшиеся. Жёсткий kill без отзыва фабрики оставляет в SCM запись о
+    /// сервере, который «ещё держит класс», и следующий холодный запуск может
+    /// получить 0x80040154 без попытки запуска LocalServer32.
     /// </summary>
     private static void ОстановитьСерверы()
     {
+        var процессовДоПлавногоЗавершения = Process.GetProcessesByName("Picket302.ComAutomation").Length;
+
+        if (процессовДоПлавногоЗавершения > 0)
+        {
+            // Событие завершения уникально для каждого процесса сервера:
+            // сигнал адресуется по PID, поэтому не может задеть чужой или
+            // будущий сервер.
+            foreach (var процесс in Process.GetProcessesByName("Picket302.ComAutomation"))
+            {
+                try
+                {
+                    using var сигнал = EventWaitHandle.OpenExisting(
+                        ComServerHost.ShutdownEventNameFor(процесс.Id));
+
+                    сигнал.Set();
+                }
+                catch (WaitHandleCannotBeOpenedException)
+                {
+                    // Сервер не создал событие (не дошёл до запуска хоста) —
+                    // остаётся принудительная остановка.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Событие существует, но не для записи — принудительная остановка.
+                }
+                finally
+                {
+                    процесс.Dispose();
+                }
+            }
+
+            var дедлайн = DateTime.UtcNow.AddSeconds(5);
+
+            while (DateTime.UtcNow < дедлайн
+                && Process.GetProcessesByName("Picket302.ComAutomation").Length > 0)
+            {
+                Thread.Sleep(250);
+            }
+        }
+
+        // Фолбэк: процессы, не отреагировавшие на плавное завершение.
         foreach (var процесс in Process.GetProcessesByName("Picket302.ComAutomation"))
         {
             try

@@ -487,7 +487,7 @@ public sealed class FormBlankEditor : Form
                 графика.DrawRectangle(пероВыделения, прямоугольник.X, прямоугольник.Y, прямоугольник.Width, прямоугольник.Height);
             }
 
-            using var шрифт = new Font("Tahoma", 7f);
+            using var шрифт = new Font("Segoe UI", 7f);
             графика.DrawString(поле.Name, шрифт, Brushes.Black, прямоугольник.X + 1f, прямоугольник.Y + 1f);
         }
     }

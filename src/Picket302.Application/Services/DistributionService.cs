@@ -22,6 +22,43 @@ public sealed record ClonedDistribution(
     int LettersCreated);
 
 /// <summary>
+/// Результат правки сохранённой рассылки: состав рассылки изменён без
+/// создания дублирующей записи (ТЗ §8.12, функция 156).
+/// </summary>
+/// <param name="Distribution">Изменённая рассылка с прежним идентификатором.</param>
+/// <param name="SkippedCounterparties">
+/// Наименования контрагентов, пропущенных при добавлении: удалены или без
+/// основного адреса.
+/// </param>
+/// <param name="LettersAdded">Число добавленных писем.</param>
+/// <param name="LettersRemoved">Число удалённых писем.</param>
+public sealed record UpdatedDistribution(
+    Distribution Distribution,
+    IReadOnlyList<string> SkippedCounterparties,
+    int LettersAdded,
+    int LettersRemoved);
+
+/// <summary>
+/// Запрос правки существующей рассылки (ТЗ §8.12, функция 156).
+/// </summary>
+/// <param name="DistributionId">Идентификатор изменяемой рассылки.</param>
+/// <param name="Name">Новое наименование.</param>
+/// <param name="Kind">Новый вид рассылки.</param>
+/// <param name="SenderId">
+/// Отправитель для новых писем; при отсутствии берётся сохранённый
+/// отправитель рассылки.
+/// </param>
+/// <param name="CounterpartyIds">Итоговый состав участников рассылки.</param>
+/// <param name="EnvelopeType">Формат конверта для новых писем.</param>
+public sealed record DistributionUpdateRequest(
+    long DistributionId,
+    string Name,
+    DistributionKind Kind,
+    long? SenderId,
+    IReadOnlyList<long> CounterpartyIds,
+    string? EnvelopeType = null);
+
+/// <summary>
 /// Рассылки: формирование, состав, повторная отправка и список
 /// (ТЗ §8.1, функция 21; §8.12, функции 140, 141, 142 и 156).
 /// </summary>
@@ -336,6 +373,167 @@ public sealed class DistributionService
 
         return Result<ClonedDistribution>.Success(
             new ClonedDistribution(копия, пропущены, создано));
+    }
+
+    /// <summary>
+    /// Изменяет сохранённую рассылку без создания дублирующей записи: правит
+    /// наименование и вид, добавляет письма новых участников, удаляет письма
+    /// исключённых и сохраняет неизменённые письма как есть (ТЗ §8.12,
+    /// функция 156 — «правка рассылки»).
+    /// </summary>
+    /// <remarks>
+    /// Идентификатор, момент создания, состояние и момент отправки рассылки
+    /// не заменяются. Участник письма зависит от вида рассылки: в «один ко
+    /// многим» участник — получатель письма (<c>CounterpartyId</c>), в
+    /// «многие к одному» — отправитель письма (<c>SenderId</c>). Изменение
+    /// выполняется в одной транзакции: при ошибке частично сохранённое
+    /// состояние откатывается.
+    /// </remarks>
+    /// <param name="запрос">Параметры правки.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Изменённая рассылка либо текст нарушения.</returns>
+    public async Task<Result<UpdatedDistribution>> UpdateDistributionAsync(
+        DistributionUpdateRequest запрос,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(запрос);
+        ArgumentNullException.ThrowIfNull(запрос.CounterpartyIds);
+
+        var разрешение = _ворота?.Проверить(LicenseOperation.СозданиеЗаписей);
+
+        if (разрешение is { Разрешено: false })
+        {
+            return Result<UpdatedDistribution>.Failure(разрешение.Сообщение);
+        }
+
+        if (запрос.CounterpartyIds.Count == 0)
+        {
+            return Result<UpdatedDistribution>.Failure(
+                "Список адресатов пуст — правка рассылки отменена.");
+        }
+
+        var рассылка = await _рассылки.GetByIdAsync(запрос.DistributionId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (рассылка is null)
+        {
+            return Result<UpdatedDistribution>.Failure(
+                $"Рассылка с идентификатором {запрос.DistributionId} не найдена.");
+        }
+
+        var отправитель = запрос.SenderId is > 0 ? запрос.SenderId : рассылка.SenderId;
+
+        if (отправитель is null or <= 0)
+        {
+            return Result<UpdatedDistribution>.Failure(
+                "Отправитель рассылки не указан — укажите или создайте отправителя.");
+        }
+
+        var участники = запрос.CounterpartyIds.Distinct().ToList();
+        var письма = await _письма
+            .GetByDistributionAsync(рассылка.Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        var пропущены = new List<string>();
+        var удалено = 0;
+        var добавлено = 0;
+
+        await _единицаРаботы.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            рассылка.Name = string.IsNullOrWhiteSpace(запрос.Name)
+                ? "Рассылка"
+                : запрос.Name.Trim();
+            рассылка.Kind = запрос.Kind;
+            рассылка.SenderId = отправитель;
+
+            await _рассылки.UpdateAsync(рассылка, cancellationToken).ConfigureAwait(false);
+
+            var оставшиеся = new HashSet<long>(участники);
+
+            foreach (var письмо in письма)
+            {
+                var участник = запрос.Kind == DistributionKind.OneToMany
+                    ? письмо.CounterpartyId
+                    : письмо.SenderId;
+
+                if (оставшиеся.Remove(участник))
+                {
+                    // Неизменённое письмо сохраняется как есть: копии,
+                    // категория и примечание не затираются.
+                    continue;
+                }
+
+                await _письма.DeleteAsync(письмо.Id, cancellationToken).ConfigureAwait(false);
+                удалено++;
+            }
+
+            if (оставшиеся.Count > 0)
+            {
+                var формат = письма.FirstOrDefault()?.EnvelopeType
+                    ?? запрос.EnvelopeType
+                    ?? "C6";
+
+                var план = new DistributionPlan
+                {
+                    Name = рассылка.Name,
+                    Kind = запрос.Kind,
+                    SenderId = отправитель.Value,
+                    CounterpartyIds = [.. оставшиеся],
+                    EnvelopeType = формат,
+                };
+
+                foreach (var участник in оставшиеся)
+                {
+                    var письмо = await СоздатьПисьмоAsync(
+                        рассылка.Id,
+                        план,
+                        участник,
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (письмо is null)
+                    {
+                        var контрагент = await _контрагенты
+                            .GetByIdAsync(участник, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        пропущены.Add(контрагент?.Name ?? $"#{участник}");
+                        continue;
+                    }
+
+                    await _письма.AddAsync(письмо, cancellationToken).ConfigureAwait(false);
+                    добавлено++;
+                }
+            }
+
+            var осталосьПисем = письма.Count - удалено + добавлено;
+
+            if (осталосьПисем == 0)
+            {
+                await _единицаРаботы.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                return Result<UpdatedDistribution>.Failure(
+                    "Ни у одного адресата не найден основной адрес — правка рассылки отменена.");
+            }
+
+            var конвертов = await _рассылки
+                .RecalculateEnvelopesRequiredAsync(рассылка.Id, cancellationToken)
+                .ConfigureAwait(false);
+
+            рассылка.EnvelopesRequired = конвертов;
+
+            await _рассылки.UpdateAsync(рассылка, cancellationToken).ConfigureAwait(false);
+
+            await _единицаРаботы.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            await _единицаРаботы.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+
+        return Result<UpdatedDistribution>.Success(
+            new UpdatedDistribution(рассылка, пропущены, добавлено, удалено));
     }
 
     /// <summary>

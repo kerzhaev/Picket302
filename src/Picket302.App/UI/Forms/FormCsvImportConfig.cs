@@ -72,7 +72,7 @@ public sealed class FormCsvImportConfig : Form
         _хранилище = хранилище ?? ImportWizardController.CreateProfileStore();
 
         Text = "Настройка разбора CSV";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

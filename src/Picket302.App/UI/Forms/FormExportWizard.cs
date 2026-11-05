@@ -196,7 +196,7 @@ public sealed class FormExportWizard : Form
         Записи = записи ?? Array.Empty<Counterparty>();
 
         Text = "Мастер выгрузки данных";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
@@ -653,7 +653,7 @@ public sealed class ДиалогПостДействия : Form
     public ДиалогПостДействия()
     {
         Text = "Сохранение файлов завершено";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

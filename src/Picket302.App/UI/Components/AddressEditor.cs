@@ -6,12 +6,12 @@ namespace Picket302.App.UI.Components;
 
 /// <summary>
 /// Редактор адреса: почтовый индекс, шесть строк и переключатель основного
-/// адреса (ТЗ §7.1: «Индекс: [220050] [▼]», «Стр 1: …» … «Стр 6: …»;
+/// адреса (ТЗ §7.1: «Индекс: [220050] [▼]», «Строка 1: …» … «Строка 6: …»;
 /// §8.1, функция 4: «Шесть строк адреса»).
 /// </summary>
 /// <remarks>
 /// Индекс редактируется в отдельном поле с кнопкой выбора из ранее
-/// использовавшихся индексов. Шесть строк адреса нумеруются как «Стр 1» … «Стр 6».
+/// использовавшихся индексов. Шесть строк адреса нумеруются как «Строка 1» … «Строка 6».
 /// </remarks>
 public sealed class AddressEditor : UserControl
 {
@@ -21,43 +21,73 @@ public sealed class AddressEditor : UserControl
     private readonly RadioButton _переключательОсновного = new();
     private readonly Label _заголовок = new();
     private readonly ComboBox _историяИндексов = new();
+    private readonly ToolTip _подсказки = new();
+    private readonly bool _показыватьЗаголовок;
+
+    /// <summary>
+    /// Подсказки к строкам адреса (аудит UX 2026-11-03, A3): подписи «Строка N»
+    /// дополнены всплывающими пояснениями общепринятого смысла строк.
+    /// </summary>
+    private static readonly string[] ПодсказкиСтрок =
+    [
+        "Наименование организации или фамилия",
+        "Подразделение, управление, отдел",
+        "Улица и дом",
+        "Корпус, строение, офис",
+        "Город или населённый пункт",
+        "Область, республика, край",
+    ];
 
     /// <summary>
     /// Создаёт редактор адреса.
     /// </summary>
     /// <param name="заголовок">Заголовок блока адреса.</param>
-    public AddressEditor(string заголовок)
+    public AddressEditor(string заголовок, bool показыватьЗаголовок = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(заголовок);
 
+        _показыватьЗаголовок = показыватьЗаголовок;
         Dock = DockStyle.Top;
         AutoSize = false;
-        Height = 150;
-        Padding = new Padding(2);
+        Height = 190;
+        Padding = new Padding(4, 2, 4, 2);
+        BackColor = Color.Transparent;
 
         _заголовок.Text = заголовок;
         _заголовок.AutoSize = true;
-        _заголовок.Font = new Font("Tahoma", 8f, FontStyle.Bold);
+        _заголовок.Font = EnvelopeUiTheme.ШрифтЗаголовка(8.5f);
+        _заголовок.ForeColor = EnvelopeUiTheme.MutedText;
         _заголовок.Location = new Point(4, 2);
+        _заголовок.Visible = _показыватьЗаголовок;
 
         var сетка = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 3,
+            ColumnCount = 4,
             RowCount = Address.LineCount + 1,
             AutoSize = true,
-            Padding = new Padding(0, 16, 0, 0),
+            Padding = new Padding(0, _показыватьЗаголовок ? 16 : 2, 0, 0),
+            BackColor = Color.Transparent,
         };
 
-        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
+        // Длинная подпись «Индекс:» должна оставаться одной строкой и на
+        // системном масштабе 100%, и на увеличенном шрифте Windows.
+        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
         сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 24));
+        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        for (var строка = 0; строка <= Address.LineCount; строка++)
+        {
+            сетка.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        }
 
         var меткаИндекса = new Label
         {
             Text = "Индекс:",
             AutoSize = true,
             Anchor = AnchorStyles.Left,
+            ForeColor = EnvelopeUiTheme.MutedText,
         };
 
         сетка.Controls.Add(меткаИндекса, 0, 0);
@@ -65,7 +95,8 @@ public sealed class AddressEditor : UserControl
         сетка.Controls.Add(_кнопкаИндекса, 2, 0);
 
         _полеИндекса.Dock = DockStyle.Fill;
-        _полеИндекса.Font = new Font("Tahoma", 8f);
+        _полеИндекса.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
+        _полеИндекса.Margin = new Padding(0, 2, 2, 2);
         _полеИндекса.KeyDown += (_, аргументы) =>
         {
             if (!FieldValueAutoComplete.ТребуетсяПодбор(
@@ -83,25 +114,36 @@ public sealed class AddressEditor : UserControl
 
         _кнопкаИндекса.Text = "▼";
         _кнопкаИндекса.Dock = DockStyle.Fill;
-        _кнопкаИндекса.Font = new Font("Tahoma", 8f);
-        _кнопкаИндекса.FlatStyle = FlatStyle.System;
+        _кнопкаИндекса.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
+        _кнопкаИндекса.FlatStyle = FlatStyle.Flat;
+        _кнопкаИндекса.FlatAppearance.BorderColor = EnvelopeUiTheme.Border;
+        _кнопкаИндекса.BackColor = EnvelopeUiTheme.PanelBackground;
+        _кнопкаИндекса.ForeColor = EnvelopeUiTheme.Text;
+        _кнопкаИндекса.AccessibleName = "Выбрать индекс из истории";
+        _кнопкаИндекса.AccessibleDescription = "Открывает список ранее использованных почтовых индексов";
+        _кнопкаИндекса.UseVisualStyleBackColor = false;
         _кнопкаИндекса.Click += (_, _) => ПоказатьИсториюИндексов();
 
         for (var строка = 0; строка < Address.LineCount; строка++)
         {
             var метка = new Label
             {
-                Text = $"Стр {строка + 1}:",
+                Text = $"Строка {строка + 1}:",
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
+                ForeColor = EnvelopeUiTheme.MutedText,
             };
 
             var поле = new TextBox
             {
                 Dock = DockStyle.Fill,
-                Font = new Font("Tahoma", 8f),
+                Font = EnvelopeUiTheme.ШрифтТекста(8.5f),
+                Margin = new Padding(0, 2, 2, 2),
                 Tag = строка,
             };
+
+            _подсказки.SetToolTip(поле, ПодсказкиСтрок[строка]);
+            поле.AccessibleName = $"Строка {строка + 1} адреса — {ПодсказкиСтрок[строка]}";
 
             _поляСтрок[строка] = поле;
 
@@ -109,17 +151,25 @@ public sealed class AddressEditor : UserControl
             сетка.Controls.Add(поле, 1, строка + 1);
         }
 
+        // Переключатель основного адреса живёт в таблице рядом с индексом:
+        // координатное размещение накладывалось на поле индекса (аудит UX
+        // 2026-11-03, G2).
         _переключательОсновного.Text = "основной";
         _переключательОсновного.AutoSize = true;
-        _переключательОсновного.Font = new Font("Tahoma", 8f);
-        _переключательОсновного.Location = new Point(60, 4);
+        _переключательОсновного.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
+        _переключательОсновного.ForeColor = EnvelopeUiTheme.MutedText;
+        _переключательОсновного.Anchor = AnchorStyles.Left;
+        _переключательОсновного.Margin = new Padding(6, 2, 0, 2);
+        _подсказки.SetToolTip(_переключательОсновного, "Считать этот адрес основным для контрагента");
+        сетка.Controls.Add(_переключательОсновного, 3, 0);
+
+        _подсказки.SetToolTip(_полеИндекса, "Почтовый индекс (6 цифр)");
 
         _историяИндексов.Visible = false;
         _историяИндексов.DropDownStyle = ComboBoxStyle.DropDownList;
 
         Controls.Add(сетка);
         Controls.Add(_заголовок);
-        Controls.Add(_переключательОсновного);
         Controls.Add(_историяИндексов);
     }
 

@@ -62,7 +62,7 @@ public sealed class FormConnectionSettings : Form
         _реестрСерверов = реестрСерверов;
 
         Text = "Подключение к базе данных";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

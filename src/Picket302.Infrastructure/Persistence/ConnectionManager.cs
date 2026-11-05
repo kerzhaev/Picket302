@@ -145,6 +145,7 @@ public sealed class ConnectionManager
     };
 
     private readonly string _путьНастроек;
+    private readonly string? _путьБазыПоУмолчанию;
     private readonly DpapiSecretStore _секреты;
     private ConnectionDescriptor _текущий;
 
@@ -162,12 +163,32 @@ public sealed class ConnectionManager
     /// <param name="путьНастроек">Путь к файлу настроек подключения.</param>
     /// <param name="каталогСекретов">Каталог хранилища DPAPI.</param>
     public ConnectionManager(string? путьНастроек, string? каталогСекретов = null)
+        : this(путьНастроек, каталогСекретов, null)
+    {
+    }
+
+    /// <summary>
+    /// Создаёт менеджер подключения с указанными путями и базой по умолчанию
+    /// профиля: изолированный тестовый профиль получает собственный путь базы
+    /// вместо реального профиля пользователя.
+    /// </summary>
+    /// <param name="путьНастроек">Путь к файлу настроек подключения.</param>
+    /// <param name="каталогСекретов">Каталог хранилища DPAPI.</param>
+    /// <param name="путьБазыПоУмолчанию">
+    /// Путь к базе по умолчанию, записываемый в реквизиты при отсутствии
+    /// файла настроек; <see langword="null"/> — реальный профиль пользователя.
+    /// </param>
+    public ConnectionManager(
+        string? путьНастроек,
+        string? каталогСекретов,
+        string? путьБазыПоУмолчанию)
     {
         _путьНастроек = путьНастроек ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Picket302",
             SettingsFileName);
 
+        _путьБазыПоУмолчанию = путьБазыПоУмолчанию;
         _секреты = new DpapiSecretStore(каталогСекретов);
         _текущий = ПрочитатьНастройки();
         IsFirstConnectionDone = _текущий.FirstConnectionDone;
@@ -365,7 +386,7 @@ public sealed class ConnectionManager
     {
         if (!File.Exists(_путьНастроек))
         {
-            return ConnectionDescriptor.Local(ПутьБазыПоУмолчанию());
+            return ConnectionDescriptor.Local(_путьБазыПоУмолчанию ?? ПутьБазыПоУмолчанию());
         }
 
         try
@@ -375,18 +396,18 @@ public sealed class ConnectionManager
 
             if (реквизиты is null)
             {
-                return ConnectionDescriptor.Local(ПутьБазыПоУмолчанию());
+                return ConnectionDescriptor.Local(_путьБазыПоУмолчанию ?? ПутьБазыПоУмолчанию());
             }
 
             return реквизиты;
         }
         catch (JsonException)
         {
-            return ConnectionDescriptor.Local(ПутьБазыПоУмолчанию());
+            return ConnectionDescriptor.Local(_путьБазыПоУмолчанию ?? ПутьБазыПоУмолчанию());
         }
         catch (IOException)
         {
-            return ConnectionDescriptor.Local(ПутьБазыПоУмолчанию());
+            return ConnectionDescriptor.Local(_путьБазыПоУмолчанию ?? ПутьБазыПоУмолчанию());
         }
     }
 

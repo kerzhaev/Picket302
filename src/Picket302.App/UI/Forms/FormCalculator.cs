@@ -16,7 +16,7 @@ public sealed class FormCalculator : Form
         Height = 28,
         ReadOnly = true,
         TextAlign = HorizontalAlignment.Right,
-        Font = new Font("Tahoma", 12f),
+            Font = new Font("Segoe UI", 12f),
     };
 
     private readonly Label _операция = new()
@@ -43,7 +43,7 @@ public sealed class FormCalculator : Form
     public FormCalculator()
     {
         Text = "Калькулятор";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedToolWindow;
         MinimizeBox = false;

@@ -23,7 +23,7 @@ public sealed class FormValuePicker : Form
         ArgumentNullException.ThrowIfNull(значения);
 
         Text = заголовок;
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
@@ -32,7 +32,7 @@ public sealed class FormValuePicker : Form
 
         _список.Location = new Point(8, 8);
         _список.Size = new Size(304, 200);
-        _список.Font = new Font("Tahoma", 8f);
+        _список.Font = new Font("Segoe UI", 8f);
 
         foreach (var значение in значения)
         {

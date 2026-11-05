@@ -45,7 +45,7 @@ public sealed class FormExceptionReport : Form
         _исключение = исключение;
 
         Text = "Ошибка программы";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.Sizable;
         MinimizeBox = false;

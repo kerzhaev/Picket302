@@ -131,6 +131,7 @@ public sealed class MainShellUxFixesTests
         .SelectMany(полоса => полоса.Items.Cast<ToolStripItem>())
         .Select(пункт => пункт.Text)
         .Where(текст => !string.IsNullOrEmpty(текст))
+        .Cast<string>()
         .ToArray();
 
     /// <summary>

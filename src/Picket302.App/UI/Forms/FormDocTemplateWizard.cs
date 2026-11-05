@@ -84,7 +84,7 @@ public sealed class FormDocTemplateWizard : Form
         _контроллер = new DocTemplateWizardController(parameters: значения);
 
         Text = "Мастер редактирования шаблонов документов";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

@@ -117,13 +117,48 @@ public sealed class ComRegistration
         using (var progId = Registry.CurrentUser.CreateSubKey($@"{_classesRoot}\{ComAutomationIds.ProgId}", writable: true))
         {
             progId?.SetValue(string.Empty, ServerDescription, RegistryValueKind.String);
+            // The canonical ProgID -> CLSID link is a named REG_SZ value. A
+            // previous build also wrote a CLSID subkey; the compatibility
+            // form is retained below while this canonical link is restored.
             progId?.SetValue("CLSID", FormatGuid(ComAutomationIds.ClassId), RegistryValueKind.String);
+        }
+
+        // CLSIDFromProgID on the Windows builds used by the application
+        // resolves the traditional default value of the CLSID subkey. Keep
+        // that compatibility form alongside the documented named value.
+        using (var progIdClsid = Registry.CurrentUser.CreateSubKey(
+                   $@"{_classesRoot}\{ComAutomationIds.ProgId}\CLSID",
+                   writable: true))
+        {
+            progIdClsid?.SetValue(string.Empty, FormatGuid(ComAutomationIds.ClassId), RegistryValueKind.String);
         }
 
         using (var clsid = Registry.CurrentUser.CreateSubKey($@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}", writable: true))
         {
             clsid?.SetValue(string.Empty, ServerDescription, RegistryValueKind.String);
             clsid?.SetValue("AppID", FormatGuid(AppId), RegistryValueKind.String);
+            // Both reverse links are named REG_SZ values on the CLSID key.
+            // Write the canonical values even when an older installation
+            // already contains the compatibility subkeys below.
+            clsid?.SetValue("ProgID", ComAutomationIds.ProgId, RegistryValueKind.String);
+            clsid?.SetValue("VersionIndependentProgID", ComAutomationIds.ProgId, RegistryValueKind.String);
+        }
+
+        // Keep the old default-value subkeys too. They are harmless and make
+        // the registration readable by legacy COM tooling that expects the
+        // reverse links in subkey form.
+        using (var clsidProgId = Registry.CurrentUser.CreateSubKey(
+                   $@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}\ProgID",
+                   writable: true))
+        {
+            clsidProgId?.SetValue(string.Empty, ComAutomationIds.ProgId, RegistryValueKind.String);
+        }
+
+        using (var clsidVersionIndependentProgId = Registry.CurrentUser.CreateSubKey(
+                   $@"{_classesRoot}\CLSID\{FormatGuid(ComAutomationIds.ClassId)}\VersionIndependentProgID",
+                   writable: true))
+        {
+            clsidVersionIndependentProgId?.SetValue(string.Empty, ComAutomationIds.ProgId, RegistryValueKind.String);
         }
 
         using (var localServer = Registry.CurrentUser.CreateSubKey(
@@ -131,6 +166,11 @@ public sealed class ComRegistration
                    writable: true))
         {
             localServer?.SetValue(string.Empty, Quote(_serverPath), RegistryValueKind.String);
+            // ServerExecutable is passed as lpApplicationName to
+            // CreateProcess, removing any ambiguity caused by spaces or
+            // arguments in LocalServer32's command line.
+            localServer?.SetValue("ServerExecutable", _serverPath, RegistryValueKind.String);
+            localServer?.Flush();
         }
 
         using (var appId = Registry.CurrentUser.CreateSubKey($@"{_classesRoot}\AppID\{FormatGuid(AppId)}", writable: true))
@@ -319,8 +359,13 @@ public sealed class ComRegistration
 
     private static string FormatGuid(string value) => $"{{{value}}}";
 
-    private static string Quote(string path) =>
-        path.Contains(' ') && !path.StartsWith('"') ? $"\"{path}\"" : path;
+    /// <summary>
+    /// Заключает путь LocalServer32 в кавычки всегда: значение ветки читает
+    /// SCM при запуске сервера, и кавычки делают разбор пути независимым от
+    /// пробелов в каталоге установки (запуск из каталога без пробелов тоже
+    /// остаётся корректным).
+    /// </summary>
+    private static string Quote(string path) => $"\"{path}\"";
 
     /// <summary>
     /// Определяет путь к исполняемому файлу COM-сервера.

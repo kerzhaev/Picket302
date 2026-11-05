@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using System.Globalization;
 using System.Windows.Forms;
 using Picket302.App.UI.Components;
+using Picket302.Application.Services;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 
@@ -31,6 +32,8 @@ public sealed class FormDistributionEditor : Form
     private readonly Button _отмена = new();
     private readonly TextBox _наименование = new();
     private readonly ComboBox _видРассылки = new();
+    private readonly Label _подсказкаПолучателей = new();
+    private readonly ToolTip _подсказки = new();
 
     private IReadOnlyList<Counterparty> _всеКонтрагенты = [];
     private IReadOnlyList<Category> _категорииСправочника = [];
@@ -56,14 +59,16 @@ public sealed class FormDistributionEditor : Form
         _создание = рассылка is null;
         _рассылка = рассылка ?? new Distribution();
 
-        Text = _создание ? "Новая рассылка" : "Рассылка";
-        Font = new Font("Tahoma", 8f);
+        Text = _создание ? "Новая рассылка" : $"Правка рассылки — {_рассылка.Name}";
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(900, 560);
+        ClientSize = new Size(940, 580);
+        MinimumSize = new Size(760, 480);
 
         ПостроитьИнтерфейс();
+        EnvelopeUiTheme.ОформитьОкно(this);
+        EnvelopeUiTheme.ОформитьОсновнуюКнопку(_сохранить);
 
         ЗагрузитьДанныеAsync();
     }
@@ -75,54 +80,86 @@ public sealed class FormDistributionEditor : Form
     public Distribution? Результат { get; private set; }
 
     /// <summary>
-    /// Строит элементы формы.
+    /// Строит элементы формы: шапка параметров и кнопки на гибких контейнерах,
+    /// поэтому поля не перекрываются и кнопки не исчезают при изменении
+    /// размера окна (аудит UX 2026-11-03, G2: отказ от координатной компоновки).
     /// </summary>
     private void ПостроитьИнтерфейс()
     {
-        var верх = new Panel { Dock = DockStyle.Top, Height = 60 };
+        // Шапка: подпись/поле «Наименование», «Вид» и «Категория» тянутся
+        // пропорционально ширине окна.
+        var верх = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(8, 8, 8, 4),
+        };
+
+        верх.ColumnCount = 6;
+        верх.RowCount = 1;
+        верх.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        верх.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45f));
+        верх.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        верх.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+        верх.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        верх.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35f));
 
         var меткаНаименования = new Label
         {
             Text = "Наименование:",
-            AutoSize = true,
-            Location = new Point(8, 8),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 4, 4, 0),
         };
 
-        _наименование.Location = new Point(110, 5);
-        _наименование.Width = 280;
+        _наименование.Dock = DockStyle.Fill;
+        _наименование.Margin = new Padding(0, 0, 8, 0);
 
         var меткаВида = new Label
         {
             Text = "Вид:",
-            AutoSize = true,
-            Location = new Point(400, 8),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 4, 4, 0),
         };
 
         _видРассылки.DropDownStyle = ComboBoxStyle.DropDownList;
-        _видРассылки.Location = new Point(430, 5);
-        _видРассылки.Width = 180;
+        _видРассылки.Dock = DockStyle.Fill;
+        _видРассылки.Margin = new Padding(0, 0, 8, 0);
         _видРассылки.Items.Add("Один ко многим");
         _видРассылки.Items.Add("Многие к одному");
         _видРассылки.SelectedIndex = 0;
 
+        // Вид существующей рассылки не меняется: роли писем («один ко многим»
+        // и «многие к одному») имеют разную семантику, и смена вида без
+        // пересоздания состава молча переориентировала бы письма. Для другого
+        // вида создаётся новая рассылка.
+        if (!_создание)
+        {
+            _видРассылки.Enabled = false;
+            _подсказки.SetToolTip(
+                _видРассылки,
+                "Вид существующей рассылки нельзя изменить без пересоздания состава писем. Создайте новую рассылку нужного вида.");
+        }
+
         var меткаКатегории = new Label
         {
             Text = "Категория:",
-            AutoSize = true,
-            Location = new Point(620, 8),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 4, 4, 0),
         };
 
         _категории.DropDownStyle = ComboBoxStyle.DropDownList;
-        _категории.Location = new Point(690, 5);
-        _категории.Width = 190;
+        _категории.Dock = DockStyle.Fill;
         _категории.SelectedIndexChanged += (_, _) => ОбновитьДоступные();
 
-        верх.Controls.Add(меткаНаименования);
-        верх.Controls.Add(_наименование);
-        верх.Controls.Add(меткаВида);
-        верх.Controls.Add(_видРассылки);
-        верх.Controls.Add(меткаКатегории);
-        верх.Controls.Add(_категории);
+        верх.Controls.Add(меткаНаименования, 0, 0);
+        верх.Controls.Add(_наименование, 1, 0);
+        верх.Controls.Add(меткаВида, 2, 0);
+        верх.Controls.Add(_видРассылки, 3, 0);
+        верх.Controls.Add(меткаКатегории, 4, 0);
+        верх.Controls.Add(_категории, 5, 0);
 
         var разделитель = new SplitContainer
         {
@@ -132,15 +169,15 @@ public sealed class FormDistributionEditor : Form
         };
 
         _доступные.Dock = DockStyle.Fill;
-        _доступные.Font = new Font("Tahoma", 8f);
         _доступные.ReadOnly = true;
         _доступные.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _доступные.MultiSelect = true;
         _доступные.RowHeadersVisible = false;
+        _доступные.AllowUserToAddRows = false;
         _доступные.Columns.Add("Наименование", "Наименование");
         _доступные.Columns.Add("Индекс", "Индекс");
         _доступные.Columns.Add("Город", "Город");
-        _доступные.Columns[0].Width = 260;
+        _доступные.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         _доступные.Columns[1].Width = 70;
         _доступные.Columns[2].Width = 140;
         _доступные.MouseDown += ЗапомнитьТочкуПеретаскивания;
@@ -148,7 +185,6 @@ public sealed class FormDistributionEditor : Form
         _доступные.CellDoubleClick += (_, _) => ДобавитьВыделенные();
 
         _получатели.Dock = DockStyle.Fill;
-        _получатели.Font = new Font("Tahoma", 8f);
         _получатели.View = View.Details;
         _получатели.FullRowSelect = true;
         _получатели.AllowDrop = true;
@@ -161,11 +197,22 @@ public sealed class FormDistributionEditor : Form
         _получатели.DragEnter += ПринятьПеретаскивание;
         _получатели.DragDrop += РазместитьПеретаскивание;
 
+        // Подсказка пустого списка получателей (аудит UX 2026-11-03, G5):
+        // вместо пустого поля объясняется первое действие.
+        _подсказкаПолучателей.Text = "Получатели не выбраны." + Environment.NewLine
+            + "Выделите контрагентов слева и дважды щёлкните," + Environment.NewLine
+            + "перетащите их сюда или нажмите «Добавить всех активных».";
+        _подсказкаПолучателей.Dock = DockStyle.Fill;
+        _подсказкаПолучателей.TextAlign = ContentAlignment.MiddleCenter;
+        _подсказкаПолучателей.Visible = false;
+
         var кнопкиДобавления = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 30,
+            Height = 34,
             FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(4, 2, 4, 2),
+            WrapContents = false,
         };
 
         _добавитьВсехАктивных.Text = "Добавить всех активных";
@@ -191,27 +238,38 @@ public sealed class FormDistributionEditor : Form
         разделитель.Panel1.Controls.Add(_доступные);
         разделитель.Panel1.Controls.Add(кнопкиДобавления);
         разделитель.Panel2.Controls.Add(_получатели);
+        разделитель.Panel2.Controls.Add(_подсказкаПолучателей);
 
-        var низ = new Panel { Dock = DockStyle.Bottom, Height = 52 };
+        // Низ: счётчик слева, кнопки прижаты к правому краю потоком — при
+        // узком окне кнопки не уходят за границу (аудит UX 2026-11-03, G2).
+        var низ = new Panel { Dock = DockStyle.Bottom, Height = 52, Padding = new Padding(8, 0, 8, 0) };
 
-        _счётчикКонвертов.AutoSize = true;
-        _счётчикКонвертов.Location = new Point(8, 10);
-        _счётчикКонвертов.Font = new Font("Tahoma", 8f, FontStyle.Bold);
+        _счётчикКонвертов.Dock = DockStyle.Fill;
+        _счётчикКонвертов.TextAlign = ContentAlignment.MiddleLeft;
+        _счётчикКонвертов.Font = EnvelopeUiTheme.ШрифтЗаголовка(8.5f);
         _счётчикКонвертов.Text = "Всего необходимо конвертов: 0";
 
+        var кнопкиИтога = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 10, 0, 0),
+        };
+
         _сохранить.Text = "Сохранить";
-        _сохранить.Size = new Size(90, 24);
-        _сохранить.Location = new Point(700, 24);
+        _сохранить.AutoSize = true;
         _сохранить.Click += (_, _) => Сохранить();
 
         _отмена.Text = "Отмена";
-        _отмена.Size = new Size(90, 24);
-        _отмена.Location = new Point(796, 24);
+        _отмена.AutoSize = true;
         _отмена.DialogResult = DialogResult.Cancel;
 
+        кнопкиИтога.Controls.Add(_отмена);
+        кнопкиИтога.Controls.Add(_сохранить);
+
         низ.Controls.Add(_счётчикКонвертов);
-        низ.Controls.Add(_сохранить);
-        низ.Controls.Add(_отмена);
+        низ.Controls.Add(кнопкиИтога);
 
         Controls.Add(разделитель);
         Controls.Add(низ);
@@ -258,7 +316,14 @@ public sealed class FormDistributionEditor : Form
 
                 foreach (var письмо in письма)
                 {
-                    var контрагент = _всеКонтрагенты.FirstOrDefault(сущ => сущ.Id == письмо.CounterpartyId);
+                    // Участник письма зависит от вида рассылки: в «один ко
+                    // многим» перечисляются получатели, в «многие к одному» —
+                    // отправители писем.
+                    var участник = _рассылка.Kind == DistributionKind.ManyToOne
+                        ? письмо.SenderId
+                        : письмо.CounterpartyId;
+
+                    var контрагент = _всеКонтрагенты.FirstOrDefault(сущ => сущ.Id == участник);
 
                     if (контрагент is not null)
                     {
@@ -412,7 +477,8 @@ public sealed class FormDistributionEditor : Form
     }
 
     /// <summary>
-    /// Пересчитывает и показывает счётчик «Всего необходимо конвертов».
+    /// Пересчитывает и показывает счётчик «Всего необходимо конвертов»
+    /// и подсказку пустого списка получателей.
     /// </summary>
     private void ОбновитьСчётчик()
     {
@@ -427,6 +493,8 @@ public sealed class FormDistributionEditor : Form
         }
 
         _счётчикКонвертов.Text = $"Всего необходимо конвертов: {конвертов}";
+        _подсказкаПолучателей.Visible = _получатели.Items.Count == 0;
+        _получатели.Visible = _получатели.Items.Count > 0;
     }
 
     /// <summary>
@@ -507,25 +575,21 @@ public sealed class FormDistributionEditor : Form
     }
 
     /// <summary>
-    /// Сохраняет рассылку: создаёт письма по составу получателей.
+    /// Сохраняет рассылку: новая создаётся с письмами по составу получателей,
+    /// существующая изменяется без создания дублирующей записи (ТЗ §8.12,
+    /// функция 156).
     /// </summary>
+    /// <remarks>
+    /// Отправитель: для новой рассылки обязателен текущий глобальный
+    /// отправитель; для правки значение по умолчанию — сохранённый отправитель
+    /// рассылки (<c>_рассылка.SenderId</c>), и только при его отсутствии
+    /// берётся текущий. Случайная замена сохранённого отправителя текущим
+    /// глобальным не выполняется.
+    /// </remarks>
     private async void Сохранить()
     {
         try
         {
-            var отправитель = _состав.ТекущийОтправитель.CurrentSenderId;
-
-            if (отправитель is null or <= 0)
-            {
-                MessageBox.Show(
-                    this,
-                    "Не выбран текущий отправитель — укажите его в верхней части главного окна.",
-                    "Рассылка",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
             if (_получатели.Items.Count == 0)
             {
                 MessageBox.Show(
@@ -541,27 +605,103 @@ public sealed class FormDistributionEditor : Form
                 .Select(элемент => (long)элемент.Tag!)
                 .ToList();
 
-            var план = new DistributionPlan
-            {
-                Name = string.IsNullOrWhiteSpace(_наименование.Text) ? "Рассылка" : _наименование.Text.Trim(),
-                Kind = _видРассылки.SelectedIndex == 1
-                    ? DistributionKind.ManyToOne
-                    : DistributionKind.OneToMany,
-                SenderId = отправитель.Value,
-                CounterpartyIds = идентификаторы,
-            };
+            var имя = string.IsNullOrWhiteSpace(_наименование.Text)
+                ? "Рассылка"
+                : _наименование.Text.Trim();
 
-            var результат = await _состав.СлужбаРассылок
-                .GenerateDistributionAsync(план)
-                .ConfigureAwait(true);
+            var вид = _видРассылки.SelectedIndex == 1
+                ? DistributionKind.ManyToOne
+                : DistributionKind.OneToMany;
 
-            if (результат.IsFailure)
+            if (_создание)
             {
-                MessageBox.Show(this, результат.Error!, "Рассылка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                var текущий = _состав.ТекущийОтправитель.CurrentSenderId;
+
+                if (текущий is null or <= 0)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Не выбран текущий отправитель — укажите его в верхней части главного окна.",
+                        "Рассылка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var план = new DistributionPlan
+                {
+                    Name = имя,
+                    Kind = вид,
+                    SenderId = текущий.Value,
+                    CounterpartyIds = идентификаторы,
+                };
+
+                var создание = await _состав.СлужбаРассылок
+                    .GenerateDistributionAsync(план)
+                    .ConfigureAwait(true);
+
+                if (создание.IsFailure)
+                {
+                    MessageBox.Show(this, создание.Error!, "Рассылка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                Результат = создание.Value;
+                DialogResult = DialogResult.OK;
+                Close();
                 return;
             }
 
-            Результат = результат.Value;
+            // Правка: сохранённый отправитель рассылки — значение по
+            // умолчанию; текущий глобальный используется только если
+            // сохранённого нет.
+            var отправительРассылки = _рассылка.SenderId is > 0
+                ? _рассылка.SenderId
+                : _состав.ТекущийОтправитель.CurrentSenderId;
+
+            if (отправительРассылки is null or <= 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "У рассылки не указан отправитель, и текущий отправитель не выбран — укажите отправителя в верхней части главного окна.",
+                    "Рассылка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Вид заблокирован при правке (см. ПостроитьИнтерфейс); в запрос
+            // передаётся вид самой рассылки, а не прочитанное из
+            // заблокированного списка значение.
+            var запрос = new DistributionUpdateRequest(
+                _рассылка.Id,
+                имя,
+                _рассылка.Kind,
+                отправительРассылки,
+                идентификаторы);
+
+            var правка = await _состав.СлужбаРассылок
+                .UpdateDistributionAsync(запрос)
+                .ConfigureAwait(true);
+
+            if (правка.IsFailure)
+            {
+                MessageBox.Show(this, правка.Error!, "Рассылка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (правка.Value.SkippedCounterparties.Count > 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "Пропущены контрагенты без основного адреса: "
+                    + string.Join(", ", правка.Value.SkippedCounterparties) + ".",
+                    "Рассылка",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+
+            Результат = правка.Value.Distribution;
             DialogResult = DialogResult.OK;
             Close();
         }

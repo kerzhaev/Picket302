@@ -40,7 +40,7 @@ public sealed class FormLegacyUpgradeWizard : Form
         _импортёр = импортёр;
 
         Text = "Загрузка данных из предыдущей версии";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
@@ -118,7 +118,7 @@ public sealed class FormLegacyUpgradeWizard : Form
             Text = "Загрузка данных из предыдущей (бесплатной) версии Picket302.",
             AutoSize = true,
             Location = new Point(10, 10),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         var пояснение = new Label

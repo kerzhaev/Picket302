@@ -28,7 +28,7 @@ public sealed class FormSearch : Form
     public FormSearch(string? текущийЗапрос = null, int совпадений = 0)
     {
         Text = "Поиск";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

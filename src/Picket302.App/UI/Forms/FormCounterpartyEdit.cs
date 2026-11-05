@@ -92,7 +92,7 @@ public sealed class FormCounterpartyEdit : Form
         _контрагент = контрагент ?? new Counterparty();
 
         Text = _создание ? "Новый контрагент" : "Карточка контрагента";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
@@ -234,7 +234,7 @@ public sealed class FormCounterpartyEdit : Form
         панельАдресов.Controls.Add(_почтовыйАдрес);
 
         _пользовательскиеПоля.Dock = DockStyle.Fill;
-        _пользовательскиеПоля.Font = new Font("Tahoma", 8f);
+        _пользовательскиеПоля.Font = new Font("Segoe UI", 8f);
         _пользовательскиеПоля.AllowUserToAddRows = true;
         _пользовательскиеПоля.AllowUserToDeleteRows = true;
         _пользовательскиеПоля.RowHeadersVisible = false;
@@ -262,7 +262,7 @@ public sealed class FormCounterpartyEdit : Form
             Text = "Пользовательские поля (в макетах доступны по тегу вида [Custom_ИмяПоля]):",
             Dock = DockStyle.Top,
             AutoSize = true,
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         панельПользовательских.Controls.Add(_пользовательскиеПоля);
@@ -364,7 +364,7 @@ public sealed class FormCounterpartyEdit : Form
         };
 
         поле.Dock = DockStyle.Fill;
-        поле.Font = new Font("Tahoma", 8f);
+        поле.Font = new Font("Segoe UI", 8f);
         поле.Margin = new Padding(0, 0, 6, 2);
 
         таблица.Controls.Add(метка, колонка, строка);

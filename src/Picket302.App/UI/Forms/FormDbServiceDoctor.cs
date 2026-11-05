@@ -35,7 +35,7 @@ public sealed class FormDbServiceDoctor : Form
         _диагност = диагност;
 
         Text = "Диагностика сервера базы данных";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;

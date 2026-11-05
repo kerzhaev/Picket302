@@ -42,7 +42,7 @@ public sealed class FormUsbInstallWizard : Form
         _установщик = установщик;
 
         Text = "Установка на USB-флешку";
-        Font = new Font("Tahoma", 8f);
+        Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
@@ -214,7 +214,7 @@ public sealed class FormUsbInstallWizard : Form
             Text = "Режим установки:",
             AutoSize = true,
             Location = new Point(10, 10),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         _всёЦеликом.Text = "Всё целиком (программа, переносная СУБД и база данных)";
@@ -274,7 +274,7 @@ public sealed class FormUsbInstallWizard : Form
             Text = "Объём данных:",
             AutoSize = true,
             Location = new Point(10, 118),
-            Font = new Font("Tahoma", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
         _требуется.AutoSize = true;

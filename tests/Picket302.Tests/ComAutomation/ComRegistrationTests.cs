@@ -16,7 +16,6 @@ namespace Picket302.Tests.ComAutomation;
 public sealed class ComRegistrationTests : IDisposable
 {
     private const string ТестовыйКорень = @"Software\Picket302.Tests\Classes";
-    private const string ТестовыйКореньПродукта = @"Software\Picket302.Tests";
 
     private readonly ComRegistration _регистрация;
 
@@ -38,7 +37,11 @@ public sealed class ComRegistrationTests : IDisposable
 
         try
         {
-            Registry.CurrentUser.DeleteSubKeyTree(ТестовыйКореньПродукта, throwOnMissingSubKey: false);
+            // Удаляется только собственная ветка «Classes»: под родителем
+            // «Software\Picket302.Tests» параллельные тесты (TestRegistryScope)
+            // держат свои ключи, и удаление всего дерева порождает редкий
+            // плавающий сбой соседней коллекции.
+            Registry.CurrentUser.DeleteSubKeyTree(ТестовыйКорень, throwOnMissingSubKey: false);
         }
         catch (Exception)
         {
@@ -58,7 +61,10 @@ public sealed class ComRegistrationTests : IDisposable
         var библиотека = $@"{ТестовыйКорень}\TypeLib\{{{ComAutomationIds.TypeLibId}}}\{ComAutomationIds.TypeLibVersion}\0\win64";
 
         Assert.True(ComRegistration.KeyExists(progId));
+        Assert.True(ComRegistration.KeyExists($@"{progId}\CLSID"));
         Assert.True(ComRegistration.KeyExists(clsid));
+        Assert.True(ComRegistration.KeyExists($@"{clsid}\ProgID"));
+        Assert.True(ComRegistration.KeyExists($@"{clsid}\VersionIndependentProgID"));
         Assert.True(ComRegistration.KeyExists($@"{clsid}\LocalServer32"));
         Assert.True(ComRegistration.KeyExists(appId));
         Assert.True(ComRegistration.KeyExists(интерфейс));
@@ -70,15 +76,42 @@ public sealed class ComRegistrationTests : IDisposable
 
         Assert.Equal(
             $"{{{ComAutomationIds.ClassId}}}",
+            ComRegistration.ReadValue($@"{progId}\CLSID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
+            ComRegistration.ReadValue(clsid, "ProgID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
+            ComRegistration.ReadValue($@"{clsid}\ProgID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
+            ComRegistration.ReadValue(clsid, "VersionIndependentProgID"));
+
+        Assert.Equal(
+            ComAutomationIds.ProgId,
+            ComRegistration.ReadValue($@"{clsid}\VersionIndependentProgID"));
+
+        Assert.Equal(
+            $"{{{ComAutomationIds.ClassId}}}",
             ComRegistration.ReadValue(clsid, "AppID"));
 
         Assert.Equal(
             $"{{{ComAutomationIds.ClassId}}}",
             ComRegistration.ReadValue(appId, "CLSID"));
 
+        // Путь LocalServer32 всегда записывается в кавычках: SCM разбирает
+        // командную строку запуска сервера, и кавычки делают путь корректным
+        // и при пробелах в каталоге, и без них.
+        Assert.Equal(
+            $"\"{_регистрация.ServerPath}\"",
+            ComRegistration.ReadValue($@"{clsid}\LocalServer32"));
+
         Assert.Equal(
             _регистрация.ServerPath,
-            ComRegistration.ReadValue($@"{clsid}\LocalServer32"));
+            ComRegistration.ReadValue($@"{clsid}\LocalServer32", "ServerExecutable"));
 
         // Универсальный маршалер автоматизации назначается веткой
         // ProxyStubClsid32 со CLSID стандартного прокси oleaut32.dll (F-E19):
