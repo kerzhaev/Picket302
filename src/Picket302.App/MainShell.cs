@@ -3332,7 +3332,7 @@ public sealed class MainShell : Form
                 MessageBoxIcon.Warning);
         }
 
-        if (итог.Ошибка is not null)
+        if (итог.Ошибка is not null && !итог.ОшибкаСообщенаОператору)
         {
             MessageBox.Show(this, итог.Ошибка, "Печать рассылок", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
@@ -3348,8 +3348,10 @@ public sealed class MainShell : Form
 
     /// <summary>
     /// Запускает печатную операцию рассылок через общий конвейер печати:
-    /// диалог, предпросмотр и спулер. Ошибки конвейера показываются
-    /// оператору внутри конвейера; сюда возвращается лишь итог.
+    /// диалог, предпросмотр и спулер. Итог конвейера передаётся без
+    /// схлопывания: успех, отмена оператора и ошибка различаются, сообщение
+    /// ошибки и признак его показа сохраняются. Исключения доступа к данным
+    /// переводятся в ошибку с текстом.
     /// </summary>
     /// <param name="mailIds">Идентификаторы писем.</param>
     /// <returns>Итог операции.</returns>
@@ -3357,10 +3359,8 @@ public sealed class MainShell : Form
     {
         try
         {
-            var успех = await ВыполнитьПечатьAsync(mailIds, сПредпросмотром: true, пакетнаяПечать: true)
+            return await ВыполнитьПечатьAsync(mailIds, сПредпросмотром: true, пакетнаяПечать: true)
                 .ConfigureAwait(true);
-
-            return успех ? Printing.ПечатьИтог.Выполнено : Printing.ПечатьИтог.Отменено;
         }
         catch (Exception исключение) when (исключение is SqliteException or InvalidOperationException or IOException)
         {
@@ -4174,11 +4174,14 @@ public sealed class MainShell : Form
     /// <param name="сПредпросмотром">Признак показа интерактивного предпросмотра.</param>
     /// <param name="пакетнаяПечать">Признак пакетной печати (F6 / F7).</param>
     /// <returns>
-    /// <see langword="true"/> — сессия завершилась успешно;
-    /// <see langword="false"/> — отменена оператором, заблокирована или
-    /// завершена с ошибкой (ошибка уже показана оператору).
+    /// Итог операции с различением состояний: «Выполнено» — успех;
+    /// «Отменено» — оператор отказался (диалог, подсказка подачи,
+    /// предпросмотр, отмена блокировки размера); «Ошибка» — отказ конвейера,
+    /// отсутствие принтера или сохраняющаяся блокировка размера.
+    /// Для ошибок, уже показанных оператору внутри сессии, выставлен
+    /// признак <see cref="Printing.ПечатьИтог.СообщениеПоказано"/>.
     /// </returns>
-    private async Task<bool> ВыполнитьПечатьAsync(
+    private async Task<Printing.ПечатьИтог> ВыполнитьПечатьAsync(
         IReadOnlyList<long> mailIds,
         bool сПредпросмотром,
         bool пакетнаяПечать = false)
@@ -4187,7 +4190,7 @@ public sealed class MainShell : Form
 
         if (состав is null || mailIds.Count == 0)
         {
-            return false;
+            return Printing.ПечатьИтог.Отменено;
         }
 
         // ТЗ §8.6, функция 78: без принтера по умолчанию печать блокируется.
@@ -4200,7 +4203,10 @@ public sealed class MainShell : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
 
-            return false;
+            return new Printing.ПечатьИтог(
+                Printing.ПечатьКод.Ошибка,
+                PrinterManager.NoDefaultPrinterMessage,
+                СообщениеПоказано: true);
         }
 
         var запрос = await ПоказатьДиалогПечатиAsync(mailIds, сПредпросмотром, пакетнаяПечать)
@@ -4208,7 +4214,7 @@ public sealed class MainShell : Form
 
         if (запрос is null)
         {
-            return false;
+            return Printing.ПечатьИтог.Отменено;
         }
 
         if (await состав.ПодсказкаПодачи.ShouldShowAsync().ConfigureAwait(true))
@@ -4217,7 +4223,7 @@ public sealed class MainShell : Form
 
             if (подсказка.ShowDialog(this) != DialogResult.OK)
             {
-                return false;
+                return Printing.ПечатьИтог.Отменено;
             }
 
             if (подсказка.ПодавитьПредупреждение)
@@ -4232,7 +4238,7 @@ public sealed class MainShell : Form
             // задания в спулер; отказ оператора отменяет печать.
             if (сПредпросмотром && !await ПоказатьПредпросмотрAsync(запрос).ConfigureAwait(true))
             {
-                return false;
+                return Printing.ПечатьИтог.Отменено;
             }
 
             var итог = await ЗапуститьПечатьAsync(mailIds, запрос).ConfigureAwait(true);
@@ -4247,16 +4253,21 @@ public sealed class MainShell : Form
                         "Печать",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
+
+                    return new Printing.ПечатьИтог(
+                        Printing.ПечатьКод.Ошибка,
+                        итог.ErrorMessage,
+                        СообщениеПоказано: true);
                 }
 
-                return итог.IsSuccess;
+                return Printing.ПечатьИтог.ИзРезультатаКонвейера(итог);
             }
 
             var решение = await ПоказатьДиалогРазмераAsync(запрос).ConfigureAwait(true);
 
             if (решение == PaperSizeBlockedDecision.Отмена)
             {
-                return false;
+                return Printing.ПечатьИтог.Отменено;
             }
 
             if (решение == PaperSizeBlockedDecision.ЗафиксироватьA4)
@@ -4270,14 +4281,17 @@ public sealed class MainShell : Form
 
             if (новыйЗапрос is null)
             {
-                return false;
+                return Printing.ПечатьИтог.Отменено;
             }
 
             запрос = новыйЗапрос;
         }
 
-        // После трёх попыток блокировка размера сохраняется — успеха нет.
-        return false;
+        // После трёх попыток блокировка размера сохраняется: оператору
+        // показывают причину, успех не заявляется.
+        return new Printing.ПечатьИтог(
+            Printing.ПечатьКод.Ошибка,
+            "Печать не выполнена: размер конверта не помещается на выбранный лист.");
     }
 
     /// <summary>
