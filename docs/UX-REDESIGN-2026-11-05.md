@@ -1,4 +1,4 @@
-# UX-редизайн Picket302 — этап 2026-11-05/06
+# UX-редизайн Picket302 — этап 2026-11-05/07
 
 ## 1. Цель этапа
 
@@ -293,34 +293,46 @@ WinForms-форм в параллельных коллекциях и глоба
 
     dotnet test .\tests\Picket302.Tests\Picket302.Tests.csproj -c Debug --no-build --nologo --filter "FullyQualifiedName~App|FullyQualifiedName~Application|FullyQualifiedName~Domain|FullyQualifiedName~Infrastructure|FullyQualifiedName~Printing|FullyQualifiedName~Licensing|FullyQualifiedName~Architecture" --logger "console;verbosity=minimal"
 
-→ **1227/1227** (0 fail, 0 skip).
+→ **1251/1251** (0 fail, 0 skip).
 
 Не запускались (вне области): `FullyQualifiedName~ComAutomation`,
 `FullyQualifiedName~Acceptance`.
 
-## 8. Статусы (свежие прогоны 2026-11-06, вторая серия замечаний)
+## 8. Статусы (свежие прогоны 2026-11-07, третья серия замечаний)
 
     SOURCE_VERIFIED=true              — исходник сверён, все правки в ветке
     BUILD_DEBUG_VERIFIED=true         — 0 ошибок / 0 предупреждений
     BUILD_RELEASE_VERIFIED=true       — 0 ошибок / 0 предупреждений
     BUILD_ACCEPTANCE_HARNESS_VERIFIED=true — harness 0 ошибок / 0
-                                      предупреждений (CA1031 локально
-                                      задокументирован, CA2007 устранён)
-    TEST_DEBUG_VERIFIED=true          — см. п. 7.4 (фактические числа)
-    TEST_RELEASE_VERIFIED=true        — целевые прогоны Release
-    TEST_STABILITY_VERIFIED=true      — 3×Debug + 3×Release целевых без
-                                      зависаний, процессов и каталогов
-    PROFILE_SAFETY_VERIFIED=true      — sentinel + отпечатки до/после:
-                                      дельта бизнес-файлов 0/0/0; sentinel
-                                      намеренно создаётся и удаляется в
-                                      finally реального профиля
+                                      предупреждений
+    TEST_DEBUG_VERIFIED=true          — полный non-COM Debug 1251/1251
+    TEST_RELEASE_VERIFIED=true        — полный non-COM Release 1251/1251;
+                                      целевые Release 58/58
+    TEST_STABILITY_VERIFIED=true      — полные прогоны Debug и Release:
+                                      0 каталогов Picket302Tests_* после;
+                                      целевые Debug/Release 58/58 ×3 ранее
+    PROFILE_SAFETY_VERIFIED=true      — сегментный гард: равенство,
+                                      вложенность в обе стороны, регистр,
+                                      разделители, reparse-канонизация
+                                      (junction-цикл fail-closed); негативные
+                                      прогоны exit 3 на родителе и на самом
+                                      prod-каталоге; sentinel в finally;
+                                      дельта бизнес-файлов 0/0/0
     ACCEPTANCE_EXIT_CODE_VERIFIED=true — emptybook/printflow exit 0 при
-                                      PASS; негативный гард-прогон exit 3
-                                      на родителе и на самом prod-каталоге
-    TEMP_CLEANUP_VERIFIED=true        — временные профили удаляются
-                                      harness'ом и профилем тестов;
-                                      FolderCycleSchemaTests соединение
-                                      закрыто в finally
+                                      PASS; fault-inject (delta-removed,
+                                      killed, cleanup-false, harness-exit)
+                                      → exit 1; guard-negative fault → exit 1
+    TEMP_CLEANUP_VERIFIED=true        — после полных прогонов Debug и
+                                      Release: Picket302Tests_* = 0,
+                                      Picket302Tests отсутствует; cleanup
+                                      failure стал машинно видимым
+                                      (ProfileCleanupException);
+                                      5 keep-профилей в
+                                      %TEMP%\Picket302Acceptance сохранены
+                                      намеренно (не удаляются)
+    NAG_RUNTIME_VERIFIED=true         — startup NAG отключён решением
+                                      владельца (DEFERRED_BY_OWNER);
+                                      acceptance-прогоны проходят без NAG
     EMPTY_STATE_VISUAL_VERIFIED=true  — настоящий пустой экран, скриншот 01
     F5_RUNTIME_VERIFIED=true          — полная модальная цепочка F5,
                                       UI отзывается, печати нет
@@ -328,16 +340,17 @@ WinForms-форм в параллельных коллекциях и глоба
                                       MessageBox, печать, подача,
                                       предпросмотр), печати нет
     UI_VISUAL_VERIFIED=true           — скриншоты таблицы п. 6
-    REFERENCE_VISUAL_VERIFIED=PARTIAL — сравнён только главный экран
-                                      референса; диалоги референса не
-                                      сравнивались
+    REFERENCE_VISUAL_VERIFIED=PARTIAL — подтверждено структурное сходство
+                                      главного экрана; количественная
+                                      оценка 70% не измерялась; сравнение
+                                      диалогов референса не выполнялось
     COM_VERIFIED=NOT_RUN_BY_SCOPE     — COM/cold activation/реестр/SCM не
                                       запускались
     PRINT_VERIFIED=NOT_RUN_BY_SCOPE   — физическая печать не выполнялась:
                                       F5 отменён, F6 закрыт на
-                                      предпросмотре до передачи задания;
-                                      coverage не измерялась
-    CODE_COVERAGE_MEASURED=false
+                                      предпросмотре до передачи задания
+    CODE_COVERAGE_MEASURED=false      — coverage-collector не
+                                      устанавливался, артефакта нет
 
 ## 9. Ограничения и что не проверялось
 
