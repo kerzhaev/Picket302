@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Picket302.App;
 using Picket302.Infrastructure;
 using Picket302.Tests.Infrastructure;
 using Xunit;
@@ -12,7 +13,7 @@ namespace Picket302.Tests.App;
 /// пользователя в <c>%AppData%\Picket302</c> — ни реквизиты подключения,
 /// ни базу данных, ни журналы.
 /// </summary>
-[Collection("ПрофильПриложения")]
+[Collection("WinFormsПрофиль")]
 public sealed class ProfileIsolationTests
 {
     /// <summary>Реальный каталог профиля приложения.</summary>
@@ -123,5 +124,150 @@ public sealed class ProfileIsolationTests
         // Время изменения в отпечатке ловит перезапись тем же содержимым.
         return Convert.ToHexString(SHA256.HashData(поток))
             + "|" + File.GetLastWriteTimeUtc(путь).Ticks;
+    }
+
+    /// <summary>
+    /// Пустой профиль без демо-данных остаётся пустым: <c>создатьДемоБазу:
+    /// false</c> — рабочий путь runtime-проверки пустой адресной книги.
+    /// </summary>
+    [Fact]
+    public async Task ПустойПрофильБезДемоБазы_АдреснаяКнигаОстаётсяПустой()
+    {
+        using var профиль = new ИзолированныйПрофиль();
+
+        var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
+
+        var страница = await состав.Контрагенты
+            .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None);
+
+        Assert.Equal(0, страница.TotalCount);
+        Assert.Empty(await состав.Контрагенты.GetSendersAsync(CancellationToken.None));
+
+        await состав.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Демо-база появляется только при явном запросе: <c>создатьДемоБазу:
+    /// true</c> наполняет пустую адресную книгу, <c>false</c> — нет.
+    /// </summary>
+    [Fact]
+    public async Task ДемоБазаСоздаётсяТолькоПриЯвномЗапросе()
+    {
+        using var пустой = new ИзолированныйПрофиль();
+        var составПустой = await AppServices.СоздатьAsync(пустой.Пути, создатьДемоБазу: false);
+
+        Assert.Equal(
+            0,
+            (await составПустой.Контрагенты
+                .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None))
+            .TotalCount);
+
+        await составПустой.DisposeAsync();
+
+        using var демо = new ИзолированныйПрофиль();
+        var составДемо = await AppServices.СоздатьAsync(демо.Пути, создатьДемоБазу: true);
+
+        Assert.True(
+            (await составДемо.Контрагенты
+                .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None))
+            .TotalCount > 0);
+
+        await составДемо.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Гард изоляции отказывает до создания состава, если путь профиля
+    /// совпадает с производственным каталогом пользователя.
+    /// </summary>
+    [Fact]
+    public void ИзолированныйПрофиль_ОтказываетНаПроизводственномПути()
+    {
+        // Корень = родитель производственного каталога: структура профиля
+        // добавляет к корню имя «Picket302», поэтому родитель даёт точное
+        // совпадение с производственным путём.
+        var родитель = Path.GetDirectoryName(КаталогПрофиля)
+            ?? throw new InvalidOperationException("У профиля нет родительского каталога.");
+
+        var ошибка = Assert.Throws<InvalidOperationException>(() => new ИзолированныйПрофиль(родитель));
+
+        Assert.Contains("производственн", ошибка.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Sentinel-файл в реальном профиле пользователя не изменяется
+    /// тестовым прогоном: SHA-256 и LastWriteTimeUtc до и после совпадают,
+    /// новые файлы реального профиля не появляются.
+    /// </summary>
+    [Fact]
+    public async Task SentinelФайлРеальногоПрофиля_НеИзменяетсяПрогоном()
+    {
+        Directory.CreateDirectory(КаталогПрофиля);
+
+        var sentinel = Path.Combine(КаталогПрофиля, "picket302-review-sentinel.tmp");
+
+        File.WriteAllText(sentinel, $"sentinel-{Guid.NewGuid():N}");
+
+        try
+        {
+            var отпечатокДо = ОтпечатокФайла(sentinel);
+            var профильДо = СнятьОтпечатки();
+
+            using (var профиль = new ИзолированныйПрофиль())
+            {
+                using var окно = await профиль.СоздатьОболочкуAsync(создатьДемоБазу: true);
+
+                await окно.ИнициализироватьAsync();
+
+                Assert.True(окно.Инициализировано);
+            }
+
+            Assert.Equal(отпечатокДо, ОтпечатокФайла(sentinel));
+
+            var профильПосле = СнятьОтпечатки();
+
+            Assert.Equal(
+                профильДо.Keys.OrderBy(имя => имя, StringComparer.Ordinal),
+                профильПосле.Keys.OrderBy(имя => имя, StringComparer.Ordinal));
+        }
+        finally
+        {
+            File.Delete(sentinel);
+        }
+    }
+
+    /// <summary>
+    /// Журнал сбоев тестового контура пишется во временный профиль: файл
+    /// журнала появляется в <c>пути.LogsDirectory</c>, реальный профиль
+    /// не получает новых файлов журнала.
+    /// </summary>
+    [Fact]
+    public async Task ЖурналСбоевТестовогоКонтура_ПишетВоВременныйПрофиль()
+    {
+        var журналРеальногоДо = СнятьОтпечатки()
+            .Where(пара => пара.Key.StartsWith("logs", StringComparison.Ordinal))
+            .ToDictionary(пара => пара.Key, пара => пара.Value);
+
+        // Проверка выполняется внутри блока профиля: утилизация удаляет
+        // весь временный корень вместе с журналом.
+        using (var профиль = new ИзолированныйПрофиль())
+        {
+            using (var хаб = new Picket302.Infrastructure.Logging.LogHub(профиль.Пути.LogsDirectory))
+            {
+                хаб.LogError(new InvalidOperationException("Проверка изоляции журнала."));
+            }
+
+            Assert.True(
+                Directory.Exists(профиль.Пути.LogsDirectory)
+                && Directory.EnumerateFiles(профиль.Пути.LogsDirectory).Any(),
+                "Файл журнала должен создаваться во временном профиле.");
+        }
+
+        var журналРеальногоПосле = СнятьОтпечатки()
+            .Where(пара => пара.Key.StartsWith("logs", StringComparison.Ordinal))
+            .ToDictionary(пара => пара.Key, пара => пара.Value);
+
+        Assert.Equal(
+            журналРеальногоДо.Keys.OrderBy(имя => имя, StringComparer.Ordinal),
+            журналРеальногоПосле.Keys.OrderBy(имя => имя, StringComparer.Ordinal));
     }
 }

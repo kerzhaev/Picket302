@@ -7,6 +7,7 @@ using Picket302.Domain.Entities;
 using Picket302.Printing.Devices;
 using Picket302.Printing.Engine;
 using Picket302.Printing.Preview;
+using Picket302.Tests.Infrastructure;
 using Xunit;
 
 namespace Picket302.Tests.App;
@@ -19,6 +20,7 @@ namespace Picket302.Tests.App;
 /// Проверяются свойства компоновки иерархии, а не пиксельные координаты;
 /// COM, реестр, принтер и физическая печать не используются.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class ResponsiveUiContractTests
 {
     private static IEnumerable<Control> Обойти(Control контейнер)
@@ -181,6 +183,35 @@ public sealed class ResponsiveUiContractTests
             .Invoke(окно, null);
 
         Assert.False(окно.ПоказанаПодсказкаПустыхПапок);
+    }
+
+    /// <summary>
+    /// Полоса кнопок «Кому» растягивается по содержимому: обе строки
+    /// («Добавить…Открыть список в Excel» и «Сохранить вид таблицы»,
+    /// «Вид таблиц…») полностью видимы в координатах формы при
+    /// минимальном размере окна. Прежняя фиксированная высота 50 px
+    /// обрезала второй ряд кнопок (runtime-приёмка 2026-11-06).
+    /// </summary>
+    [Fact]
+    public void MainShell_ПолосаКнопокКому_ОбеСтрокиПолностьюВидимы()
+    {
+        using var окно = new MainShell();
+        окно.CreateControl();
+        окно.ClientSize = окно.MinimumSize;
+        окно.PerformLayout();
+
+        var поток = Обойти(Вкладка(окно, "Адресная книга"))
+            .OfType<FlowLayoutPanel>()
+            .Single(панель => панель.Controls.OfType<Button>().Any(кнопка => кнопка.Text == "Предпросмотр и печать"));
+
+        Assert.True(поток.AutoSize, "Полоса кнопок «Кому» должна расти по содержимому.");
+
+        foreach (var кнопка in поток.Controls.OfType<Button>())
+        {
+            var причина = LayoutAssertions.ПричинаВыходаЗаГраницы(кнопка, окно);
+
+            Assert.True(причина is null, причина);
+        }
     }
 
     /// <summary>

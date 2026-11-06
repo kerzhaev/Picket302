@@ -13,6 +13,7 @@ namespace Picket302.Tests.App;
 /// отсутствие принтера. Запуск печати подменяется делегатом-fake — реальный
 /// принтер и диалоги не используются.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class DistributionPrintScenarioTests
 {
     /// <summary>
@@ -50,7 +51,8 @@ public sealed class DistributionPrintScenarioTests
         ИзолированныйПрофиль профиль,
         params string[] именаРассылок)
     {
-        var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
+        var состав = профиль.ВзятьВладение(
+            await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false));
 
         var отправитель = await состав.Контрагенты.AddAsync(Контрагент("ООО «Отправитель»"));
         var получатель = await состав.Контрагенты.AddAsync(Контрагент("ООО «Получатель»"));

@@ -15,6 +15,7 @@ namespace Picket302.Tests.App;
 /// приложения не выполняется — проверяются свойства компоновки; база —
 /// временная изолированная.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class AdaptiveLayoutTests
 {
     private static IEnumerable<Control> Обойти(Control контейнер)
@@ -43,7 +44,10 @@ public sealed class AdaptiveLayoutTests
     private static async Task<FormDistributionEditor> СоздатьРедактор(
         ИзолированныйПрофиль профиль)
     {
-        var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
+        // Владение составом у профиля: без него утилизация профиля не
+        // освобождает пул соединений и временный каталог с базой остаётся.
+        var состав = профиль.ВзятьВладение(
+            await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false));
 
         return new FormDistributionEditor(состав);
     }

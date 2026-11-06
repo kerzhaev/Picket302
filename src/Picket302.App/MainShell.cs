@@ -1168,7 +1168,7 @@ public sealed class MainShell : Form
         var кнопки = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 30,
+            AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             Padding = new Padding(1, 2, 1, 1),
@@ -1299,7 +1299,7 @@ public sealed class MainShell : Form
         var кнопки = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 50,
+            AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true,
             Padding = new Padding(1, 2, 1, 1),

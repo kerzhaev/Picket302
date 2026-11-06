@@ -24,11 +24,30 @@ public sealed class ИзолированныйПрофиль : IDisposable
     /// Создаёт уникальный временный корень профиля.
     /// </summary>
     public ИзолированныйПрофиль()
+        : this(null)
     {
-        Корень = Path.Combine(Path.GetTempPath(), "Picket302Tests", Guid.NewGuid().ToString("N"));
+    }
+
+    /// <summary>
+    /// Создаёт профиль в указанном корне: точка acceptance-проверок,
+    /// которым нужно знать путь заранее (скриншоты, драйверы модальных
+    /// окон). Путь обязан отличаться от производственного профиля.
+    /// </summary>
+    /// <param name="корень">
+    /// Корень профиля; <see langword="null"/> — уникальный временный каталог.
+    /// </param>
+    public ИзолированныйПрофиль(string? корень)
+    {
+        Корень = корень ?? Path.Combine(Path.GetTempPath(), "Picket302Tests", Guid.NewGuid().ToString("N"));
         Пути = Picket302ProfilePaths.ДляКорня(Корень);
 
+        ГардПрофиля.ГарантироватьИзоляцию(Пути);
+
+        // Полная структура профиля создаётся сразу: журналы Serilog и
+        // хранилище секретов не создают промежуточных каталогов сами.
         Directory.CreateDirectory(Пути.DataDirectory);
+        Directory.CreateDirectory(Пути.LogsDirectory);
+        Directory.CreateDirectory(Пути.SecretsDirectory);
     }
 
     /// <summary>
@@ -45,6 +64,23 @@ public sealed class ИзолированныйПрофиль : IDisposable
         _оболочка = new MainShell(_состав);
 
         return _оболочка;
+    }
+
+    /// <summary>
+    /// Передаёт профилю владение составом, созданным вызывающим кодом:
+    /// утилизация профиля освобождает состав и очищает пул соединений,
+    /// поэтому файл базы освобождается и временный каталог удаляется
+    /// (без владения тест оставлял каталог с <c>picket302.db</c>).
+    /// </summary>
+    /// <param name="состав">Состав, созданный по <see cref="Пути"/>.</param>
+    /// <returns>Тот же состав — для fluent-использования.</returns>
+    public AppServices ВзятьВладение(AppServices состав)
+    {
+        ArgumentNullException.ThrowIfNull(состав);
+
+        _состав = состав;
+
+        return состав;
     }
 
     /// <inheritdoc />
