@@ -9,6 +9,7 @@ namespace Picket302.Tests.App;
 /// «Настройка вида таблиц: цвета, заголовки столбцов, скрытие колонок,
 /// «полосатая таблица» глобально, сброс к умолчаниям»).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class FormGridAppearanceTests
 {
     /// <summary>

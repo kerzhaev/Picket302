@@ -13,6 +13,7 @@ namespace Picket302.Tests.App;
 /// выбранных рассылок (ТЗ §8.12, функция 156), а также сбор идентификаторов
 /// выбранных строк без выбора и с множественным выбором.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class MainShellDistributionActionsTests
 {
     [Fact]

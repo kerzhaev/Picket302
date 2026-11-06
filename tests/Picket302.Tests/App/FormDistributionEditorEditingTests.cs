@@ -14,6 +14,7 @@ namespace Picket302.Tests.App;
 /// сохранение изменяет ту же запись — письма добавляются и удаляются,
 /// дублирующая рассылка не создаётся.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class FormDistributionEditorEditingTests
 {
     private static Counterparty НовыйКонтрагент(string имя, bool отправитель = false) => new()

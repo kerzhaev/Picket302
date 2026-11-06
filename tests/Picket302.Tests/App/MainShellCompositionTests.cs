@@ -16,6 +16,7 @@ namespace Picket302.Tests.App;
 /// поэтому после инициализации по умолчанию обработчики молча пропускали
 /// работу с базой данных.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class MainShellCompositionTests
 {
     [Fact]

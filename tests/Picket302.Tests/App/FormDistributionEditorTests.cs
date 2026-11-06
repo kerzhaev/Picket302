@@ -12,6 +12,7 @@ namespace Picket302.Tests.App;
 /// применялся к наименованию («ООО «Ромашка»») и падал исключением
 /// <see cref="FormatException"/>.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class FormDistributionEditorTests
 {
     [Fact]

@@ -9,6 +9,7 @@ namespace Picket302.Tests.App;
 /// Регрессионные проверки исправлений UX-аудита от 2026-11-03
 /// (docs/UX-AUDIT-2026-11-03.md: U1, U2, U4, C1, C2, E1, F1).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class MainShellUxFixesTests
 {
     /// <summary>

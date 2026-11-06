@@ -13,6 +13,7 @@ namespace Picket302.Tests.App;
 /// (ТЗ §8.11, функция 131: «Настройка вида таблиц: цвета, заголовки столбцов,
 /// скрытие колонок, «полосатая таблица» глобально, сброс к умолчаниям»).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class GridViewSettingsControllerTests : IDisposable
 {
     private const string ИдентификаторТаблицы = "Адресная книга";

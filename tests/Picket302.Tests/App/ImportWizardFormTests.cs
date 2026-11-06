@@ -14,6 +14,7 @@ namespace Picket302.Tests.App;
 /// (ТЗ §8.12, функция 159: «Мастер импорта адресной книги (7 экранов)»;
 /// ТЗ §8.12, функция 160: «Выгрузка … с последующим действием»).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class ImportWizardFormTests
 {
     /// <summary>

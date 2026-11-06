@@ -10,6 +10,7 @@ namespace Picket302.Tests.App;
 /// <summary>
 /// Проверки скрытого входа в настройки подключения (ТЗ §8.11, функция 134).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class ShortcutInterceptorTests
 {
     [Fact]

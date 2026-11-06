@@ -14,6 +14,7 @@ namespace Picket302.Tests.App;
 /// разлиновке и диалогов проверки размера бумаги (ТЗ §8.6, функции 78, 82,
 /// 83, 89).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class PrintDialogsTests
 {
     private static PrintTemplate Шаблон(long id, string имя) => new()

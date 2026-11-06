@@ -8,6 +8,7 @@ namespace Picket302.Tests.App;
 /// Проверка создания состава приложения и запуска главного окна
 /// (ТЗ §8.11, функция 137: «Демо-база при первом запуске»).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class AppStartupTests
 {
     [Fact]

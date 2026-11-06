@@ -8,6 +8,7 @@ namespace Picket302.Tests.App;
 /// Карточка отправления: выпадающие списки категории отправления и вида
 /// уведомления, флаг «нужно уведомление» (ТЗ §8.1, функции 23 и 32).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class MailEditFormTests
 {
     [Fact]

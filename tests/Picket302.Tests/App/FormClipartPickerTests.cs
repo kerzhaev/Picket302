@@ -10,6 +10,7 @@ namespace Picket302.Tests.App;
 /// выбор элемента заполняет результат и включает кнопку выбора; без выбора
 /// кнопка недоступна, отсутствующий элемент не выбирается.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class FormClipartPickerTests
 {
     private static IEnumerable<Control> Обойти(Control контейнер)

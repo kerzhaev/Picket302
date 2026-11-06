@@ -11,6 +11,7 @@ namespace Picket302.Tests.App;
 /// ((char)KeyCode), который не зависит от раскладки, — кириллица давала
 /// латинские буквы.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class MainShellDirectDialTests
 {
     /// <summary>Закрытый обработчик символьного ввода (KeyPress).</summary>

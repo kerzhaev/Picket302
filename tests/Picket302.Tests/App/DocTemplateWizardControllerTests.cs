@@ -11,6 +11,7 @@ namespace Picket302.Tests.App;
 /// контроллеров, не требующих создания окна
 /// (ТЗ §8.5, функция 66; ТЗ §8.12, функция 160).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class DocTemplateWizardControllerTests
 {
     /// <summary>Текст корректного шаблона таблицы стилей.</summary>

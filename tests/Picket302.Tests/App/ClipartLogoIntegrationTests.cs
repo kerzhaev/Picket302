@@ -22,6 +22,7 @@ namespace Picket302.Tests.App;
 /// репозиторием во временную базу, повторное чтение, подстановка в
 /// PrintDataSource и удаление логотипа. Внешние файлы и сеть не используются.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class ClipartLogoIntegrationTests
 {
     private static Counterparty Контрагент(string имя) => new()

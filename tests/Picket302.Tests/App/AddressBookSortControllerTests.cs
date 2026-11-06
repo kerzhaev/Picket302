@@ -9,6 +9,7 @@ namespace Picket302.Tests.App;
 /// Проверки сортировки адресной книги по клику на заголовок столбца
 /// (ТЗ §8.1, функция 9: «Фильтры и сортировка по любой колонке»).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class AddressBookSortControllerTests
 {
     /// <summary>

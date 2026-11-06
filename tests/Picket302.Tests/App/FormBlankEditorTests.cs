@@ -9,6 +9,7 @@ namespace Picket302.Tests.App;
 /// <summary>
 /// Встроенный редактор бланков — форма (ТЗ §7.5, §5.2; §8.3, функция 38).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class FormBlankEditorTests
 {
     private static CustomBlank Заготовка()

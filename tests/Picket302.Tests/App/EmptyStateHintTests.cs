@@ -9,6 +9,7 @@ namespace Picket302.Tests.App;
 /// скрывается, вместо неё виден текст с первым действием; при появлении
 /// строк всё возвращается на место.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class EmptyStateHintTests
 {
     [Fact]

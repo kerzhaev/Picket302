@@ -7,6 +7,7 @@ namespace Picket302.Tests.App;
 /// <summary>
 /// Проверка каркаса главного окна оператора (ТЗ §7.1 «Главное окно приложения»).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class MainShellMenuTests
 {
     /// <summary>

@@ -13,6 +13,7 @@ namespace Picket302.Tests.App;
 /// приложения (Схема «3+2»)»; §7.10: «Правила цветовой схемы и плотности»;
 /// §8.12, функция 152: «Четыре вкладки главного окна»).
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class MainShellLayoutTests
 {
     [Fact]
