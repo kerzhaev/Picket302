@@ -1,9 +1,10 @@
-﻿# Общая библиотека acceptance-драйвера Picket302:
-# - запуск harness с явным профилем и гардом изоляции;
-# - ожидание окон по заголовку внутри процесса;
-# - нажатие кнопок модальных окон (BM_CLICK, без UIA — устойчиво);
-# - проверка отзывчивости UI-потока (SendMessageTimeout WM_NULL);
-# - sentinel-файл и отпечатки реального профиля до/после.
+﻿# Общая библиотека acceptance-драйвера Picket302 (fail-closed):
+# - запуск harness с явным профилем; фоновое чтение stdout;
+# - ожидание окон по заголовку; BM_CLICK кнопок;
+# - отзывчивость UI через SendMessageTimeout WM_NULL;
+# - fingerprint реального профиля через [Environment]::GetFolderPath
+#   (переменная APPDATA не используется — она может отличаться от
+#   фактического пути Known Folder).
 $ErrorActionPreference = 'Continue'
 
 Add-Type -AssemblyName System.Drawing
@@ -36,9 +37,6 @@ public static class AccWin
     public static extern bool IsWindowVisible(IntPtr hwnd);
 
     [DllImport("user32.dll")]
-    public static extern bool MoveWindow(IntPtr hwnd, int x, int y, int w, int h, bool repaint);
-
-    [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
 
     [DllImport("user32.dll")]
@@ -46,9 +44,6 @@ public static class AccWin
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp, uint flags, uint timeout, out IntPtr result);
-
-    [DllImport("user32.dll")]
-    public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     public static extern bool GetWindowRect(IntPtr hwnd, out RECT r);
@@ -103,6 +98,7 @@ public static class AccWin
             var cls = new StringBuilder(256);
             GetClassName(h, cls, 256);
             var c = cls.ToString();
+            // WinForms-кнопки и нативные кнопки MessageBox (класс Button).
             if (!c.StartsWith("WindowsForms10.Button", StringComparison.OrdinalIgnoreCase) && c != "Button") return true;
             if (Title(h) == text) { found = h; return false; }
             return true;
@@ -144,72 +140,23 @@ public static class AccWin
 }
 "@
 
-Add-Type -AssemblyName System.Security
-
-function Start-Acceptance([string]$exe, [string]$mode, [string]$profileRoot, [bool]$keep = $false) {
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $exe
-    $psi.Arguments = "$mode `"$profileRoot`"" + $(if ($keep) { " keep" } else { "" })
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.CreateNoWindow = $true
-    $p = [System.Diagnostics.Process]::Start($psi)
-
-    $ready = $null
-    for ($i = 0; $i -lt 60; $i++) {
-        $line = $p.StandardOutput.ReadLine()
-        if ($line -eq $null) { break }
-        Write-Host "  harness: $line"
-        if ($line.StartsWith('READY')) { $ready = $line; break }
-    }
-    if ($ready -eq $null) {
-        $err = $p.StandardError.ReadToEnd()
-        Write-Host "  READY NOT RECEIVED; stderr: $err"
-        return $null
-    }
-    $hwnd = [IntPtr][long](($ready -split ' ')[1])
-    return @{ Proc = $p; Hwnd = $hwnd; Ready = $ready }
-}
-
-function Stop-Acceptance($h) {
-    if ($h -eq $null) { return }
-    try { $h.Proc.StandardInput.WriteLine('CLOSE') } catch {}
-    if (-not $h.Proc.WaitForExit(20000)) {
-        Write-Host '  harness did not exit - killing (штатная уборка не удалась)'
-        $h.Proc.Kill()
-    }
-    $h.Proc.WaitForExit()
-}
-
-function Wait-AppWindow([uint32]$procId, [string]$title, [int]$seconds = 30) {
-    $deadline = (Get-Date).AddSeconds($seconds)
-    while ((Get-Date) -lt $deadline) {
-        $h = [AccWin]::FindByTitle($procId, $title)
-        if ($h -ne [IntPtr]::Zero) { return $h }
-        Start-Sleep -Milliseconds 250
-    }
-    return [IntPtr]::Zero
-}
-
-function Show-Evidence([string]$phase, [IntPtr]$hwnd) {
-    $alive = $hwnd -ne [IntPtr]::Zero
-    $title = if ($alive) { [AccWin]::Title($hwnd) } else { '<not found>' }
-    Write-Host ("  [{0}] hwnd={1} title='{2}' utc={3}" -f $phase, $hwnd, $title, (Get-Date).ToUniversalTime().ToString('o'))
+function Get-ApplicationDataFolder {
+    # Known Folder ApplicationData: единственный достоверный источник
+    # (переменная окружения APPDATA может отсутствовать или отличаться).
+    return [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData)
 }
 
 function Test-ProfileFingerprint([string]$dir) {
     $map = @{}
     if (-not (Test-Path $dir)) { return $map }
-    Get-ChildItem -Recurse -File $dir -ErrorAction SilentlyContinue | ForEach-Object {
-        $хеш = [System.Security.Cryptography.SHA256]::Create()
-        try {
+    $хеш = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        Get-ChildItem -Recurse -File $dir -ErrorAction SilentlyContinue | ForEach-Object {
             $байты = $хеш.ComputeHash([System.IO.File]::ReadAllBytes($_.FullName))
             $sha = [System.BitConverter]::ToString($байты).Replace('-', '')
-        } finally { $хеш.Dispose() }
-        $map[$_.FullName] = "$sha|$($_.LastWriteTimeUtc.Ticks)"
-    }
+            $map[$_.FullName] = "$sha|$($_.LastWriteTimeUtc.Ticks)"
+        }
+    } finally { $хеш.Dispose() }
     return $map
 }
 
@@ -226,8 +173,87 @@ function Get-SentinelState([string]$path) {
     try {
         $байты = $хеш.ComputeHash([System.IO.File]::ReadAllBytes($path))
         $sha = [System.BitConverter]::ToString($байты).Replace('-', '')
+        return "$sha|$( (Get-Item $path).LastWriteTimeUtc.Ticks )"
     } finally { $хеш.Dispose() }
-    return "$sha|$( (Get-Item $path).LastWriteTimeUtc.Ticks )"
+}
+
+# Запускает harness. stdout читается инкрементально на вызывающем потоке
+# через чистый .NET ReadLineAsync (PowerShell-замыкания в фоновых потоках
+# обращаются к SessionState и взаимно блокируются).
+function Start-Acceptance([string]$exe, [string]$mode, [string]$profileRoot, [bool]$keep = $false) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $exe
+    $psi.Arguments = "$mode `"$profileRoot`"" + $(if ($keep) { " keep" } else { "" })
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+
+    $p = [System.Diagnostics.Process]::Start($psi)
+
+    return @{
+        Proc = $p
+        Lines = [System.Collections.ArrayList]::new()
+    }
+}
+
+# Читает stdout harness построчно (ReadLineAsync) до строки, совпавшей с
+# $pattern, либо до таймаута/закрытия потока. Все прочитанные строки
+# накапливаются в $h.Lines. Возвращает $true при совпадении.
+function Read-HarnessLines($h, [string]$pattern, [int]$seconds = 15) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+
+    while ((Get-Date) -lt $deadline) {
+        $задача = $h.Proc.StandardOutput.ReadLineAsync()
+
+        while (-not $задача.IsCompleted) {
+            if ((Get-Date) -ge $deadline -or $h.Proc.HasExited) { break }
+            Start-Sleep -Milliseconds 100
+        }
+
+        if (-not $задача.IsCompleted) { return $false }
+
+        $строка = $задача.Result
+
+        if ($null -eq $строка) { return $false }  # stdout закрыт
+
+        [void]$h.Lines.Add($строка)
+
+        if ($строка -match $pattern) { return $true }
+    }
+
+    return $false
+}
+
+# Возвращает все накопленные строки stdout harness.
+function Get-HarnessLines($h) {
+    return @($h.Lines.ToArray())
+}
+
+# Штатное завершение: CLOSE -> ожидание 20 c -> Kill при необходимости.
+# Возвращает $true, если пришлось убивать процесс (для драйвера это FAIL).
+function Stop-Acceptance($h) {
+    if ($h -eq $null -or $h.Proc -eq $null) { return $false }
+    if ($h.Proc.HasExited) { return $false }
+    try { $h.Proc.StandardInput.WriteLine('CLOSE') } catch {}
+    if (-not $h.Proc.WaitForExit(20000)) {
+        $h.Proc.Kill()
+        $h.Proc.WaitForExit()
+        Write-Host '  HARNESS KILLED (штатное завершение не сработало) — сценарий фиксируется FAIL'
+        return $true
+    }
+    return $false
+}
+
+function Wait-AppWindow([uint32]$procId, [string]$title, [int]$seconds = 30) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ((Get-Date) -lt $deadline) {
+        $w = [AccWin]::FindByTitle($procId, $title)
+        if ($w -ne [IntPtr]::Zero) { return $w }
+        Start-Sleep -Milliseconds 250
+    }
+    return [IntPtr]::Zero
 }
 
 function Wait-Button([IntPtr]$dialog, [string]$text, [int]$seconds = 8) {
@@ -240,74 +266,12 @@ function Wait-Button([IntPtr]$dialog, [string]$text, [int]$seconds = 8) {
     return [IntPtr]::Zero
 }
 
-# Ждёт окно заголовка $title, различая рабочий диалог (есть «Отмена») и
-# информационный MessageBox (только «ОК»): MessageBox подтверждается и
-# ожидание продолжается. Возвращает hwnd диалога.
-function Wait-DialogOrConfirm([uint32]$procId, [string]$title, [int]$seconds = 30) {
-    $deadline = (Get-Date).AddSeconds($seconds)
-    while ((Get-Date) -lt $deadline) {
-        $w = [AccWin]::FindByTitle($procId, $title)
-        if ($w -ne [IntPtr]::Zero) {
-            $отмена = [AccWin]::FindButton($w, 'Отмена')
-            if ($отмена -ne [IntPtr]::Zero) { return $w }
-            $ок = [AccWin]::FindButton($w, 'ОК')
-            if ($ок -ne [IntPtr]::Zero) {
-                Write-Host ("  confirm-box: '" + [AccWin]::Title($w) + "' -> ОК")
-                [AccWin]::Click($ок)
-                Start-Sleep -Milliseconds 600
-                $deadline = (Get-Date).AddSeconds($seconds)
-            }
-        }
-        Start-Sleep -Milliseconds 250
-    }
-    return [IntPtr]::Zero
-}
-
-# Закрывает случайные MessageBox процесса (класс #32770), снимая каждый
-# в диагностику; возвращает количество закрытых.
-function Close-MessageBoxes([uint32]$procId, [string]$диагностика) {
-    $закрыто = 0
-    foreach ($w in [AccWin]::WindowsOf($procId)) {
-        $cls = New-Object System.Text.StringBuilder 256
-        [AccWin]::GetClassName($w, $cls, 256) | Out-Null
-        if ($cls.ToString() -eq '#32770') {
-            $текст = [AccWin]::Title($w)
-            $файл = Join-Path $диагностика ("messagebox-" + (Get-Date -Format 'HHmmss') + ".png")
-            [AccWin]::Capture($w, $файл) | Out-Null
-            Write-Host ("  unexpected message box: '" + $текст + "' -> " + $файл)
-            $ок = [AccWin]::FindButton($w, 'ОК')
-            if ($ок -ne [IntPtr]::Zero) { [AccWin]::Click($ок); $закрыто++ }
-            continue
-        }
-        $заголовок = [AccWin]::Title($w)
-        if ($заголовок -eq 'Подача конвертов') {
-            $файл = Join-Path $диагностика ("feed-" + (Get-Date -Format 'HHmmss') + ".png")
-            [AccWin]::Capture($w, $файл) | Out-Null
-            # «Продолжить» ведёт в окно предпросмотра; физический спул
-            # вызывается только после подтверждения предпросмотра, поэтому
-            # задание на принтер не уходит.
-            Write-Host ("  feed dialog: '" + $заголовок + "' -> Продолжить -> " + $файл)
-            $продолжить = [AccWin]::FindButton($w, 'Продолжить')
-            if ($продолжить -ne [IntPtr]::Zero) { [AccWin]::Click($продолжить); $закрыто++ }
-            continue
-        }
-        if ($заголовок -eq 'Проверка размера бумаги') {
-            $файл = Join-Path $диагностика ("papersize-" + (Get-Date -Format 'HHmmss') + ".png")
-            [AccWin]::Capture($w, $файл) | Out-Null
-            Write-Host ("  paper-size dialog: '" + $заголовок + "' -> Отмена -> " + $файл)
-            $отмена = [AccWin]::FindButton($w, 'Отмена')
-            if ($отмена -eq [IntPtr]::Zero) { $отмена = [AccWin]::FindButton($w, 'Выбрать другой принтер') }
-            if ($отмена -ne [IntPtr]::Zero) { [AccWin]::Click($отмена); $закрыто++ }
-        }
-    }
-    return $закрыто
-}
-
-# Дамп всех видимых окон процесса: класс | заголовок
 function Dump-AllWindows([uint32]$procId) {
+    $список = @()
     foreach ($w in [AccWin]::WindowsOf($procId)) {
         $cls = New-Object System.Text.StringBuilder 256
         [AccWin]::GetClassName($w, $cls, 256) | Out-Null
-        Write-Host ("  window: " + $cls.ToString() + " | '" + [AccWin]::Title($w) + "'")
+        $список += ($cls.ToString() + " | '" + [AccWin]::Title($w) + "'")
     }
+    return $список
 }

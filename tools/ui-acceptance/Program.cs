@@ -1,17 +1,26 @@
-﻿using System.Drawing;
+using System.Drawing;
 using Picket302.App;
 using Picket302.Domain.Entities;
 using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure;
+
+// Широкий перехват — осознанный контракт CLI: harness не падает без
+// диагностики, а печатает ошибку и возвращает код 1, чтобы драйвер
+// зафиксировал FAIL и снял отпечатки реального профиля.
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Design",
+    "CA1031:Do not catch general exception types",
+    Justification = "CLI-контракт harness: любое исключение превращается в код возврата 1 с диагностикой в stderr")]
 
 // Acceptance-harness Picket302: показывает реальное главное окно на ЯВНО
 // переданном изолированном профиле. Режимы:
 //   emptybook <профиль>      — пустая адресная книга (создатьДемоБазу: false)
 //   printflow <профиль>      — синтетические отправитель+получатель для F5/F6
 //
-// Гард: отказ при совпадении профиля с производственным каталогом
-// пользователя. Никакой зависимости от переменных APPDATA/LOCALAPPDATA —
-// путь профиля известен до создания состава.
+// Гард изоляции: путь профиля проверяется ДО создания каких-либо каталогов
+// и состава. Проверяются и сам корень, и рассчитанный
+// Picket302ProfilePaths.ДляКорня(корень).DataDirectory: корень может
+// совпадать с родителем производственного каталога и превращаться в него.
 
 if (args.Length < 2)
 {
@@ -21,7 +30,6 @@ if (args.Length < 2)
 
 var режим = args[0];
 var кореньПрофиля = Path.GetFullPath(args[1]);
-var сохранятьПрофиль = args.Length > 2 && args[2] == "keep";
 
 if (режим is not ("emptybook" or "printflow"))
 {
@@ -29,27 +37,45 @@ if (режим is not ("emptybook" or "printflow"))
     return 2;
 }
 
-// --- Гард изоляции ----------------------------------------------------
-var производственный = Path.GetFullPath(Picket302ProfilePaths.ПоУмолчанию().DataDirectory)
-    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-var проверяемый = кореньПрофиля.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+// --- Гард изоляции (до создания каталогов и состава) ------------------
+var пути = Picket302ProfilePaths.ДляКорня(кореньПрофиля);
+var производственный = ProfileIsolationGuard.ПроизводственныйКаталог();
 
-if (string.Equals(производственный, проверяемый, StringComparison.OrdinalIgnoreCase))
+// Отказ 1: сам корень уже является производственным каталогом данных.
+var причинаКорня = ProfileIsolationGuard.ПричинаОтказа(кореньПрофиля, производственный);
+
+// Отказ 2: ДляКорня(корень) превращается в производственный каталог
+// (корень — родитель производственного каталога или совпадает с ним).
+var причинаРасчёта = ProfileIsolationGuard.ПричинаОтказа(пути.DataDirectory, производственный);
+
+if (причинаКорня is not null || причинаРасчёта is not null)
 {
-    Console.Error.WriteLine(
-        $"ОТКАЗ: корень профиля совпадает с производственным каталогом {производственный}. "
-        + "Acceptance-прогоны обязаны работать с временным каталогом.");
+    Console.Error.WriteLine("ОТКАЗ: профиль изоляции совпадает с производственным.");
+    Console.Error.WriteLine($"  переданный корень: {кореньПрофиля}");
+    Console.Error.WriteLine($"  рассчитанный DataDirectory: {пути.DataDirectory}");
+    Console.Error.WriteLine($"  производственный DataDirectory: {производственный}");
+
+    if (причинаКорня is not null)
+    {
+        Console.Error.WriteLine($"  причина (корень): {причинаКорня}");
+    }
+
+    if (причинаРасчёта is not null)
+    {
+        Console.Error.WriteLine($"  причина (расчёт): {причинаРасчёта}");
+    }
+
     return 3;
 }
 
-var пути = Picket302ProfilePaths.ДляКорня(кореньПрофиля);
+Console.Out.WriteLine($"PROFILE {пути.DataDirectory}");
+Console.Out.Flush();
+
+var сохранятьПрофиль = args.Length > 2 && args[2] == "keep";
 
 Directory.CreateDirectory(пути.DataDirectory);
 Directory.CreateDirectory(пути.LogsDirectory);
 Directory.CreateDirectory(пути.SecretsDirectory);
-
-Console.Out.WriteLine($"PROFILE {пути.DataDirectory}");
-Console.Out.Flush();
 
 ApplicationConfiguration.Initialize();
 Application.SetCompatibleTextRenderingDefault(false);
@@ -60,11 +86,11 @@ MainShell? окно = null;
 try
 {
     // Пункт B/A: демо-засев никогда не выполняется в acceptance-профиле.
-    состав = await AppServices.СоздатьAsync(пути, создатьДемоБазу: false);
+    состав = await AppServices.СоздатьAsync(пути, создатьДемоБазу: false).ConfigureAwait(false);
 
     if (режим == "printflow")
     {
-        await ЗасеятьОтправителяИПолучателя(состав);
+        await ЗасеятьОтправителяИПолучателя(состав).ConfigureAwait(false);
     }
 
     окно = new MainShell(состав)
@@ -73,12 +99,12 @@ try
         WindowState = FormWindowState.Normal,
     };
 
-    await окно.ИнициализироватьAsync();
+    await окно.ИнициализироватьAsync().ConfigureAwait(false);
 
     // Чтение команд — в фоне; исполнение на UI-потоке через BeginInvoke.
     _ = Task.Run(async () =>
     {
-        while (await Console.In.ReadLineAsync() is { } команда)
+        while (await Console.In.ReadLineAsync().ConfigureAwait(false) is { } команда)
         {
             var текст = команда.Trim().ToUpperInvariant();
 
@@ -107,6 +133,8 @@ try
 }
 catch (Exception ошибка)
 {
+    // CLI-контракт: harness не падает без диагностики — печатает ошибку и
+    // возвращает 1, чтобы драйвер зафиксировал FAIL и снял отпечатки.
     Console.Error.WriteLine(ошибка);
     return 1;
 }
@@ -116,7 +144,7 @@ finally
 
     if (состав is not null)
     {
-        await состав.DisposeAsync();
+        await состав.DisposeAsync().ConfigureAwait(false);
     }
 
     Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
@@ -136,7 +164,7 @@ finally
             }
             catch (IOException)
             {
-                await Task.Delay(200);
+                await Task.Delay(200).ConfigureAwait(false);
             }
         }
     }
@@ -165,6 +193,15 @@ static void Выполнить(MainShell окно, string команда)
 
             break;
 
+        case "COUNTS":
+            // Счётчики и состав таблиц: драйвер проверяет пустое состояние
+            // без UIA (строка состояния и число строк обеих таблиц).
+            Console.Out.WriteLine(
+                $"COUNTS всего={ИзвлечьЧисло(окно.СчётчикВсего.Text)} "
+                + $"отправителей={ЧислоСтрок(окно.ТаблицаОтправителей)} "
+                + $"получателей={ЧислоСтрок(окно.ТаблицаПолучателей)}");
+            break;
+
         case "F5":
             if (Нажать(окно, "Печать текущего конверта"))
             {
@@ -187,6 +224,36 @@ static void Выполнить(MainShell окно, string команда)
     }
 
     Console.Out.Flush();
+}
+
+static int ЧислоСтрок(DataGridView таблица)
+{
+    var число = 0;
+
+    foreach (DataGridViewRow строка in таблица.Rows)
+    {
+        if (!строка.IsNewRow)
+        {
+            число++;
+        }
+    }
+
+    return число;
+}
+
+static string ИзвлечьЧисло(string текст)
+{
+    var фрагменты = текст.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    foreach (var фрагмент in фрагменты)
+    {
+        if (long.TryParse(фрагмент, out _))
+        {
+            return фрагмент;
+        }
+    }
+
+    return "0";
 }
 
 static bool Нажать(MainShell окно, string текст)
@@ -230,7 +297,7 @@ static async Task ЗасеятьОтправителяИПолучателя(App
         PostalAddress = Address.Create(
             "101000",
             ["ООО «Отправитель Приёмки»", "Управление делами", "ул. Тверская, 12", "корп. 2", "г. Москва", string.Empty]).Value,
-    });
+    }).ConfigureAwait(false);
 
     await состав.Контрагенты.AddAsync(new Counterparty
     {
@@ -242,7 +309,7 @@ static async Task ЗасеятьОтправителяИПолучателя(App
         PostalAddress = Address.Create(
             "125009",
             ["ООО «Получатель Приёмки»", "Отдел писем", "ул. Тверская, 7", string.Empty, "г. Москва", string.Empty]).Value,
-    });
+    }).ConfigureAwait(false);
 
     // Текущий отправитель сохраняется в настройках интерфейса изолированного
     // профиля: печатный поток F5 требует выбранного отправителя.
@@ -259,7 +326,7 @@ static async Task ЗасеятьОтправителяИПолучателя(App
         Format = "C6",
         WidthMm = 324m,
         HeightMm = 229m,
-    });
+    }).ConfigureAwait(false);
 
     Console.Out.WriteLine("SEEDED");
     Console.Out.Flush();
