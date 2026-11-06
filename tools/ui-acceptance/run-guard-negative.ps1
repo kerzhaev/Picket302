@@ -71,19 +71,20 @@ try {
         Write-Host ("  stdout: " + ($stdout -replace $nl, ' | '))
         Write-Host ("  stderr (первые 3 строки): " + ((($stderr -split $nl) | Select-Object -First 3) -join ' | '))
 
-        if ($p.ExitCode -ne 3) {
-            Write-Host "  FAIL: ожидается код возврата 3"
-            $exitCode = 1
-            return
+        # Fault-inject: намеренно неверное ожидание доказывает fail-closed
+        # (несработавший assertion обязан дать ненулевой exit).
+        $ожидаемыйКод = 3
+        if ($env:P302_GUARD_FAULT -eq 'wrong-expectation') { $ожидаемыйКод = 0 }
+
+        if ($p.ExitCode -ne $ожидаемыйКод) {
+            throw "FAIL: ожидается код возврата $ожидаемыйКод, фактически $($p.ExitCode)"
         }
 
         if ($stdout -match 'PROFILE' -or $stdout -match 'READY') {
-            Write-Host "  FAIL: stdout содержит PROFILE/READY — гарда не было"
-            $exitCode = 1
-            return
+            throw 'FAIL: stdout содержит PROFILE/READY — гарда не было'
         }
 
-        Write-Host "  OK: код 3, приложение не запускалось"
+        Write-Host '  OK: код 3, приложение не запускалось'
     }
 
     # Отпечатки после обоих отказов
@@ -96,15 +97,28 @@ try {
     Write-Host "sentinel unchanged: $($sentinelДо -eq $sentinelПосле)"
     Write-Host "new files: $($новые.Count); changed files: $($изменённые.Count)"
 
-    if ($sentinelДо -ne $sentinelПосле) { Write-Host 'FAIL: sentinel изменён'; return }
-    if ($новые.Count -ne 0) { Write-Host 'FAIL: появились новые файлы'; return }
-    if ($изменённые.Count -ne 0) { Write-Host 'FAIL: изменены файлы'; return }
+    if ($sentinelДо -ne $sentinelПосле) { throw 'FAIL: sentinel изменён' }
+
+    $удалённые = @($отпечатокДо.Keys | Where-Object { -not $отпечатокПосле.ContainsKey($_) })
+    Write-Host "removed files: $($удалённые.Count)"
+    if ($удалённые.Count -ne 0) { throw "FAIL: удалены файлы реального профиля: $($удалённые -join '; ')" }
+    if ($новые.Count -ne 0) { throw "FAIL: появились новые файлы: $($новые -join '; ')" }
+    if ($изменённые.Count -ne 0) { throw "FAIL: изменены файлы: $($изменённые -join '; ')" }
 
     Write-Host 'GUARD-NEGATIVE PASS: True'
     $exitCode = 0
 }
+catch {
+    Write-Host "GUARD-NEGATIVE FAIL: $($_.Exception.Message)"
+    $exitCode = 1
+}
 finally {
-    if (Test-Path $sentinel) { Remove-Item $sentinel -Force }
+    $удалениеОк = $true
+    if (Test-Path $sentinel) {
+        try { Remove-Item $sentinel -Force -ErrorAction Stop; $удалениеОк = $true }
+        catch { Write-Host "FAIL: sentinel не удалён: $($_.Exception.Message)"; $удалениеОк = $false }
+    }
+    if (-not $удалениеОк) { $exitCode = 1 }
 }
 
 exit $exitCode

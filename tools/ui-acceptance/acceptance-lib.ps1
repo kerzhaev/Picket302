@@ -275,3 +275,21 @@ function Dump-AllWindows([uint32]$procId) {
     }
     return $список
 }
+
+# Пишет evidence-файл прогона; возвращает $true при успешной записи.
+function ЗаписатьEvidence([string]$относительныйПуть, [string]$заголовок, [string]$режимСтрока, $журнал) {
+    try {
+        $каталог = 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна'
+        $строки = @(
+            "# $заголовок",
+            '',
+            "Прогон: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), профиль: временный (guid), $режимСтрока.",
+            ''
+        ) + @($журнал)
+        Set-Content -Path (Join-Path $каталог $относительныйПуть) -Value $строки -Encoding UTF8 -ErrorAction Stop
+        return $true
+    } catch {
+        Write-Host "  EVIDENCE WRITE FAIL: $($_.Exception.Message)"
+        return $false
+    }
+}

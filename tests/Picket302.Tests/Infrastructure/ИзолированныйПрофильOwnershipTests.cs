@@ -22,13 +22,13 @@ public sealed class ИзолированныйПрофильOwnershipTests
     {
         using var профиль = new ИзолированныйПрофиль();
 
-        var состав = профиль.ВзятьВладение(
-            await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false));
+        var создан = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
+        var returned = профиль.ВзятьВладение(создан);
 
-        Assert.Same(состав, состав);
+        Assert.Same(создан, returned);
 
         // Повторная передача того же состава — уже ошибка владения.
-        Assert.Throws<InvalidOperationException>(() => профиль.ВзятьВладение(состав));
+        Assert.Throws<InvalidOperationException>(() => профиль.ВзятьВладение(создан));
     }
 
     /// <summary>
@@ -107,9 +107,22 @@ public sealed class ИзолированныйПрофильOwnershipTests
             _ = профиль.ВзятьВладение(
                 await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false));
 
-            профиль.Dispose();
+            // Dispose бросает ProfileCleanupException: cleanup failure
+            // машинно видимый, тест не зелёный.
+            ИзолированныйПрофиль.ProfileCleanupException? ошибка = null;
 
+            try
+            {
+                профиль.Dispose();
+            }
+            catch (ИзолированныйПрофиль.ProfileCleanupException пойманная)
+            {
+                ошибка = пойманная;
+            }
+
+            Assert.NotNull(ошибка);
             Assert.Equal(корень, профиль.ОставшийсяКаталог);
+            Assert.Contains(корень, ошибка.Message, StringComparison.Ordinal);
             Assert.True(Directory.Exists(корень));
 
             // Ручная уборка после диагностики: тест не оставляет каталог.
@@ -137,8 +150,40 @@ public sealed class ИзолированныйПрофильOwnershipTests
         {
             if (Directory.Exists(корень))
             {
-                Directory.Delete(корень, recursive: true);
+                try
+                {
+                    Directory.Delete(корень, recursive: true);
+                }
+                catch (IOException)
+                {
+                }
             }
+        }
+    }
+
+    /// <summary>
+    /// Передача состава, созданного по путям чужого профиля, отклоняется:
+    /// утилизация этого профиля иначе закрыла бы чужую базу, а собственная
+    /// осталась бы неосвобождённой (задокументированное поведение).
+    /// </summary>
+    [Fact]
+    public async Task ВзятьВладение_СоставЧужогоПрофиля_Отклоняется()
+    {
+        using var профиль = new ИзолированныйПрофиль();
+        using var чужой = new ИзолированныйПрофиль();
+
+        var чужойСостав = await AppServices.СоздатьAsync(чужой.Пути, создатьДемоБазу: false);
+
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => профиль.ВзятьВладение(чужойСостав));
+
+            // Чужой профиль освобождает собственный состав сам.
+            await чужойСостав.DisposeAsync();
+        }
+        finally
+        {
+            чужой.Dispose();
         }
     }
 }

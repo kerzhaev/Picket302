@@ -75,10 +75,16 @@ public sealed class ИзолированныйПрофиль : IDisposable
     /// Повторная передача — ошибка: молчаливая замена состава теряла бы
     /// прежний без освобождения.
     /// </summary>
+    /// <remarks>
+    /// Состав обязан быть создан по путям <see cref="Пути"/>: передача
+    /// состава чужого профиля отклоняется, иначе утилизация профиля
+    /// закрыла бы чужую базу, а собственная осталась бы неосвобождённой.
+    /// </remarks>
     /// <param name="состав">Состав, созданный по <see cref="Пути"/>.</param>
     /// <returns>Тот же состав — для fluent-использования.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Профиль уже владеет составом либо оболочкой.
+    /// Профиль уже владеет составом либо оболочкой, или состав создан по
+    /// другому профилю.
     /// </exception>
     public AppServices ВзятьВладение(AppServices состав)
     {
@@ -90,14 +96,41 @@ public sealed class ИзолированныйПрофиль : IDisposable
                 "Профиль уже владеет составом или оболочкой — повторная передача владения недопустима.");
         }
 
+        var ожидаемаяБаза = Picket302ProfilePaths.ДляКорня(Корень).DatabasePath;
+
+        if (!string.Equals(
+                Path.GetFullPath(состав.ПутьБазы),
+                Path.GetFullPath(ожидаемаяБаза),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Состав принадлежит другому профилю (база: " + состав.ПутьБазы
+                + ", ожидалась: " + ожидаемаяБаза + ") — передача владения недопустима.");
+        }
+
         _состав = состав;
 
         return состав;
     }
 
     /// <summary>
-    /// Признак неудалённого временного каталога после исчерпания попыток:
-    /// среда не чистая, диагностика обязана быть видимой.
+    /// Исключение утилизации профиля: временный каталог не удалён — среда
+    /// не чистая. Бросается из <see cref="Dispose"/>, чтобы провал cleanup
+    /// делал тест красным (машинно видимый), а не только печатался.
+    /// </summary>
+    public sealed class ProfileCleanupException : InvalidOperationException
+    {
+        /// <summary>Создаёт исключение с путём остаточного каталога.</summary>
+        /// <param name="каталог">Неудалённый каталог.</param>
+        public ProfileCleanupException(string каталог)
+            : base("ИзолированныйПрофиль: временный каталог не удалён после 5 попыток и остался: " + каталог)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Неудалённый временный каталог после утилизации; заполняется перед
+    /// выбросом <see cref="ProfileCleanupException"/>.
     /// </summary>
     public string? ОставшийсяКаталог { get; private set; }
 
@@ -111,78 +144,107 @@ public sealed class ИзолированныйПрофиль : IDisposable
 
         _утилизирован = true;
 
+        Exception? ошибкаОболочки = null;
+        Exception? ошибкаСостава = null;
+
+        // Оболочка, состав, пул и каталог освобождаются независимо: провал
+        // одного не должен оставить остальные необработанными.
         try
         {
-            // Оболочка и состав освобождаются независимо: провал одного не
-            // должен оставить другой и временный каталог необработанными.
-            try
-            {
-                _оболочка?.Dispose();
-            }
-            catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException)
-            {
-                Console.Error.WriteLine($"ИзолированныйПрофиль: ошибка утилизации оболочки: {ошибка.Message}");
-            }
+            _оболочка?.Dispose();
+        }
+        catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException)
+        {
+            ошибкаОболочки = ошибка;
+        }
 
-            try
-            {
-                _состав?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            }
-            catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException or SqliteException)
-            {
-                Console.Error.WriteLine($"ИзолированныйПрофиль: ошибка утилизации состава: {ошибка.Message}");
-            }
+        try
+        {
+            _состав?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException or SqliteException)
+        {
+            ошибкаСостава = ошибка;
+        }
 
-            // Пул соединений может удерживать файл базы в момент удаления.
+        try
+        {
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        }
+        catch (Exception ошибка)
+        {
+            Console.Error.WriteLine("ИзолированныйПрофиль: ошибка очистки пула: " + ошибка.Message);
+        }
 
-            for (var попытка = 0; попытка < 5; попытка++)
-            {
-                try
-                {
-                    if (Directory.Exists(Корень))
-                    {
-                        Directory.Delete(Корень, recursive: true);
-                    }
-
-                    break;
-                }
-                catch (IOException)
-                {
-                    // Каталог ещё занят завершающимися соединениями — повторяем.
-                    Thread.Sleep(200);
-                }
-            }
-
-            if (Directory.Exists(Корень))
-            {
-                // После исчерпания попыток каталог остался: среда не чистая.
-                ОставшийсяКаталог = Корень;
-                Console.Error.WriteLine(
-                    $"ИзолированныйПрофиль: временный каталог не удалён после 5 попыток и остался: {Корень}");
-            }
-
-            // Родительский каталог «Picket302Tests» удаляется, когда опустел:
-            // параллельные тесты создают в нём свои уникальные корни.
+        for (var попытка = 0; попытка < 5; попытка++)
+        {
             try
             {
-                var родитель = Path.GetDirectoryName(Корень);
-
-                if (родитель is not null
-                    && Directory.Exists(родитель)
-                    && !Directory.EnumerateFileSystemEntries(родитель).Any())
+                if (Directory.Exists(Корень))
                 {
-                    Directory.Delete(родитель);
+                    Directory.Delete(Корень, recursive: true);
                 }
+
+                break;
             }
-            catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+            catch (IOException)
             {
-                // Занятый параллельным тестом каталог удалит последний тест.
+                // Каталог ещё занят завершающимися соединениями — повторяем.
+                Thread.Sleep(200);
             }
         }
-        finally
+
+        if (Directory.Exists(Корень))
         {
-            GC.SuppressFinalize(this);
+            ОставшийсяКаталог = Корень;
+        }
+
+        // Ошибки утилизации и cleanup сообщаются вместе, чтобы ни одна не
+        // маскировала другую.
+        if (ошибкаОболочки is not null
+            || ошибкаСостава is not null
+            || ОставшийсяКаталог is not null)
+        {
+            throw new ProfileCleanupException(ОставшийсяКаталог ?? Корень)
+            {
+                Data =
+                {
+                    ["ошибкаОболочки"] = ошибкаОболочки?.Message ?? string.Empty,
+                    ["ошибкаСостава"] = ошибкаСостава?.Message ?? string.Empty,
+                    ["каталогОстался"] = ОставшийсяКаталог is not null,
+                },
+            };
+        }
+
+        // Родительский каталог «Picket302Tests» удаляется, когда опустел:
+        // параллельные тесты создают в нём свои уникальные корни.
+        try
+        {
+            var родитель = Path.GetDirectoryName(Корень);
+
+            if (родитель is not null
+                && Directory.Exists(родитель)
+                && !Directory.EnumerateFileSystemEntries(родитель).Any())
+            {
+                Directory.Delete(родитель);
+            }
+        }
+        catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+        {
+            // Занятый параллельным тестом каталог удалит последний тест.
+        }
+
+        if (ошибкаОболочки is not null || ошибкаСостава is not null)
+        {
+            throw new ProfileCleanupException(Корень)
+            {
+                Data =
+                {
+                    ["ошибкаОболочки"] = ошибкаОболочки?.Message ?? string.Empty,
+                    ["ошибкаСостава"] = ошибкаСостава?.Message ?? string.Empty,
+                    ["каталогОстался"] = false,
+                },
+            };
         }
     }
 

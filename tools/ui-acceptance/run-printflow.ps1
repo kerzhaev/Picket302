@@ -32,6 +32,7 @@ function ЗафиксироватьНеожиданное([string]$тип, [IntP
     $файл = Join-Path $out ("$префиксСкриншота-" + (Get-Date -Format 'HHmmss') + '.png')
     [AccWin]::Capture($окно, $файл) | Out-Null
     Запись "UNEXPECTED ${тип}: '$заголовок' hwnd=$окно (скриншот: $(Split-Path -Leaf $файл))"
+    $script:unexpectedFired = $true
 }
 
 # Ожидает окно заголовка $title, попутно ловя неожиданные модальные окна:
@@ -93,6 +94,9 @@ try {
     Start-Sleep -Seconds 2
 
     $успех = $true
+    $f5Passed = $false
+    $f6Passed = $false
+    $unexpectedFired = $false
     $всёОк = {
         param($условие, $сообщение)
         if ($условие) { Запись "OK: $сообщение" } else { Запись "FAIL: $сообщение"; $script:успех = $false }
@@ -165,6 +169,10 @@ try {
         Запись "UI отвечает после F5 (WM_NULL): $живF5"
         if (-not $живF5) { $успех = $false }
     }
+
+    # FLOW F5 PASS: карточка, диалог печати и отмена фактически пройдены.
+    $f5Passed = $успех -and $живF5
+    Запись "FLOW F5 PASS: $f5Passed"
 
     # --- 4. F6: Карточка -> ОК -> MessageBox -> Печать -> Подача -> Предпросмотр
     if ($успех) {
@@ -323,6 +331,11 @@ try {
         if (-not $живF6) { $успех = $false }
     }
 
+    # FLOW F6 PASS: карточка, MessageBox, печать, подача и предпросмотр
+    # фактически пройдены.
+    $f6Passed = $успех -and $живF6
+    Запись "FLOW F6 PASS: $f6Passed"
+
     # --- 5. Завершение и уборка --------------------------------------------
     $убит = Stop-Acceptance $h
     if ($h -ne $null -and -not $h.Proc.HasExited) { $h.Proc.WaitForExit() }
@@ -348,24 +361,65 @@ try {
     Запись "production delta: new=$($дельта.New.Count) changed=$($дельта.Changed.Count) removed=$($дельта.Removed.Count)"
 
     # --- 7. Итог ------------------------------------------------------------
+    # Fault-inject (в памяти, production не трогается).
+    if ($env:P302_PRINTFLOW_FAULT -eq 'delta-removed') {
+        $дельта.Removed = @('C:' + [IO.Path]::DirectorySeparatorChar + 'fake' + [IO.Path]::DirectorySeparatorChar + 'injected.file')
+        Запись 'FAULT-INJECT: delta Removed > 0'
+    }
+
+    if ($env:P302_PRINTFLOW_FAULT -eq 'killed') {
+        $убит = $true
+        Запись 'FAULT-INJECT: harness killed = True'
+    }
+
+    if ($env:P302_PRINTFLOW_FAULT -eq 'cleanup-false') {
+        $профильОчищен = $false
+        Запись 'FAULT-INJECT: cleanup = False'
+    }
+
+    if ($env:P302_PRINTFLOW_FAULT -eq 'harness-exit') {
+        $кодВыходаHarness = 7
+        Запись 'FAULT-INJECT: harness exit = 7'
+    }
+
     & $всёОк $hasSelect 'SELECT подтверждён stdout (OK SELECT)'
     & $всёОк ($отказовStdout -eq 0) 'нет FAIL-строк в stdout harness'
 
     # OK F5/OK F6 печатаются асинхронно после закрытия модальной цепочки
     # (async void + ShowDialog) и не гарантированы в stdout — не FAIL-условие;
-    # фактическое выполнение команд доказано появлением и обработкой
-    # всех модальных окон цепочки (см. журнал выше).
+    # выполнение команд доказано FLOW F5/F6 PASS по фактически пройденным окнам.
     Запись "информационно: OK F5=$hasF5 OK F6=$hasF6 в stdout (async void после ShowDialog)"
 
-    if ($успех) {
-        Запись 'PRINTFLOW PASS: True'
+    $harnessPassed = ($кодВыходаHarness -eq 0) -and (-not $убит)
+    $cleanupPassed = $профильОчищен
+    $profileSafetyPassed = ($sentinelДо -eq $sentinelПосле) -and
+        ($дельта.New.Count -eq 0) -and
+        ($дельта.Changed.Count -eq 0) -and
+        ($дельта.Removed.Count -eq 0)
+
+    Запись "F5-цепочка: $f5Passed; F6-цепочка: $f6Passed"
+    Запись "неожиданных окон: $unexpectedFired; UI после F5: $живF5; UI после F6: $живF6"
+    Запись "harness: exit=$кодВыходаHarness killed=$убит -> $harnessPassed"
+    Запись "cleanup: $cleanupPassed; profile safety: $profileSafetyPassed"
+
+    $всёХорошо = $успех -and $f5Passed -and $f6Passed -and (-not $unexpectedFired) -and
+        $harnessPassed -and $cleanupPassed -and $profileSafetyPassed
+
+    if ($всёХорошо) {
         $exitCode = 0
+        Запись 'итоговый exit code: 0 (PASS)'
+        $evidenceOk = ЗаписатьEvidence 'f5-f6-runtime-evidence.md' 'F5/F6 runtime-доказательство (acceptance harness)' 'createDemoData=false' $журнал
+        Запись "evidence записан: $evidenceOk"
+
+        if (-not $evidenceOk) { $exitCode = 1; Запись 'PRINTFLOW PASS: False (evidence не записан)' }
+        else { Запись 'PRINTFLOW PASS: True' }
     } else {
         Запись 'PRINTFLOW PASS: False'
     }
 }
 catch {
     Запись "EXCEPTION: $($_.Exception.Message)"
+    [void](ЗаписатьEvidence 'f5-f6-runtime-evidence.md' 'F5/F6 runtime-доказательство (FAIL)' 'createDemoData=false' $журнал)
     $exitCode = 1
 }
 finally {

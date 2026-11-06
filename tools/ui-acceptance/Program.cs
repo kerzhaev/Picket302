@@ -82,6 +82,8 @@ Application.SetCompatibleTextRenderingDefault(false);
 
 AppServices? состав = null;
 MainShell? окно = null;
+var основнойКод = 0;
+var cleanupКод = 0;
 
 try
 {
@@ -128,51 +130,113 @@ try
 
     Console.Out.WriteLine("DONE");
     Console.Out.Flush();
-
-    return 0;
 }
 catch (Exception ошибка)
 {
     // CLI-контракт: harness не падает без диагностики — печатает ошибку и
     // возвращает 1, чтобы драйвер зафиксировал FAIL и снял отпечатки.
     Console.Error.WriteLine(ошибка);
-    return 1;
+    основнойКод = 1;
 }
-finally
-{
-    окно?.Dispose();
 
-    if (состав is not null)
+// --- Cleanup fail-closed: каждый шаг независимо, итог учитывается ------
+try
+{
+    try
     {
-        await состав.DisposeAsync().ConfigureAwait(false);
+        окно?.Dispose();
+    }
+    catch (Exception ошибка)
+    {
+        Console.Error.WriteLine($"CLEANUP: ошибка утилизации окна: {ошибка.Message}");
+        cleanupКод = 1;
     }
 
-    Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-
-    if (!сохранятьПрофиль)
+    try
     {
-        for (var попытка = 0; попытка < 5; попытка++)
+        if (состав is not null)
         {
-            try
-            {
-                if (Directory.Exists(кореньПрофиля))
-                {
-                    Directory.Delete(кореньПрофиля, recursive: true);
-                }
-
-                break;
-            }
-            catch (IOException)
-            {
-                await Task.Delay(200).ConfigureAwait(false);
-            }
+            await состав.DisposeAsync().ConfigureAwait(false);
         }
+    }
+    catch (Exception ошибка)
+    {
+        Console.Error.WriteLine($"CLEANUP: ошибка утилизации состава: {ошибка.Message}");
+        cleanupКод = 1;
+    }
+
+    try
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+    }
+    catch (Exception ошибка)
+    {
+        Console.Error.WriteLine($"CLEANUP: ошибка очистки пула соединений: {ошибка.Message}");
+        cleanupКод = 1;
+    }
+
+    if (сохранятьПрофиль)
+    {
+        Console.Out.WriteLine($"PROFILE-KEPT {пути.DataDirectory}");
+        Console.Out.WriteLine("CLEANUP: intentionally kept");
     }
     else
     {
-        Console.Out.WriteLine($"PROFILE-KEPT {пути.DataDirectory}");
+        var удалён = false;
+
+        try
+        {
+            for (var попытка = 0; попытка < 5; попытка++)
+            {
+                if (!Directory.Exists(кореньПрофиля))
+                {
+                    удалён = true;
+                    break;
+                }
+
+                try
+                {
+                    Directory.Delete(кореньПрофиля, recursive: true);
+                }
+                catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+                {
+                    await Task.Delay(200).ConfigureAwait(false);
+                }
+            }
+
+            удалён = !Directory.Exists(кореньПрофиля);
+        }
+        catch (Exception ошибка)
+        {
+            Console.Error.WriteLine($"CLEANUP: ошибка удаления временного профиля: {ошибка.Message}");
+        }
+
+        if (удалён)
+        {
+            Console.Out.WriteLine("CLEANUP PASS: True");
+        }
+        else
+        {
+            cleanupКод = 1;
+            Console.Error.WriteLine($"CLEANUP PASS: False");
+            Console.Error.WriteLine($"CLEANUP: каталог остался: {кореньПрофиля}");
+            Console.Error.WriteLine("CLEANUP: причина — файлы заняты процессом или доступ запрещён");
+        }
     }
 }
+finally
+{
+    // Итог: нормальный режим завершается нулём только при успешном
+    // сценарии И успешном cleanup.
+    var итог = Math.Max(основнойКод, cleanupКод);
+
+    Console.Out.WriteLine($"EXIT {итог}");
+    Console.Out.Flush();
+
+    Environment.ExitCode = итог;
+}
+
+return Environment.ExitCode;
 
 static void Выполнить(MainShell окно, string команда)
 {

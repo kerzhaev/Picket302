@@ -88,6 +88,18 @@ try {
     Запись "production delta: new=$($дельта.New.Count) changed=$($дельта.Changed.Count) removed=$($дельта.Removed.Count)"
 
     # --- 7. Итог: все обязательные условия ---------------------------------
+    # Fault-inject (в памяти, production не трогается): доказательство
+    # fail-closed для Removed>0 и провала cleanup.
+    if ($env:P302_EMPTYBOOK_FAULT -eq 'delta-removed') {
+        $дельта.Removed = @('C:' + [IO.Path]::DirectorySeparatorChar + 'fake' + [IO.Path]::DirectorySeparatorChar + 'injected.file')
+        Запись 'FAULT-INJECT: delta Removed > 0'
+    }
+
+    if ($env:P302_EMPTYBOOK_FAULT -eq 'cleanup-false') {
+        $профильОчищен = $false
+        Запись 'FAULT-INJECT: cleanup = False'
+    }
+
     $условия = [ordered]@{
         'READY получен' = ($null -ne ($stdout | Where-Object { $_ -match '^READY ' }))
         'COUNTS получен' = ($null -ne $строкаСчётчиков)
@@ -99,6 +111,7 @@ try {
         'sentinel совпал' = ($sentinelДо -eq $sentinelПосле)
         'новых файлов нет' = ($дельта.New.Count -eq 0)
         'изменённых файлов нет' = ($дельта.Changed.Count -eq 0)
+        'удалённых файлов нет' = ($дельта.Removed.Count -eq 0)
         'harness exit 0' = ($кодВыходаHarness -eq 0)
         'harness не убит' = (-not $убит)
         'нет FAIL в stdout' = ($отказовStdout -eq 0)
@@ -111,6 +124,11 @@ try {
         if (-not $значение) { $всёХорошо = $false }
     }
 
+    $evidenceOk = ЗаписатьEvidence 'emptybook-runtime-evidence.md' 'Emptybook runtime-доказательство' 'createDemoData=false' $журнал
+    Запись "evidence записан: $evidenceOk"
+
+    if (-not $evidenceOk) { $всёХорошо = $false; Запись 'FAIL: evidence не записан' }
+
     if ($всёХорошо) {
         Запись 'EMPTYBOOK PASS: True'
         $exitCode = 0
@@ -120,6 +138,7 @@ try {
 }
 catch {
     Запись "EXCEPTION: $($_.Exception.Message)"
+    [void](ЗаписатьEvidence 'emptybook-runtime-evidence.md' 'Emptybook runtime-доказательство (FAIL)' 'createDemoData=false' $журнал)
     $exitCode = 1
 }
 finally {
