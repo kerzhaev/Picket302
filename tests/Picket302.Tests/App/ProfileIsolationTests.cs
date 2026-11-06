@@ -135,15 +135,16 @@ public sealed class ProfileIsolationTests
     {
         using var профиль = new ИзолированныйПрофиль();
 
-        var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
+        // Владение у профиля: состав освобождается в Dispose профиля даже
+        // при упавшем Assert.
+        var состав = профиль.ВзятьВладение(
+            await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false));
 
         var страница = await состав.Контрагенты
             .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None);
 
         Assert.Equal(0, страница.TotalCount);
         Assert.Empty(await состав.Контрагенты.GetSendersAsync(CancellationToken.None));
-
-        await состав.DisposeAsync();
     }
 
     /// <summary>
@@ -154,7 +155,8 @@ public sealed class ProfileIsolationTests
     public async Task ДемоБазаСоздаётсяТолькоПриЯвномЗапросе()
     {
         using var пустой = new ИзолированныйПрофиль();
-        var составПустой = await AppServices.СоздатьAsync(пустой.Пути, создатьДемоБазу: false);
+        var составПустой = пустой.ВзятьВладение(
+            await AppServices.СоздатьAsync(пустой.Пути, создатьДемоБазу: false));
 
         Assert.Equal(
             0,
@@ -162,17 +164,14 @@ public sealed class ProfileIsolationTests
                 .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None))
             .TotalCount);
 
-        await составПустой.DisposeAsync();
-
         using var демо = new ИзолированныйПрофиль();
-        var составДемо = await AppServices.СоздатьAsync(демо.Пути, создатьДемоБазу: true);
+        var составДемо = демо.ВзятьВладение(
+            await AppServices.СоздатьAsync(демо.Пути, создатьДемоБазу: true));
 
         Assert.True(
             (await составДемо.Контрагенты
                 .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None))
             .TotalCount > 0);
-
-        await составДемо.DisposeAsync();
     }
 
     /// <summary>
@@ -241,7 +240,7 @@ public sealed class ProfileIsolationTests
     /// не получает новых файлов журнала.
     /// </summary>
     [Fact]
-    public async Task ЖурналСбоевТестовогоКонтура_ПишетВоВременныйПрофиль()
+    public void ЖурналСбоевТестовогоКонтура_ПишетВоВременныйПрофиль()
     {
         var журналРеальногоДо = СнятьОтпечатки()
             .Where(пара => пара.Key.StartsWith("logs", StringComparison.Ordinal))

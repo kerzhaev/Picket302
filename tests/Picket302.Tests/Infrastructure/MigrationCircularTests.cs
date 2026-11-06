@@ -35,16 +35,28 @@ public sealed class MigrationCircularTests : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        // Соединения BackupService/SqliteTestDatabase возвращаются в пул и
+        // держат файл базы — без очистки пула каталог остаётся (замечание
+        // review 2026-11-07: 2 каталога restored.db на полный прогон).
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
         try
         {
             if (Directory.Exists(_каталог))
             {
                 Directory.Delete(_каталог, recursive: true);
             }
+
+            if (Directory.Exists(_каталог))
+            {
+                Console.Error.WriteLine(
+                    $"MigrationCircularTests: временный каталог не удалён и остался: {_каталог}");
+            }
         }
         catch (IOException)
         {
-            // Временный каталог не удалён — на результат теста не влияет.
+            Console.Error.WriteLine(
+                $"MigrationCircularTests: не удалось удалить временный каталог: {_каталог}");
         }
 
         GC.SuppressFinalize(this);

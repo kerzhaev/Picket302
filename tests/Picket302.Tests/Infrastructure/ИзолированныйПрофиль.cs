@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Picket302.App;
 using Picket302.Infrastructure;
 
@@ -71,61 +72,119 @@ public sealed class ИзолированныйПрофиль : IDisposable
     /// утилизация профиля освобождает состав и очищает пул соединений,
     /// поэтому файл базы освобождается и временный каталог удаляется
     /// (без владения тест оставлял каталог с <c>picket302.db</c>).
+    /// Повторная передача — ошибка: молчаливая замена состава теряла бы
+    /// прежний без освобождения.
     /// </summary>
     /// <param name="состав">Состав, созданный по <see cref="Пути"/>.</param>
     /// <returns>Тот же состав — для fluent-использования.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Профиль уже владеет составом либо оболочкой.
+    /// </exception>
     public AppServices ВзятьВладение(AppServices состав)
     {
         ArgumentNullException.ThrowIfNull(состав);
+
+        if (_состав is not null || _оболочка is not null)
+        {
+            throw new InvalidOperationException(
+                "Профиль уже владеет составом или оболочкой — повторная передача владения недопустима.");
+        }
 
         _состав = состав;
 
         return состав;
     }
 
+    /// <summary>
+    /// Признак неудалённого временного каталога после исчерпания попыток:
+    /// среда не чистая, диагностика обязана быть видимой.
+    /// </summary>
+    public string? ОставшийсяКаталог { get; private set; }
+
     /// <inheritdoc />
     public void Dispose()
     {
-        _оболочка?.Dispose();
-        _состав?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-
-        // Пул соединений может удерживать файл базы в момент удаления.
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-
-        for (var попытка = 0; попытка < 5; попытка++)
+        if (_утилизирован)
         {
-            try
-            {
-                if (Directory.Exists(Корень))
-                {
-                    Directory.Delete(Корень, recursive: true);
-                }
-
-                break;
-            }
-            catch (IOException)
-            {
-                // Каталог ещё занят завершающимися соединениями — повторяем.
-                Thread.Sleep(200);
-            }
+            return;
         }
 
-        // Родительский каталог «Picket302Tests» удаляется, когда опустел:
-        // параллельные тесты создают в нём свои уникальные корни.
+        _утилизирован = true;
+
         try
         {
-            var родитель = Path.GetDirectoryName(Корень);
-
-            if (родитель is not null
-                && Directory.Exists(родитель)
-                && !Directory.EnumerateFileSystemEntries(родитель).Any())
+            // Оболочка и состав освобождаются независимо: провал одного не
+            // должен оставить другой и временный каталог необработанными.
+            try
             {
-                Directory.Delete(родитель);
+                _оболочка?.Dispose();
+            }
+            catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException)
+            {
+                Console.Error.WriteLine($"ИзолированныйПрофиль: ошибка утилизации оболочки: {ошибка.Message}");
+            }
+
+            try
+            {
+                _состав?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+            catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException or SqliteException)
+            {
+                Console.Error.WriteLine($"ИзолированныйПрофиль: ошибка утилизации состава: {ошибка.Message}");
+            }
+
+            // Пул соединений может удерживать файл базы в момент удаления.
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+            for (var попытка = 0; попытка < 5; попытка++)
+            {
+                try
+                {
+                    if (Directory.Exists(Корень))
+                    {
+                        Directory.Delete(Корень, recursive: true);
+                    }
+
+                    break;
+                }
+                catch (IOException)
+                {
+                    // Каталог ещё занят завершающимися соединениями — повторяем.
+                    Thread.Sleep(200);
+                }
+            }
+
+            if (Directory.Exists(Корень))
+            {
+                // После исчерпания попыток каталог остался: среда не чистая.
+                ОставшийсяКаталог = Корень;
+                Console.Error.WriteLine(
+                    $"ИзолированныйПрофиль: временный каталог не удалён после 5 попыток и остался: {Корень}");
+            }
+
+            // Родительский каталог «Picket302Tests» удаляется, когда опустел:
+            // параллельные тесты создают в нём свои уникальные корни.
+            try
+            {
+                var родитель = Path.GetDirectoryName(Корень);
+
+                if (родитель is not null
+                    && Directory.Exists(родитель)
+                    && !Directory.EnumerateFileSystemEntries(родитель).Any())
+                {
+                    Directory.Delete(родитель);
+                }
+            }
+            catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+            {
+                // Занятый параллельным тестом каталог удалит последний тест.
             }
         }
-        catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+        finally
         {
-            // Занятый параллельным тестом каталог удалит последний тест.
+            GC.SuppressFinalize(this);
         }
     }
+
+    private bool _утилизирован;
 }

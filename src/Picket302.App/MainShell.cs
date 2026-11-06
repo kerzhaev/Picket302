@@ -2826,12 +2826,23 @@ public sealed class MainShell : Form
     /// истечении срока (ТЗ §8.10, функция 119: «NAG-экран при старте в
     /// trial-режиме», «Осталось дней: 0»).
     /// </summary>
+    /// <remarks>
+    /// Отключено решением владельца проекта (2026-11-07): лицензионная фича
+    /// целиком отложена на самый последний этап — NAG-окно при старте не
+    /// показывается. Метод и <see cref="FormLicenseNag"/> сохранены для
+    /// будущего включения одной строкой в <see cref="OnLoad"/>.
+    /// </remarks>
     /// <param name="состав">Состав приложения.</param>
     /// <returns><see langword="true"/>, если NAG-окно было показано.</returns>
     public bool ПоказатьNagЛицензии(AppServices состав)
     {
         ArgumentNullException.ThrowIfNull(состав);
 
+        // Лицензионная фича отложена (решение владельца 2026-11-07): окно
+        // не показывается; метод сохранён для будущего включения.
+        return false;
+
+#pragma warning disable CS0162 // Недостижимый код — сохранён для будущего включения NAG
         var статус = состав.ВоротаЛицензии.ТекущийСтатус;
 
         if (статус.State == LicenseState.Licensed)
@@ -2848,6 +2859,7 @@ public sealed class MainShell : Form
         }
 
         return true;
+#pragma warning restore CS0162 // Недостижимый код — сохранён для будущего включения NAG
     }
 
     /// <summary>

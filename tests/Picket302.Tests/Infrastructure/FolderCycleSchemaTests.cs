@@ -27,16 +27,29 @@ public sealed class FolderCycleSchemaTests : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
+        // Соединения теста возвращаются в пул (Pooling по умолчанию) и
+        // держат файл базы — без очистки пула временный каталог остаётся.
+        SqliteConnection.ClearAllPools();
+
         try
         {
             if (Directory.Exists(_каталог))
             {
                 Directory.Delete(_каталог, recursive: true);
             }
+
+            if (Directory.Exists(_каталог))
+            {
+                // После исчерпания одной попытки: каталог остался занятым —
+                // среда не чистая, это должно быть видно в диагностике.
+                Console.Error.WriteLine(
+                    $"FolderCycleSchemaTests: временный каталог не удалён и остался: {_каталог}");
+            }
         }
         catch (IOException)
         {
-            // Временный каталог не удалён — на результат теста не влияет.
+            Console.Error.WriteLine(
+                $"FolderCycleSchemaTests: не удалось удалить временный каталог: {_каталог}");
         }
 
         GC.SuppressFinalize(this);
@@ -131,20 +144,37 @@ public sealed class FolderCycleSchemaTests : IDisposable
         }
 
         var строка = new SqliteConnectionStringBuilder { DataSource = путьБазы }.ToString();
-        var соединение = new SqliteConnection(строка);
+
+        // Соединение владеет проверкой и закрывается в finally при любом
+        // исходе: при таймауте фоновой задачи открытый дескриптор базы
+        // удерживал временный каталог.
+        await using var соединение = new SqliteConnection(строка);
         await соединение.OpenAsync();
 
-        var задача = Task.Run(() => соединение.ExecuteAsync(
-            "UPDATE folders SET parent_id = 1 WHERE id = 2;"));
+        Task? задача = null;
 
-        var завершилась = await Task.WhenAny(задача, Task.Delay(TimeSpan.FromSeconds(15)));
+        try
+        {
+            задача = Task.Run(() => соединение.ExecuteAsync(
+                "UPDATE folders SET parent_id = 1 WHERE id = 2;"));
 
-        Assert.True(
-            завершилась == задача,
-            "Обновление parent_id на дереве с циклом не завершилось — рекурсивный обход триггера не конечен.");
+            var завершилась = await Task.WhenAny(задача, Task.Delay(TimeSpan.FromSeconds(15)));
 
-        // Перемещение под корневую папку цикл разрывает — ошибки быть не должно.
-        await задача;
+            Assert.True(
+                завершилась == задача,
+                "Обновление parent_id на дереве с циклом не завершилось — рекурсивный обход триггера не конечен.");
+
+            // Перемещение под корневую папку цикл разрывает — ошибки быть не должно.
+            await задача;
+        }
+        finally
+        {
+            // При таймауте фоновая задача могла остаться в работе: закрытие
+            // соединения прерывает её ExecuteAsync — это допустимо на пути
+            // зафиксированного FAIL; дескриптор базы освобождается.
+            await соединение.CloseAsync();
+            SqliteConnection.ClearPool(соединение);
+        }
 
         await using var проверка = await SqliteTestDatabase.CreateFileAsync(путьБазы, сМиграциями: false);
 
