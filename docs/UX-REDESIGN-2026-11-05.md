@@ -15,7 +15,8 @@
 |---|---|---|
 | Базовый коммит ТЗ | `0dc8002` (в `main` через merge `f6a1e64`) | исходный базис этапа |
 | Этап редизайна | `9d76bda` (ветка `feature/redesign-ui-stage2`) | корневой SplitContainer, TableLayoutPanel-диалоги, прокручиваемый предпросмотр |
-| Закрытие замечаний review | см. `git log` ветки после `9d76bda` | изоляция профиля, сериализация тестов, acceptance F5/F6, empty-book, правки отчёта |
+| Закрытие первой серии замечаний | `a558952` | изоляция профиля, сериализация тестов, acceptance F5/F6, empty-book, правки отчёта |
+| Закрытие второй серии замечаний (гард, fail-closed, утечки, evidence) | см. `git log` ветки после `a558952` | обход гарда закрыт, скрипты fail-closed, FolderCycleSchemaTests соединение, владение профиля, CS1998, 0 предупреждений harness |
 
 ## 3. Сравнение с референсом
 
@@ -297,25 +298,45 @@ WinForms-форм в параллельных коллекциях и глоба
 Не запускались (вне области): `FullyQualifiedName~ComAutomation`,
 `FullyQualifiedName~Acceptance`.
 
-## 8. Статусы
+## 8. Статусы (свежие прогоны 2026-11-06, вторая серия замечаний)
 
-    SOURCE_VERIFIED=true            — исходник сверён, все правки в ветке
-    BUILD_DEBUG_VERIFIED=true       — 0 ошибок / 0 предупреждений, 2026-11-06
-    BUILD_RELEASE_VERIFIED=true     — 0 ошибок / 0 предупреждений, 2026-11-06
-    TEST_DEBUG_VERIFIED=true        — 1227/1227, 2026-11-06
-    TEST_RELEASE_VERIFIED=true      — 58/58 целевые ×3, 2026-11-06
-    TEST_STABILITY_VERIFIED=true    — 3×Debug + 3×Release без зависаний,
-                                      без остаточных процессов и профилей
-    PROFILE_SAFETY_VERIFIED=true    — sentinel + отпечатки: дельта 0/0/0
-    EMPTY_STATE_VISUAL_VERIFIED=true — настоящий пустой экран, скриншот 01
-    F5_F6_RUNTIME_VERIFIED=true     — полная модальная цепочка обоих сценариев
-    UI_VISUAL_VERIFIED=true         — 18 скриншотов + F5/F6 (таблица п. 6)
-    REFERENCE_VISUAL_VERIFIED=PARTIAL — сравнён только главный экран референса
-    COM_VERIFIED=NOT_RUN_BY_SCOPE   — COM/cold activation не запускались
-    PRINT_VERIFIED=NOT_RUN_BY_SCOPE — физическая печать не выполнялась;
-                                      диалог печати — «Отмена», предпросмотр
-                                      и подача — «Закрыть»/«Продолжить»+
-                                      «Закрыть», заданий на принтер нет
+    SOURCE_VERIFIED=true              — исходник сверён, все правки в ветке
+    BUILD_DEBUG_VERIFIED=true         — 0 ошибок / 0 предупреждений
+    BUILD_RELEASE_VERIFIED=true       — 0 ошибок / 0 предупреждений
+    BUILD_ACCEPTANCE_HARNESS_VERIFIED=true — harness 0 ошибок / 0
+                                      предупреждений (CA1031 локально
+                                      задокументирован, CA2007 устранён)
+    TEST_DEBUG_VERIFIED=true          — см. п. 7.4 (фактические числа)
+    TEST_RELEASE_VERIFIED=true        — целевые прогоны Release
+    TEST_STABILITY_VERIFIED=true      — 3×Debug + 3×Release целевых без
+                                      зависаний, процессов и каталогов
+    PROFILE_SAFETY_VERIFIED=true      — sentinel + отпечатки до/после:
+                                      дельта бизнес-файлов 0/0/0; sentinel
+                                      намеренно создаётся и удаляется в
+                                      finally реального профиля
+    ACCEPTANCE_EXIT_CODE_VERIFIED=true — emptybook/printflow exit 0 при
+                                      PASS; негативный гард-прогон exit 3
+                                      на родителе и на самом prod-каталоге
+    TEMP_CLEANUP_VERIFIED=true        — временные профили удаляются
+                                      harness'ом и профилем тестов;
+                                      FolderCycleSchemaTests соединение
+                                      закрыто в finally
+    EMPTY_STATE_VISUAL_VERIFIED=true  — настоящий пустой экран, скриншот 01
+    F5_RUNTIME_VERIFIED=true          — полная модальная цепочка F5,
+                                      UI отзывается, печати нет
+    F6_RUNTIME_VERIFIED=true          — полная цепочка F6 (карточка,
+                                      MessageBox, печать, подача,
+                                      предпросмотр), печати нет
+    UI_VISUAL_VERIFIED=true           — скриншоты таблицы п. 6
+    REFERENCE_VISUAL_VERIFIED=PARTIAL — сравнён только главный экран
+                                      референса; диалоги референса не
+                                      сравнивались
+    COM_VERIFIED=NOT_RUN_BY_SCOPE     — COM/cold activation/реестр/SCM не
+                                      запускались
+    PRINT_VERIFIED=NOT_RUN_BY_SCOPE   — физическая печать не выполнялась:
+                                      F5 отменён, F6 закрыт на
+                                      предпросмотре до передачи задания;
+                                      coverage не измерялась
     CODE_COVERAGE_MEASURED=false
 
 ## 9. Ограничения и что не проверялось
