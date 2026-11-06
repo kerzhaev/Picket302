@@ -32,13 +32,44 @@ public sealed class PrintDialogsTests
         PrinterState.Ready,
         IsDefault: true);
 
+    /// <summary>
+    /// Обходит форму рекурсивно: после перевода диалога на TableLayoutPanel
+    /// поля лежат во вложенных контейнерах (редизайн 2026-11-05, этап 3).
+    /// </summary>
+    private static IEnumerable<Control> Обойти(Control контейнер)
+    {
+        foreach (Control элемент in контейнер.Controls)
+        {
+            yield return элемент;
+
+            foreach (var вложенный in Обойти(элемент))
+            {
+                yield return вложенный;
+            }
+        }
+    }
+
     private static ComboBox ПереченьШаблонов(FormEnvelopePrint форма) =>
-        форма.Controls
+        Обойти(форма)
             .OfType<ComboBox>()
             .Single(перечень => перечень.Items.OfType<string>().Any(текст => текст.Contains("Конверт", StringComparison.Ordinal)));
 
     private static CheckBox Флажок(FormEnvelopePrint форма, string текст) =>
-        форма.Controls.OfType<CheckBox>().Single(флажок => флажок.Text == текст);
+        Обойти(форма).OfType<CheckBox>().Single(флажок => флажок.Text == текст);
+
+    /// <summary>Проверяет, что поле лежит в таблице компоновки среди предков.</summary>
+    private static bool ПредокТаблица(Control поле)
+    {
+        for (var родитель = поле.Parent; родитель is not null; родитель = родитель.Parent)
+        {
+            if (родитель is TableLayoutPanel)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     [Fact]
     public void FormEnvelopePrint_ОпцияВключена_ПереченьШаблоновПоказывается()
@@ -104,8 +135,89 @@ public sealed class PrintDialogsTests
             показатьСписокШаблонов: true);
 
         Assert.Contains(
-            форма.Controls.OfType<Button>(),
+            Обойти(форма).OfType<Button>(),
             кнопка => кнопка.Text == "Настройки принтера");
+    }
+
+    /// <summary>
+    /// Пустой список принтеров не вызывает исключение: поле называет
+    /// состояние, кнопка настроек недоступна, запрос формируется с пустым
+    /// именем принтера (редизайн 2026-11-05, этап 3, п. 8).
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_ПустойСписокПринтеров_ПонятноеСостояниеБезИсключения()
+    {
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6") },
+            Array.Empty<PrinterDescriptor>(),
+            показатьСписокШаблонов: true);
+
+        var настройки = Обойти(форма).OfType<Button>()
+            .Single(кнопка => кнопка.Text == "Настройки принтера");
+
+        Assert.False(настройки.Enabled);
+        Assert.Null(форма.ВыбранныйПринтер);
+        Assert.Equal(string.Empty, форма.СформироватьЗапрос([1]).PrinterName);
+    }
+
+    /// <summary>
+    /// Кнопки печати и отмены существуют, назначены AcceptButton и
+    /// CancelButton и лежат в layout-контейнере, а не на координатах
+    /// (этап 3, п. 2–5).
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_КнопкиДиалогаВПотокеПринятыАкцептИОтмена()
+    {
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6") },
+            new[] { Принтер },
+            показатьСписокШаблонов: true);
+
+        var печать = Обойти(форма).OfType<Button>().Single(кнопка => кнопка.Text == "Печать");
+        var отмена = Обойти(форма).OfType<Button>().Single(кнопка => кнопка.Text == "Отмена");
+
+        Assert.IsType<FlowLayoutPanel>(печать.Parent);
+        Assert.Same(печать.Parent, отмена.Parent);
+        Assert.Same(печать, форма.AcceptButton);
+        Assert.Same(отмена, форма.CancelButton);
+    }
+
+    /// <summary>
+    /// Ключевые поля лежат в layout-контейнерах, а абсолютные координаты
+    /// основных элементов не используются (этап 3, п. 1).
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_ОсновныеПоля_ВКонтейнерахКомпоновки()
+    {
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6") },
+            new[] { Принтер },
+            показатьСписокШаблонов: true);
+
+        Assert.True(ПредокТаблица(ПереченьШаблонов(форма)));
+        Assert.True(ПредокТаблица(Обойти(форма).OfType<ComboBox>()
+            .Single(поле => поле.AccessibleName == "Принтер")));
+    }
+
+    /// <summary>
+    /// Длинное имя принтера и шаблона не меняет семантику выбора.
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_ДлинныеИмена_ВыборСохраняется()
+    {
+        var длинный = new PrinterDescriptor(
+            new string('А', 80),
+            "PORTPROMPT:",
+            PrinterState.Ready,
+            IsDefault: true);
+
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6 — очень длинное наименование шаблона конверта для проверки переноса") },
+            new[] { длинный },
+            показатьСписокШаблонов: true);
+
+        Assert.Equal(длинный.Name, форма.ВыбранныйПринтер?.Name);
+        Assert.Equal("Конверт C6 — очень длинное наименование шаблона конверта для проверки переноса", форма.ВыбранныйШаблон?.Name);
     }
 
     [Fact]

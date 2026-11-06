@@ -81,14 +81,45 @@ public sealed class MainShellLayoutTests
             .Select(группа => группа.Text)
             .ToArray();
 
-        Assert.Contains("ОТПРАВИТЕЛЬ:", заголовки);
-        Assert.Contains("ПОЛУЧАТЕЛЬ:", заголовки);
-        Assert.Contains("ВИД ЛОГОТИПА:", заголовки);
-        Assert.Contains("ПРИМЕЧАНИЕ К АДРЕСУ:", заголовки);
-        Assert.Contains("ОТ КОГО:", заголовки);
-        Assert.Contains("КОМУ:", заголовки);
-        Assert.True(окно.АдресОтправителя.Height >= 180);
-        Assert.True(окно.АдресПолучателя.Height >= 180);
+        Assert.Contains("Отправитель", заголовки);
+        Assert.Contains("Получатель", заголовки);
+        Assert.Contains("Вид логотипа", заголовки);
+        Assert.Contains("Примечание к адресу", заголовки);
+        Assert.Contains("От кого", заголовки);
+        Assert.Contains("Кому", заголовки);
+        // Редактор требует высоты шести строк адреса и не сжимается меньше.
+        Assert.True(Math.Max(окно.АдресОтправителя.Height, окно.АдресОтправителя.MinimumSize.Height) >= 180);
+        Assert.True(Math.Max(окно.АдресПолучателя.Height, окно.АдресПолучателя.MinimumSize.Height) >= 180);
+    }
+
+    /// <summary>
+    /// Пользовательские заголовки не выполняются капслоком (редизайн
+    /// 2026-11-05, этап 2, A5): референс использует обычный регистр
+    /// («Отправитель:», «От кого:»).
+    /// </summary>
+    [Fact]
+    public void MainShell_ЗаголовкиГрупп_НеКапслоком()
+    {
+        using var окно = new MainShell();
+
+        var заголовки = Обойти(окно)
+            .OfType<GroupBox>()
+            .Select(группа => группа.Text)
+            .Where(текст => !string.IsNullOrWhiteSpace(текст))
+            .ToList();
+
+        Assert.NotEmpty(заголовки);
+        Assert.All(заголовки, заголовок =>
+        {
+            var капслок = заголовок.ToUpperInvariant();
+            Assert.NotEqual(капслок, заголовок);
+        });
+
+        var подписьДерева = Обойти(окно)
+            .OfType<Label>()
+            .Single(метка => метка.Text == "Папки писем");
+
+        Assert.NotNull(подписьДерева);
     }
 
     [Fact]

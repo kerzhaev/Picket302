@@ -13,17 +13,27 @@ namespace Picket302.App.UI.Forms;
 /// принтера, параметры задания.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Перечень шаблонов показывается только при включённой опции «Показывать
 /// список шаблонов перед печатью» (ТЗ §8.6, функция 82); при выключенной опции
 /// печать выполняется последним использованным шаблоном.
+/// </para>
+/// <para>
+/// Компоновка построена на <see cref="TableLayoutPanel"/> и
+/// <see cref="FlowLayoutPanel"/> без абсолютных координат (редизайн
+/// 2026-11-05, этап 3): диалог переносит длинные имена принтеров, шаблонов и
+/// текст предупреждения без наложения на кнопки.
+/// </para>
 /// </remarks>
 public sealed class FormEnvelopePrint : Form
 {
-    private readonly ComboBox _шаблоны = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
-    private readonly ComboBox _принтеры = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 280 };
-    private readonly ComboBox _дуплекс = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
-    private readonly ComboBox _паритет = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
-    private readonly NumericUpDown _копии = new() { Minimum = 1, Maximum = 9999, Value = 1, Width = 80 };
+    private const string ТекстОтсутствияПринтеров = "Принтеры не найдены";
+
+    private readonly ComboBox _шаблоны = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ComboBox _принтеры = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ComboBox _дуплекс = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ComboBox _паритет = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly NumericUpDown _копии = new() { Minimum = 1, Maximum = 9999, Value = 1, Dock = DockStyle.Fill };
     private readonly CheckBox _зафиксироватьA4 = new() { Text = "Зафиксировать размер A4", AutoSize = true };
     private readonly CheckBox _размеченный = new() { Text = "Размеченный типографский конверт", AutoSize = true };
     private readonly CheckBox _сЛоготипом = new() { Text = "С логотипом", AutoSize = true };
@@ -40,18 +50,30 @@ public sealed class FormEnvelopePrint : Form
         AutoSize = true,
     };
 
-    private readonly Label _надписьШаблона = new() { Text = "Шаблон:", AutoSize = true };
+    private readonly Label _надписьШаблона = new() { Text = "Шаблон конверта:", AutoSize = true, Anchor = AnchorStyles.Left };
     private readonly Label _предупреждениеРазлиновки = new()
     {
         Text = PreprintedMode.Warning,
-        AutoSize = false,
+        AutoSize = true,
+        MaximumSize = new Size(560, 0),
         ForeColor = Color.Firebrick,
+        Dock = DockStyle.Top,
+        TextAlign = ContentAlignment.MiddleLeft,
+        Padding = new Padding(4, 2, 4, 2),
     };
 
+    /// <summary>Строка «Шаблон конверта» — скрывается целиком вместе с полем.</summary>
+    private readonly TableLayoutPanel _строкаШаблона = new();
+
+    /// <summary>Панель предупреждения: текст и флаг подавления рядом.</summary>
+    private readonly TableLayoutPanel _панельПредупреждения = new();
+
+    private readonly ToolTip _подсказки = new();
     private readonly List<PrintTemplate> _шаблоныСписка = new();
     private readonly List<PrinterDescriptor> _принтерыСписка = new();
     private readonly PrinterManager? _службаПринтеров;
     private readonly bool _показыватьПредупреждениеРазлиновки;
+    private readonly Button _кнопкаНастройкиПринтера = new() { Text = "Настройки принтера", AutoSize = true };
 
     /// <summary>Признак показа перечня шаблонов в диалоге.</summary>
     private bool _переченьШаблоновПоказывается;
@@ -92,31 +114,13 @@ public sealed class FormEnvelopePrint : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(600, 430);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        MinimumSize = new Size(560, 240);
 
         _службаПринтеров = службаПринтеров;
         _показыватьПредупреждениеРазлиновки = показыватьПредупреждениеРазлиновки;
-
-        var надписьПринтера = new Label { Text = "Принтер:", AutoSize = true, Location = new Point(12, 50) };
-        var надписьКопий = new Label { Text = "Копий:", AutoSize = true, Location = new Point(12, 84) };
-        var надписьДуплекса = new Label { Text = "Двусторонняя печать:", AutoSize = true, Location = new Point(12, 118) };
-        var надписьПаритета = new Label { Text = "Печать страниц:", AutoSize = true, Location = new Point(12, 152) };
-
-        _надписьШаблона.Location = new Point(12, 16);
-        _шаблоны.Location = new Point(140, 12);
-        _принтеры.Location = new Point(140, 46);
-        _копии.Location = new Point(140, 80);
-        _дуплекс.Location = new Point(140, 114);
-        _паритет.Location = new Point(140, 148);
-
-        var кнопкаНастройкиПринтера = new Button
-        {
-            Text = "Настройки принтера",
-            Size = new Size(160, 26),
-            Location = new Point(428, 44),
-        };
-
-        кнопкаНастройкиПринтера.Click += (_, _) => ОткрытьНастройкиПринтера();
 
         foreach (var шаблон in шаблоны.Where(шаблон => шаблон.Kind == PrintTemplateKind.Envelope))
         {
@@ -130,6 +134,17 @@ public sealed class FormEnvelopePrint : Form
             _принтеры.Items.Add($"{принтер.Name} — {принтер.State}");
         }
 
+        // Понятное состояние без принтеров (этап 3, п. 8): диалог не падает,
+        // поле называет состояние, кнопка настроек недоступна с подсказкой.
+        if (_принтеры.Items.Count == 0)
+        {
+            _принтеры.Items.Add(ТекстОтсутствияПринтеров);
+            _кнопкаНастройкиПринтера.Enabled = false;
+            _подсказки.SetToolTip(
+                _кнопкаНастройкиПринтера,
+                "Принтеры не найдены: подключите принтер и повторите печать.");
+        }
+
         _дуплекс.Items.AddRange(new object[] { "Односторонняя", "Двусторонняя", "Двухпроходная вручную" });
         _дуплекс.SelectedIndex = 1;
 
@@ -140,35 +155,34 @@ public sealed class FormEnvelopePrint : Form
 
         ВыбратьШаблон(последнийШаблон);
 
-        if (_принтеры.Items.Count > 0)
+        if (_принтерыСписка.Count > 0)
         {
             _принтеры.SelectedIndex = 0;
         }
 
-        _зафиксироватьA4.Location = new Point(140, 182);
-        _размеченный.Location = new Point(140, 206);
-        _показатьСписокШаблонов.Location = new Point(140, 230);
-        _сЛоготипом.Location = new Point(140, 254);
-        _границыПечати.Location = new Point(140, 278);
-
-        _предупреждениеРазлиновки.Location = new Point(12, 304);
-        _предупреждениеРазлиновки.Size = new Size(576, 44);
-        _подавитьПредупреждение.Location = new Point(140, 352);
-
-        var кнопкаПечать = new Button { Text = "Печать", DialogResult = DialogResult.OK, Size = new Size(96, 28) };
-        кнопкаПечать.Location = new Point(400, 388);
-
-        var кнопкаОтмена = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, Size = new Size(96, 28) };
-        кнопкаОтмена.Location = new Point(504, 388);
-
-        Controls.AddRange(new Control[]
+        var кнопкаПечать = new Button
         {
-            _надписьШаблона, надписьПринтера, надписьКопий, надписьДуплекса, надписьПаритета,
-            _шаблоны, _принтеры, кнопкаНастройкиПринтера, _копии, _дуплекс, _паритет,
-            _зафиксироватьA4, _размеченный, _показатьСписокШаблонов, _сЛоготипом, _границыПечати,
-            _предупреждениеРазлиновки, _подавитьПредупреждение,
-            кнопкаПечать, кнопкаОтмена,
-        });
+            Text = "Печать",
+            DialogResult = DialogResult.OK,
+            AutoSize = true,
+            TabIndex = 0,
+        };
+        кнопкаПечать.AccessibleName = "Печать";
+        _подсказки.SetToolTip(кнопкаПечать, "Начать печать с выбранными параметрами");
+
+        var кнопкаОтмена = new Button
+        {
+            Text = "Отмена",
+            DialogResult = DialogResult.Cancel,
+            AutoSize = true,
+            TabIndex = 1,
+        };
+        кнопкаОтмена.AccessibleName = "Отмена печати";
+        _подсказки.SetToolTip(кнопкаОтмена, "Закрыть диалог без печати");
+
+        EnvelopeUiTheme.ОформитьОсновнуюКнопку(кнопкаПечать);
+
+        Controls.Add(ПостроитьКорневуюСетку(кнопкаПечать, кнопкаОтмена));
 
         AcceptButton = кнопкаПечать;
         CancelButton = кнопкаОтмена;
@@ -177,6 +191,7 @@ public sealed class FormEnvelopePrint : Form
         _показатьСписокШаблонов.CheckedChanged += (_, _) => ОбновитьВидимостьШаблонов();
         _размеченный.CheckedChanged += (_, _) => ОбновитьПредупреждениеРазлиновки();
 
+        ДополнитьДоступность();
         ОбновитьВидимостьШаблонов();
         ОбновитьПредупреждениеРазлиновки();
         EnvelopeUiTheme.ОформитьОкно(this);
@@ -255,6 +270,218 @@ public sealed class FormEnvelopePrint : Form
     }
 
     /// <summary>
+    /// Строит корневую сетку диалога: блоки «Шаблон и принтер», параметры,
+    /// дополнительные параметры, предупреждение и панель кнопок
+    /// (этап 3, п. 2–5).
+    /// </summary>
+    /// <param name="кнопкаПечать">Основная кнопка.</param>
+    /// <param name="кнопкаОтмена">Вторичная кнопка.</param>
+    /// <returns>Корневая панель.</returns>
+    private TableLayoutPanel ПостроитьКорневуюСетку(Button кнопкаПечать, Button кнопкаОтмена)
+    {
+        var корень = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12),
+        };
+
+        корень.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        // Строка шаблона скрывается целиком (этап 3, п. 4): строка таблицы
+        // авто-высоты сворачивается при скрытии единственного содержимого.
+        _строкаШаблона.Dock = DockStyle.Fill;
+        _строкаШаблона.ColumnCount = 2;
+        _строкаШаблона.AutoSize = true;
+        _строкаШаблона.Margin = new Padding(0);
+        _строкаШаблона.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _строкаШаблона.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _строкаШаблона.Controls.Add(_надписьШаблона, 0, 0);
+        _строкаШаблона.Controls.Add(_шаблоны, 1, 0);
+        _шаблоны.MinimumSize = new Size(300, 0);
+
+        _кнопкаНастройкиПринтера.AutoSize = true;
+        _кнопкаНастройкиПринтера.AccessibleName = "Настройки принтера";
+        _подсказки.SetToolTip(
+            _кнопкаНастройкиПринтера,
+            "Открыть системные свойства выбранного принтера (ТЗ §8.6, функция 78)");
+        _кнопкаНастройкиПринтера.Click += (_, _) => ОткрытьНастройкиПринтера();
+
+        var блокШаблонаИПринтера = Секция("Шаблон и принтер", сетка =>
+        {
+            сетка.RowCount = 3;
+            сетка.Controls.Add(_строкаШаблона, 0, 0);
+            сетка.SetColumnSpan(_строкаШаблона, 3);
+            сетка.Controls.Add(Метка("Принтер:"), 0, 1);
+            сетка.Controls.Add(_принтеры, 1, 1);
+            сетка.Controls.Add(_кнопкаНастройкиПринтера, 2, 1);
+            _принтеры.MinimumSize = new Size(240, 0);
+        });
+
+        var блокПараметров = Секция("Параметры печати", сетка =>
+        {
+            сетка.RowCount = 3;
+            сетка.Controls.Add(Метка("Количество копий:"), 0, 0);
+            сетка.Controls.Add(_копии, 1, 0);
+            сетка.Controls.Add(Метка("Двусторонняя печать:"), 0, 1);
+            сетка.Controls.Add(_дуплекс, 1, 1);
+            сетка.Controls.Add(Метка("Печать страниц:"), 0, 2);
+            сетка.Controls.Add(_паритет, 1, 2);
+            _копии.MaximumSize = new Size(120, 0);
+            _дуплекс.MinimumSize = new Size(200, 0);
+            _паритет.MinimumSize = new Size(200, 0);
+        });
+
+        var флажки = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+        };
+
+        флажки.Controls.AddRange(
+        [
+            _зафиксироватьA4,
+            _размеченный,
+            _сЛоготипом,
+            _границыПечати,
+            _показатьСписокШаблонов,
+        ]);
+
+        var блокДополнительно = Секция("Дополнительные параметры", сетка =>
+        {
+            сетка.RowCount = 1;
+            сетка.Controls.Add(флажки, 0, 0);
+        });
+
+        // Предупреждение переносится и занимает собственный блок: флаг
+        // подавления рядом, кнопки не перекрываются (этап 3, п. 4).
+        _панельПредупреждения.Dock = DockStyle.Fill;
+        _панельПредупреждения.ColumnCount = 1;
+        _панельПредупреждения.RowCount = 2;
+        _панельПредупреждения.AutoSize = true;
+        _панельПредупреждения.Padding = new Padding(8);
+        _панельПредупреждения.BackColor = Color.FromArgb(253, 244, 235);
+        _панельПредупреждения.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _панельПредупреждения.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _панельПредупреждения.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _панельПредупреждения.Controls.Add(_предупреждениеРазлиновки, 0, 0);
+        _панельПредупреждения.Controls.Add(_подавитьПредупреждение, 0, 1);
+        _панельПредупреждения.Margin = new Padding(0, 8, 0, 8);
+
+        var кнопки = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            Anchor = AnchorStyles.Right,
+            AutoSize = true,
+            Margin = new Padding(0, 8, 0, 0),
+        };
+
+        кнопки.Controls.AddRange([кнопкаПечать, кнопкаОтмена]);
+        кнопки.SetFlowBreak(кнопкаОтмена, true);
+
+        корень.RowCount = 5;
+        корень.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        корень.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        корень.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        корень.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        корень.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        корень.Controls.Add(блокШаблонаИПринтера, 0, 0);
+        корень.Controls.Add(блокПараметров, 0, 1);
+        корень.Controls.Add(блокДополнительно, 0, 2);
+        корень.Controls.Add(_панельПредупреждения, 0, 3);
+        корень.Controls.Add(кнопки, 0, 4);
+
+        return корень;
+    }
+
+    /// <summary>
+    /// Создаёт секцию диалога: группу с заголовком и внутренней таблицей
+    /// «метка — поле» без абсолютных координат.
+    /// </summary>
+    /// <param name="заголовок">Заголовок секции.</param>
+    /// <param name="наполнение">Настраивает внутреннюю сетку секции.</param>
+    /// <returns>Готовая секция.</returns>
+    private static GroupBox Секция(string заголовок, Action<TableLayoutPanel> наполнение)
+    {
+        var группа = new GroupBox
+        {
+            Text = заголовок,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(8, 16, 8, 6),
+            Margin = new Padding(0, 0, 0, 8),
+        };
+
+        var сетка = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 3,
+            Margin = Padding.Empty,
+        };
+
+        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        сетка.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        сетка.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        наполнение(сетка);
+
+        for (var строка = 0; строка < Math.Max(1, сетка.RowCount); строка++)
+        {
+            сетка.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+
+        группа.Controls.Add(сетка);
+
+        return группа;
+    }
+
+    /// <summary>Создаёт метку поля секции.</summary>
+    /// <param name="текст">Текст метки.</param>
+    /// <returns>Метка.</returns>
+    private static Label Метка(string текст) => new()
+    {
+        Text = текст,
+        AutoSize = true,
+        Anchor = AnchorStyles.Left,
+    };
+
+    /// <summary>
+    /// Заполняет доступность ключевых полей диалога (этап 8).
+    /// </summary>
+    private void ДополнитьДоступность()
+    {
+        _шаблоны.AccessibleName = "Шаблон конверта";
+        _шаблоны.AccessibleDescription = "Выбор шаблона конверта или бланка для печати";
+        _принтеры.AccessibleName = "Принтер";
+        _принтеры.AccessibleDescription = "Выбор принтера для печати конвертов";
+        _копии.AccessibleName = "Количество копий";
+        _дуплекс.AccessibleName = "Двусторонняя печать";
+        _паритет.AccessibleName = "Печать страниц";
+        _зафиксироватьA4.AccessibleName = "Зафиксировать размер A4";
+        _размеченный.AccessibleName = "Размеченный типографский конверт";
+        _сЛоготипом.AccessibleName = "Печать с логотипом";
+        _границыПечати.AccessibleName = "Показывать границы печати";
+        _показатьСписокШаблонов.AccessibleName = "Показывать список шаблонов перед печатью";
+        _подавитьПредупреждение.AccessibleName = "Больше не показывать предупреждение о разлиновке";
+        _предупреждениеРазлиновки.AccessibleName = "Предупреждение о соответствии ГОСТ Р 51506-99";
+
+        _шаблоны.TabIndex = 0;
+        _принтеры.TabIndex = 1;
+        _кнопкаНастройкиПринтера.TabIndex = 2;
+        _копии.TabIndex = 3;
+        _дуплекс.TabIndex = 4;
+        _паритет.TabIndex = 5;
+    }
+
+    /// <summary>
     /// Выбирает шаблон: последний использованный, если он доступен, иначе
     /// первый из списка.
     /// </summary>
@@ -282,7 +509,8 @@ public sealed class FormEnvelopePrint : Form
 
     /// <summary>
     /// Показывает или скрывает перечень шаблонов согласно опции «Показывать
-    /// список шаблонов перед печатью».
+    /// список шаблонов перед печатью». Строка шаблона сворачивается целиком,
+    /// без пустой дыры (этап 3, п. 4).
     /// </summary>
     private void ОбновитьВидимостьШаблонов()
     {
@@ -291,6 +519,7 @@ public sealed class FormEnvelopePrint : Form
         _переченьШаблоновПоказывается = показывать;
         _шаблоны.Visible = показывать;
         _надписьШаблона.Visible = показывать;
+        _строкаШаблона.Visible = показывать;
     }
 
     /// <summary>
@@ -304,6 +533,7 @@ public sealed class FormEnvelopePrint : Form
         _предупреждениеРазлиновкиПоказывается = показывать;
         _предупреждениеРазлиновки.Visible = показывать;
         _подавитьПредупреждение.Visible = показывать;
+        _панельПредупреждения.Visible = показывать;
     }
 
     /// <summary>

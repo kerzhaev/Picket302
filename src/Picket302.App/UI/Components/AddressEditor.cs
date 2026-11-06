@@ -50,6 +50,7 @@ public sealed class AddressEditor : UserControl
         Dock = DockStyle.Top;
         AutoSize = false;
         Height = 190;
+        MinimumSize = new Size(320, 190);
         Padding = new Padding(4, 2, 4, 2);
         BackColor = Color.Transparent;
 
