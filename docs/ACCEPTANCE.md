@@ -440,6 +440,40 @@ faults `wrong-expectation` и `final-delta` exit 1; PS parse 4 файлов — 
 NOT_RUN_BY_SCOPE; подробности и полная таблица флагов —
 `docs/UX-REDESIGN-2026-11-05.md`, раздел 8.2.
 
+**Ревизия lock-release и уборки дерева процессов 2026-11-07 (шестая серия
+замечаний).** `Exit-SharedTestLock` переведён на fail-closed контракт
+(результат `Attempted/Released/Disposed/Error` с диагностикой mutex/PID/
+сценарий; `$null` — явный failure; двойной вызов не даёт PASS; ошибки
+`ReleaseMutex`/`Dispose` входят в итоговый failure всех трёх драйверов —
+PASS при неподтверждённом освобождении невозможен). Аварийная уборка —
+единый движок `Stop-HarnessTree` (Вариант A): PID и StartTime сохраняются
+до завершения (PID reuse), graceful → `taskkill /T /F` с проверкой
+`$LASTEXITCODE` (код 128 «не найден» отличён от ошибки, вывод сохранён),
+рекурсивный сбор потомков с подтверждением по CreationDate
+(неподтверждённые не убиваются), ошибка CIM — исключение (не пустой
+список), повторный скан — отдельный шаг с добиванием остатков; `Stop-Acceptance`
+больше не убивает сам. `ВладениеБлокировкой.Dispose` даёт проверяемый итог
+teardown (`Итог`/`СообщениеИтога`): таймаут Join владельца — cleanup не
+подтверждён, сигнальные объекты не уничтожаются; двойной Dispose
+идемпотентен; детерминированные тестовые швы вместо ожидания секунд.
+Новый синтетический regression-тест `tools/ui-acceptance/test-treecleanup-synthetic.ps1`
+(без Picket302/окон/production-профиля): timeout-kill завершает родителя и
+ребёнка с подтверждением повторным сканом; parent-exited/child-alive
+находится по сохранённому PID; faults kill-fail/cim-fail/descendant-remains
+дают «cleanup НЕ подтверждён»; evidence-запись/маркеры и lock
+release-fail проверены без UI; ни один fault не оставляет процесс.
+Контроль: Debug и Release non-COM последовательно **1258/1258**
+(1256 + 2 теста teardown блокировки), параллельный Debug+Release — оба
+1258/1258 exit 0; guard-negative безоконно: happy 0, faults
+wrong-expectation/final-delta/lock-release-fail/mutex-dispose-fail/
+tree-cleanup-fail — все exit 1; parse 5 PS-файлов 0 ошибок; после
+прогонов: процессов (UiAcceptance/Picket302/ComAutomation/synthetic) 0,
+`P302GuardTest_*`=0, `Picket302Tests_*`=0, `P302TreeSim_*`=0,
+`P302LockProof_*=0`, .bak/.lock=0, keep-профилей 5, sentinel отсутствует.
+UI-сценарии emptybook/printflow не запускались (запрещены постановкой) —
+NOT_RUN_BY_SCOPE; полная таблица флагов — `docs/UX-REDESIGN-2026-11-05.md`,
+раздел 8.3.
+
 ## Приложение: сквозной приёмочный сценарий
 
 `tests/Picket302.Tests/Acceptance/AcceptanceScenarioTests.cs` — `Сквозной_сценарий_приёмки_от_демо_базы_до_восстановления_архива`:

@@ -561,6 +561,121 @@ happy-evidence (дефект устранён; записи перемещены
     PRINT_VERIFIED=NOT_RUN_BY_SCOPE         — вне области
     CODE_COVERAGE_MEASURED=false            — без изменений
 
+### 8.3. Статусы ревизии lock-release и аварийной уборки дерева (шестая серия замечаний, 2026-11-07)
+
+Закрыты fail-closed-дефекты, при которых PASS не требовал подтверждённого
+освобождения блокировки и чистого дерева процессов:
+
+1. **`Exit-SharedTestLock` — fail-closed контракт**: прежняя версия глотала
+   ошибку `ReleaseMutex` (только `Write-Host`, пустой поток) и могла дать
+   PASS без освобождения. Новая версия возвращает результат
+   `Attempted/Released/Disposed/Error` с диагностикой (имя мьютекса, PID,
+   сценарий, тип и текст исключения); `$null` — явный failure (захват не
+   выполнялся); ошибка `Dispose` тоже failure; двойной вызов даёт
+   `Released=$false` (ложного PASS нет). Все три драйвера добавляют
+   результат в итоговый failure: PASS при неподтверждённом освобождении
+   невозможен.
+2. **Аварийная уборка дерева (Вариант A)**: `Stop-Acceptance` больше сам
+   не убивает процесс (прежняя ветвь убивала parent без проверки дерева,
+   после чего `Stop-HarnessTree` с `HasExited` досрочно возвращал
+   `$false`); при таймауте — единый движок `Stop-HarnessTree`: PID и
+   StartTime сохраняются ДО завершения (PID reuse); graceful CLOSE →
+   `taskkill /T /F` с проверкой `$LASTEXITCODE` («не найден»/128 отличён
+   от реальной ошибки, вывод сохранён); потомки собираются РЕКУРСИВНО с
+   подтверждением идентичности по CreationDate (неподтверждённые не
+   убиваются — fail-closed); повторный скан — отдельный шаг, остатки
+   добиваются, третий скан — итог; ошибка CIM — исключение, а не пустой
+   список. Результат различает graceful/killed/remaining/unconfirmed/
+   verification-error; драйверы выставляют флаги `tree-cleanup-failed`,
+   `remaining-descendants`, `tree-unconfirmed-descendants`,
+   `tree-verification-failed` и включают их в happy-условия.
+3. **`ВладениеБлокировкой.Dispose` — проверяемый teardown**: при таймауте
+   Join потока-владельца итог `ВладелецНеЗавершился`, сигнальные объекты
+   НЕ уничтожаются (поток ими пользуется), cleanup не считается
+   успешным; итог доступен тестам (`Итог`/`СообщениеИтога`/
+   `ОсвобождениеПодтверждено`), не бросает из Dispose (не затирает
+   исходную ошибку); двойной Dispose идемпотентен; диагностика содержит
+   имя мьютекса, процесс и PID. Детерминированные тестовые швы
+   (`ТестТаймаутJoinВладельца`, `ТестДействиеПередОсвобождением`) вместо
+   ожидания случайных секунд.
+4. **Синтетический regression-тест дерева**
+   (`tools/ui-acceptance/test-treecleanup-synthetic.ps1`, без Picket302,
+   без окон, без production-профиля): скрытый родитель PowerShell +hidden
+   ребёнок; timeout-путь завершает ОБА (повторный скан подтверждает);
+   parent-exited/child-alive — потомок находится по сохранённому PID и
+   завершается; fault-инъекции kill-fail / cim-fail / descendant-remains
+   дают «cleanup НЕ подтверждён»; evidence-запись и проверка маркеров
+   без UI; ни один fault не оставляет реальный процесс (финальная
+   уборка по сохранённым PID, все synthetic PID проверены на отсутствие).
+
+Fault-инъекции шестой серии (все без UI, все exit 1): lock `release-fail`
+и `dispose-fail` (guard-negative), `final-delta` (guard-negative),
+`tree-cleanup-fail` (guard-negative, через `Test-ProcessTreeGone`),
+`kill-fail`/`cim-fail`/`descendant-remains` (синтетическое дерево),
+`evidence-fail` (механизм записи доказан без UI; драйверный fault — при
+следующем разрешённом UI-прогоне). `evidence-fail` и UI-сценарии
+emptybook/printflow — NOT_RUN_BY_SCOPE (запрещены постановкой).
+
+    SOURCE_VERIFIED=true                    — исходник сверен
+    BUILD_DEBUG_VERIFIED=true               — 0 ошибок / 0 предупреждений
+    BUILD_RELEASE_VERIFIED=true             — 0 ошибок / 0 предупреждений
+    HARNESS_BUILD_VERIFIED=true             — harness 0 ошибок
+    TEST_DEBUG_VERIFIED=true                — полный non-COM Debug
+                                            1258/1258 (1256 + 2 теста
+                                            teardown блокировки),
+                                            0 fail, 0 skip
+    TEST_RELEASE_VERIFIED=true              — полный non-COM Release
+                                            1258/1258, 0 fail, 0 skip
+    PARALLEL_TESTHOST_VERIFIED=true         — одновременный Debug+Release:
+                                            оба 1258/1258, exit 0; без
+                                            ложных sentinel/P302GuardTest_*
+                                            (логи %TEMP%\p302-parallel-
+                                            verify6\)
+    LOCK_RELEASE_VERIFIED=true              — happy Released+Disposed
+                                            (синтетика G1); fault
+                                            release-fail и dispose-fail —
+                                            exit 1 с диагностикой
+                                            (mutex/pid/сценарий)
+    PROCESS_TREE_CLEANUP_VERIFIED=true      — синтетика: timeout-kill
+                                            завершает обоих; parent-exited/
+                                            child-alive находится и
+                                            завершается; faults → cleanup
+                                            НЕ подтверждён
+    PROCESS_TREE_POSTCHECK_VERIFIED=true    — повторный скан — отдельный
+                                            шаг; guard-negative делает
+                                            пост-проверку дерева после
+                                            каждого случая harness;
+                                            fault tree-cleanup-fail → exit 1
+    FAIL_CLOSED_VERIFIED=true               — все fault-инъекции серии
+                                            дают exit 1, ни один не
+                                            оставляет процесс/sentinel/
+                                            каталог
+    PROFILE_SAFETY_VERIFIED=true            — дельта 0/0/0 во всех
+                                            прогонах; sentinel создаётся/
+                                            удаляется под блокировкой,
+                                            после прогонов отсутствует
+    TEMP_CLEANUP_VERIFIED=true              — P302GuardTest_*=0,
+                                            Picket302Tests_*=0,
+                                            P302TreeSim_*=0,
+                                            P302LockProof_*=0, .bak/.lock=0,
+                                            keep=5, процессов 0
+    EVIDENCE_WRITE_VERIFIED=PARTIAL         — механизм записи и проверка
+                                            маркеров доказаны без UI
+                                            (invalid-имя → $false; маркер
+                                            отсутствует → $false); runtime-
+                                            прогон happy/failure-записи —
+                                            при следующем разрешённом
+                                            UI-прогоне
+    UI_RUNTIME_VERIFIED=NOT_RUN_BY_SCOPE    — emptybook/printflow с UI не
+                                            запускались (запрещены
+                                            постановкой)
+    REFERENCE_VISUAL_VERIFIED=PARTIAL       — без изменений; 70% — целевой
+                                            ориентир, количественно не
+                                            измерялся
+    COM_VERIFIED=NOT_RUN_BY_SCOPE           — вне области
+    PRINT_VERIFIED=NOT_RUN_BY_SCOPE         — вне области
+    CODE_COVERAGE_MEASURED=false            — без изменений
+
 ## 9. Ограничения и что не проверялось
 
 - COM-активация, реестр, SCM — вне области (не запускались).
