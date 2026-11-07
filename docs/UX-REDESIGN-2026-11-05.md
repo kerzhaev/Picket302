@@ -676,6 +676,97 @@ emptybook/printflow — NOT_RUN_BY_SCOPE (запрещены постановк�
     PRINT_VERIFIED=NOT_RUN_BY_SCOPE         — вне области
     CODE_COVERAGE_MEASURED=false            — без изменений
 
+### 8.4. Статусы ревизии liveness драйверов (седьмая серия замечаний, 2026-11-07)
+
+Закрыт liveness/fail-closed дефект: после `Stop-Acceptance` оба драйвера
+выполняли бесконечный `$h.Proc.WaitForExit()` — при `TreeOk=false`
+(ошибка taskkill/CIM, живой потомок) родитель мог остаться живым, и
+драйвер зависал вместо exit 1, теряя финальный fingerprint, evidence и
+освобождение блокировки.
+
+1. **`Wait-ProcessExitBounded`** — единственный допустимый способ
+   ожидания процесса в драйверах: явный именованный таймаут,
+   структурированный результат (Exited/ExitCode-null-при-недоступности/
+   TimedOut/StartTime для PID-reuse диагностики); недоступный ExitCode
+   уничтоженного процесса не превращается в исключение.
+2. **`Invoke-HarnessStop`** — единая ограниченная остановка для обоих
+   драйверов: null/неполный результат/исключение остановки — fail-флаги
+   (`teardown-failed`/`stop-result-incomplete`/`stop-exception`) без
+   бесконечных ожиданий; `TreeOk=false` — немедленный
+   `tree-cleanup-failed`, затем МАКСИМУМ ОДНА ограниченная повторная
+   попытка аварийного teardown (5000 мс) и повторный bounded post-scan
+   (отдельный шаг); живые/неподтверждённые PID — в диагностику
+   (`remaining-descendants`/`unconfirmed-descendants`/
+   `tree-postcheck-failed`).
+3. **Драйверы**: бесконечные `WaitForExit()` удалены (статическая
+   проверка `grep -nP '\.WaitForExit\(\s*\)' tools/ui-acceptance` — 0
+   совпадений в run-* файлах); ExitCode читается только у фактически
+   завершившегося процесса; `harness-not-exited` — fail-флаг, входящий в
+   happy-условия; finally продолжает ограниченную финализацию при живом
+   harness (аварийный `Invoke-HarnessStop`, диагностика, exit 1);
+   guard-negative тоже переведён на bounded-ожидание (15000 мс после
+   закрытия stdout).
+4. **`Stop-HarnessTree`**: добавлены поля `TaskKillExitCode`,
+   `HarnessNotExited`, `StartTime`; fault-шов
+   `P302_DRIVER_FAULT=parent-alive-after-stop` (только driver-level
+   liveness-тесты: TreeOk=false, процесс не убивается — внешняя уборка
+   за тестом).
+5. **Driver-level suite** (`test-driver-boundedwait.ps1`, без UI/печати/
+   COM): внешний launcher с watchdog `$proc.WaitForExit(120000)` для
+   КАЖДОГО драйвера; оба драйвера с fault завершились сами за ~1 с с
+   exit 1; проверены: маркеры fault/SAFETY-FAIL/HarnessNotExited/
+   RemainingPids в stdout, отсутствие `PASS: True`,
+   `LOCK RELEASE: released=True disposed=True` в evidence, отсутствие
+   `lock-release-failed`, удаление sentinel, отсутствие synthetic PID.
+   Инженерные ловушки, найденные при постройке suite: scriptblock-события
+   .NET в PS 5.1 не видят локальные переменные (нет замыкания сессии);
+   `Start-Process -PassThru` не отдаёт ExitCode; синхронный ReadToEnd и
+   pipe-запись блокируются, пока потомки держат write-дескрипторы —
+   применены файловые редиректы через `cmd /c` (труб нет — дедлок
+   невозможен), а synthetic harness не наследует stdout/stderr драйвера.
+
+Прогоны (2026-11-07, всё без UI):
+
+    DRIVER_BOUNDED_WAIT_VERIFIED=true    — emptybook fault-прогон 1040 мс,
+                                         printflow в тех же секундах;
+                                         watchdog 120000 мс не потребовался
+    DRIVER_FAILURE_EXIT_VERIFIED=true    — оба драйвера exit 1 при fault;
+                                         PASS: True отсутствует
+    DRIVER_NO_HANG_VERIFIED=true         — внешний watchdog подтвердил
+                                         отсутствие зависания; синтетика
+                                         не осталась
+    LOCK_RELEASE_VERIFIED=true           — fault-прогоны: LOCK RELEASE
+                                         released=True disposed=True
+    PROCESS_TREE_CLEANUP_VERIFIED=true   — синтетика дерева (шестая серия)
+                                         зелёная после изменений
+    PROCESS_TREE_POSTCHECK_VERIFIED=true — пост-скан — отдельный шаг в
+                                         Invoke-HarnessStop
+    FAIL_CLOSED_VERIFIED=true            — guard-negative: happy 0, faults
+                                         (wrong-expectation, final-delta,
+                                         tree-cleanup-fail, lock
+                                         release-fail, dispose-fail) —
+                                         все exit 1
+    PROFILE_SAFETY_VERIFIED=true         — дельта 0/0/0; sentinel под
+                                         блокировкой, после прогонов
+                                         отсутствует
+    TEMP_CLEANUP_VERIFIED=true           — все префиксы 0, keep=5
+    EVIDENCE_WRITE_VERIFIED=PARTIAL      — fault-evidence записаны и
+                                         проверены маркерами; runtime
+                                         happy-запись — при следующем
+                                         разрешённом UI-прогоне
+    UI_RUNTIME_VERIFIED=NOT_RUN_BY_SCOPE — emptybook/printflow happy UI не
+                                         запускались (запрещены
+                                         постановкой)
+    BUILD_DEBUG_VERIFIED=true            — 0/0
+    BUILD_RELEASE_VERIFIED=true          — 0/0
+    HARNESS_BUILD_VERIFIED=true          — 0/0
+    TEST_DEBUG_VERIFIED=true             — 1258/1258, 0 fail, 0 skip
+    TEST_RELEASE_VERIFIED=true           — 1258/1258, 0 fail, 0 skip
+    REFERENCE_VISUAL_VERIFIED=PARTIAL    — без изменений; 70% — целевой
+                                         ориентир, не измерялся
+    COM_VERIFIED / PRINT_VERIFIED        — NOT_RUN_BY_SCOPE
+    CODE_COVERAGE_MEASURED=false         — без изменений
+
 ## 9. Ограничения и что не проверялось
 
 - COM-активация, реестр, SCM — вне области (не запускались).

@@ -474,6 +474,35 @@ UI-сценарии emptybook/printflow не запускались (запре�
 NOT_RUN_BY_SCOPE; полная таблица флагов — `docs/UX-REDESIGN-2026-11-05.md`,
 раздел 8.3.
 
+**Ревизия liveness драйверов 2026-11-07 (седьмая серия замечаний).**
+Устранён дефект зависания: после `Stop-Acceptance` оба драйвера
+(`run-emptybook.ps1`, `run-printflow.ps1`) выполняли бесконечный
+`WaitForExit()` — при `TreeOk=false` (ошибка taskkill/CIM, живой потомок)
+драйвер висел вместо exit 1, теряя финальный fingerprint, evidence и
+освобождение блокировки. Введены: `Wait-ProcessExitBounded` (единственный
+допустимый способ ожидания: явный таймаут, ExitCode=null при
+недоступности, StartTime для PID-reuse диагностики) и `Invoke-HarnessStop`
+(единая ограниченная остановка: fail-флаги на null/неполный
+результат/исключение; при `TreeOk=false` — немедленный
+`tree-cleanup-failed`, максимум одна ограниченная повторная попытка
+teardown (5000 мс) и повторный bounded post-scan). Бесконечные
+`WaitForExit()` удалены из всех драйверов (статическая проверка — 0
+совпадений в run-*), `harness-not-exited` — машинно видимый fail-флаг в
+happy-условиях; guard-negative переведён на bounded-ожидание (15000 мс).
+Driver-level suite `test-driver-boundedwait.ps1` (без UI/печати/COM,
+fault `P302_DRIVER_FAULT=parent-alive-after-stop` — synthetic harness
+остаётся живым, TreeOk=false): внешний watchdog `WaitForExit(120000)`
+для каждого драйвера; **оба драйвера завершились сами за ~1 с с exit 1**
+(emptybook — 1040 мс), диагностика HarnessNotExited/TreeCleanupFailed/
+RemainingPids в stdout, `LOCK RELEASE: released=True disposed=True`,
+sentinel удалён, synthetic PID отсутствуют. Контроль: сборки Debug/
+Release/harness 0/0; lock-тесты 4/4; guard/ownership/postcondition 27/27;
+полные non-COM Debug и Release **1258/1258**; синтетика дерева exit 0;
+guard-negative: happy 0, пять fault'ов exit 1; перепись чистая
+(процессы 0, префиксы 0, keep=5, sentinel отсутствует). UI happy-сценарии
+не запускались (запрещены постановкой) — NOT_RUN_BY_SCOPE; таблица
+флагов — `docs/UX-REDESIGN-2026-11-05.md`, раздел 8.4.
+
 ## Приложение: сквозной приёмочный сценарий
 
 `tests/Picket302.Tests/Acceptance/AcceptanceScenarioTests.cs` — `Сквозной_сценарий_приёмки_от_демо_базы_до_восстановления_архива`:
