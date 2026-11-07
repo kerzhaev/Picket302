@@ -85,7 +85,14 @@ try {
         $p = [System.Diagnostics.Process]::Start($psi)
         $stdout = $p.StandardOutput.ReadToEnd()
         $stderr = $p.StandardError.ReadToEnd()
-        $p.WaitForExit()
+        # Ограниченное ожидание вместо бесконечного WaitForExit: stdout
+        # закрыт (ReadToEnd вернулся), но liveness-контракт требует явного
+        # бюджета; незавершённый процесс — FAIL, а не зависание.
+        $завершение = Wait-ProcessExitBounded $p 15000 'guard-negative-case'
+
+        if (-not $завершение.Exited) {
+            throw ("FAIL: harness не завершился за 15000 мс после закрытия stdout — ограниченное ожидание истекло; " + $завершение.Диагностика)
+        }
 
         Write-Host "  exit code: $($p.ExitCode)"
         $nl = "`n"

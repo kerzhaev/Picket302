@@ -273,7 +273,162 @@ function New-StopResult {
         TreeError = ''
         KillOutput = @()
         StartTimeKnown = $false
+        TaskKillExitCode = $null
+        HarnessNotExited = $false
+        StartTime = $null
     }
+}
+
+# Ограниченное ожидание завершения процесса — ЕДИНСТВЕННЫЙ допустимый
+# способ ожидать процесс в acceptance-драйверах: бесконечные
+# бесконечные вызовы WaitForExit без таймаута запрещены (процесс с ошибкой teardown может
+# остаться живым — драйвер завис бы вместо exit 1). Возвращает
+# структурированный результат: Exited / ExitCode (null, если процесс не
+# завершился или код недоступен из-за уничтоженного процесса) / TimedOut /
+# StartTime (для диагностики PID reuse) / Диагностика.
+function Wait-ProcessExitBounded($proc, [int]$timeoutMs, [string]$метка) {
+    $результат = @{ Exited = $false; ExitCode = $null; TimedOut = $false; StartTime = $null; Диагностика = '' }
+
+    if ($proc -eq $null) {
+        $результат.Диагностика = "процесс null (метка=$метка)"
+        return $результат
+    }
+
+    try { $результат.StartTime = $proc.StartTime } catch {
+        # StartTime недоступен (процесс уже уничтожен) — не критично.
+    }
+
+    try {
+        if ($proc.WaitForExit($timeoutMs)) {
+            $результат.Exited = $true
+
+            try {
+                $результат.ExitCode = $proc.ExitCode
+            } catch {
+                # Уже уничтоженный процесс: ExitCode может быть недоступен —
+                # это не превращается в исключение наружу.
+                $результат.Диагностика = "ExitCode недоступен (метка=$метка): $($_.Exception.Message)"
+            }
+        } else {
+            $результат.TimedOut = $true
+            $пид = '?'
+            try { $пид = $proc.Id } catch { }
+            $результат.Диагностика = "процесс не завершился за $timeoutMs мс (метка=$метка, pid=$пид, старт=$($результат.StartTime))"
+            Write-Host "  BOUNDED-WAIT TIMEOUT: $($результат.Диагностика)"
+        }
+    } catch {
+        $результат.Диагностика = "ожидание не выполнено (метка=$метка): $($_.Exception.Message)"
+        Write-Host "  BOUNDED-WAIT: $($результат.Диагностика)"
+    }
+
+    return $результат
+}
+
+# Единая ограниченная остановка harness для драйверов (emptybook/printflow):
+# - null/неполный результат/исключение остановки — fail-флаги, без
+#   бесконечных ожиданий;
+# - TreeOk=false — немедленный tree-cleanup-failed, затем МАКСИМУМ ОДНА
+#   ограниченная повторная попытка аварийного teardown и повторный
+#   bounded post-scan (отдельный шаг);
+# - живые/неподтверждённые PID после post-scan — в диагностику;
+# - процесс НЕ ждётся бесконечно ни в одной ветви.
+function Invoke-HarnessStop($h, [string]$сценарий, [int]$retryWaitMs = 5000) {
+    $флаги = [System.Collections.Generic.List[string]]::new()
+    $результат = $null
+    $повтор = $null
+    $пост = $null
+
+    if ($h -eq $null -or $h.Proc -eq $null) {
+        $флаги.Add('teardown-failed')
+        Write-Host "  SAFETY-FAIL: harness недоступен для остановки (сценарий=$сценарий, pid=нет)"
+        return @{ Результат = $null; Повтор = $null; ПостПроверка = $null; Флаги = $флаги }
+    }
+
+    try {
+        $результат = Stop-Acceptance $h
+    } catch {
+        $флаги.Add('stop-exception')
+        Write-Host "  SAFETY-FAIL: исключение остановки harness (сценарий=$сценарий): $($_.Exception.Message)"
+    }
+
+    if ($результат -eq $null -or -not ($результат -is [hashtable]) -or -not $результат.ContainsKey('TreeOk')) {
+        $флаги.Add('stop-result-incomplete')
+        Write-Host "  SAFETY-FAIL: результат остановки отсутствует или неполный (сценарий=$сценарий)"
+        return @{ Результат = $результат; Повтор = $null; ПостПроверка = $null; Флаги = $флаги }
+    }
+
+    if ($результат.Pid -gt 0) {
+        $пидДляЖурнала = $результат.Pid
+        Write-Host "  Остановка harness (pid=$пидДляЖурнала): graceful=$($результат.Graceful) killed=$($результат.Killed) TreeOk=$($результат.TreeOk)"
+    }
+
+    if (-not $результат.TreeOk) {
+        # Немедленный fail-флаг; без блокировки на обычном WaitForExit.
+        $флаги.Add('tree-cleanup-failed')
+        Write-Host ("  SAFETY-FAIL: дерево процессов не чистое после остановки (pid=" + $результат.Pid + "): " + $результат.TreeError)
+
+        foreach ($живой in $результат.RemainingPids) {
+            $флаги.Add('remaining-descendants')
+            Write-Host "  SAFETY-FAIL: живой PID после остановки: $живой"
+        }
+
+        foreach ($неподтверждённый in $результат.UnconfirmedPids) {
+            $флаги.Add('unconfirmed-descendants')
+            Write-Host "  SAFETY-FAIL: неподтверждённый PID (PID reuse риск): $неподтверждённый"
+        }
+
+        # Максимум ОДНА ограниченная попытка аварийного teardown.
+        try {
+            $повтор = Stop-HarnessTree $h.Proc $retryWaitMs
+        } catch {
+            $флаги.Add('stop-exception')
+            Write-Host "  SAFETY-FAIL: повторная попытка аварийного teardown: $($_.Exception.Message)"
+        }
+
+        if ($повтор -ne $null -and ($повтор -is [hashtable])) {
+            if ($повтор.TreeError) {
+                Write-Host ("  Повторная остановка (pid=" + $повтор.Pid + "): TreeOk=" + $повтор.TreeOk + "; ошибка: " + $повтор.TreeError)
+            }
+
+            if (-not $повтор.TreeConfirmed) {
+                $флаги.Add('tree-verification-failed')
+            }
+
+            if ($повтор.RemainingPids.Count -gt 0 -and $повтор.TreeOk) {
+                foreach ($живой in $повтор.RemainingPids) {
+                    $флаги.Add('remaining-descendants')
+                    Write-Host "  SAFETY-FAIL: живой PID после повторной остановки: $живой"
+                }
+            }
+        }
+
+        # Повторный bounded post-scan — отдельный шаг после завершения.
+        try {
+            $пост = Test-ProcessTreeGone $h.Proc
+        } catch {
+            $флаги.Add('tree-verification-failed')
+            Write-Host "  SAFETY-FAIL: пост-скан дерева процессов: $($_.Exception.Message)"
+        }
+
+        if ($пост -ne $null) {
+            if (-not $пост.Ok) {
+                $флаги.Add('tree-postcheck-failed')
+                Write-Host ("  SAFETY-FAIL: пост-скан дерева (pid=" + $пост.Pid + "): остатки [" +
+                    ($пост.RemainingPids -join ';') + "] неподтверждённые [" +
+                    ($пост.UnconfirmedPids -join ';') + "] ошибка: " + $пост.Error)
+            }
+
+            foreach ($живой in $пост.RemainingPids) {
+                if ($флаги -notcontains 'remaining-descendants') { $флаги.Add('remaining-descendants') }
+            }
+
+            foreach ($неподтверждённый in $пост.UnconfirmedPids) {
+                if ($флаги -notcontains 'unconfirmed-descendants') { $флаги.Add('unconfirmed-descendants') }
+            }
+        }
+    }
+
+    return @{ Результат = $результат; Повтор = $повтор; ПостПроверка = $пост; Флаги = $флаги }
 }
 
 function Wait-AppWindow([uint32]$procId, [string]$title, [int]$seconds = 30) {
@@ -573,10 +728,24 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
     try {
         $старт = $proc.StartTime
         $результат.StartTimeKnown = $true
+        $результат.StartTime = $старт
     } catch {
         $старт = [datetime]::MinValue
         $результат.StartTimeKnown = $false
         Write-Host "  TREE: StartTime недоступен заранее (pid=$пид) — идентичность потомков не подтвердить, проверка fail-closed"
+    }
+
+    # Тестовый fault (только driver-level liveness-тесты): родитель
+    # логически остаётся живым, cleanup НЕ подтверждён; реальные процессы
+    # не убиваются — внешняя уборка за fault-тестом (launcher).
+    if ($env:P302_DRIVER_FAULT -eq 'parent-alive-after-stop') {
+        $результат.TreeError = 'fault-inject: parent alive after stop'
+        $результат.RemainingPids = @($пид)
+        $результат.TreeOk = $false
+        $результат.TreeConfirmed = $true
+        $результат.HarnessNotExited = $true
+        Write-Host "  FAULT-INJECT: parent alive after stop (pid=$пид)"
+        return $результат
     }
 
     # 2. Graceful, если жив.
@@ -615,6 +784,7 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
             }
 
             $результат.KillOutput = @($выводForce)
+            $результат.TaskKillExitCode = $кодTaskkill
             $результат.Killed = $true
 
             if ($кодTaskkill -ne 0 -and $кодTaskkill -ne 128) {
@@ -704,6 +874,7 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
         }
 
         if (-not $proc.HasExited) {
+            $результат.HarnessNotExited = $true
             $результат.RemainingPids = @($результат.Pid) + @($результат.RemainingPids)
             $сообщение = "родительский процесс жив после cleanup (pid=$пид)"
             if ($результат.TreeError) {
