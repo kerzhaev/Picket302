@@ -394,6 +394,26 @@ probili.ru), №35 (запоминание последних введённых
 Failed: 0, Passed: 1112, Skipped: 0, Total: 1112; заголовок без служебных маркеров,
 LF сохранён, строк таблиц — 175.
 
+**Ревизия acceptance-инфраструктуры 2026-11-07 (четвёртая серия замечаний).**
+Закрыты дефекты, при которых PASS не означал выполнение проверки: reparse-тесты
+гарда без тихих пропусков (невозможность создать junction/symlink — FAIL;
+создание подтверждается атрибутом reparse point через `GetFileAttributesW`;
+cleanup ссылок/базы проверяется; постусловие отсутствия `P302GuardTest_*`),
+`ИзолированныйПрофиль.Dispose` с независимыми шагами и полной диагностикой
+(`AggregateException` + `Data`, ошибка `ClearAllPools` входит в провал),
+PowerShell-драйверы fail-closed (`$ErrorActionPreference='Stop'`, fingerprint
+без `SilentlyContinue`, sentinel с `-ErrorAction Stop`, единая запись evidence,
+fault-инъекции в отдельных файлах `emptybook-fault-*.md` / `printflow-fault-*.md`
+с `PASS_OF_CONTRACT: true`, happy-файлы `emptybook-happy-evidence.md` /
+`printflow-happy-evidence.md` не перезаписываются fault-прогонами). Контроль:
+Debug/Release non-COM **1254/1254** (1251 + 3 новых теста), гард 19/19
+(0 fail, 0 skip; reparse-ветви измерены фактически), сборки 0 предупреждений /
+0 ошибок, статический parse 4 скриптов — 0 ошибок, `run-guard-negative.ps1`
+exit 0, fault `wrong-expectation` exit 1 (оба без UI). Прогоны
+`run-emptybook.ps1`/`run-printflow.ps1` с UI 2026-11-07 не выполнялись (запрещены
+постановкой) — свежий runtime-статус сценариев NOT_RUN_BY_SCOPE; подробности и
+карта evidence-файлов — `docs/UX-REDESIGN-2026-11-05.md`, раздел 8.1.
+
 ## Приложение: сквозной приёмочный сценарий
 
 `tests/Picket302.Tests/Acceptance/AcceptanceScenarioTests.cs` — `Сквозной_сценарий_приёмки_от_демо_базы_до_восстановления_архива`:

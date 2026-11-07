@@ -300,6 +300,12 @@ WinForms-форм в параллельных коллекциях и глоба
 
 ## 8. Статусы (свежие прогоны 2026-11-07, третья серия замечаний)
 
+> **Примечание (ревизия 2026-11-07, четвёртая серия).** Таблица ниже
+> описывает прогоны скриптов ревизии 794cb4e. После ревизии fail-closed
+> (см. 8.1) сценарии `run-emptybook.ps1` и `run-printflow.ps1` с UI не
+> перезапускались — их runtime-статусы читайте в 8.1 (NOT_RUN_BY_SCOPE),
+> а не в этой таблице.
+
     SOURCE_VERIFIED=true              — исходник сверён, все правки в ветке
     BUILD_DEBUG_VERIFIED=true         — 0 ошибок / 0 предупреждений
     BUILD_RELEASE_VERIFIED=true       — 0 ошибок / 0 предупреждений
@@ -351,6 +357,89 @@ WinForms-форм в параллельных коллекциях и глоба
                                       предпросмотре до передачи задания
     CODE_COVERAGE_MEASURED=false      — coverage-collector не
                                       устанавливался, артефакта нет
+
+### 8.1. Статусы ревизии fail-closed (четвёртая серия замечаний, 2026-11-07)
+
+Исправлены дефекты acceptance/тестовой инфраструктуры, при которых PASS мог
+не означать выполнение проверки:
+
+1. **Reparse-тесты гарда без тихих пропусков** (`ProfileIsolationGuardTests`):
+   невозможность создать junction/symlink — FAIL (`Assert.True`), а не
+   `return`; создание подтверждается низкоуровневым атрибутом reparse point
+   через `GetFileAttributesW` (`File.GetAttributes` на dangling-ссылке
+   бросает `FileNotFoundException` и молча пропускал ветвь); cleanup ссылок
+   и базы проверяется на фактическое отсутствие, ошибка cleanup — красный
+   тест; добавлено постусловие отсутствия `P302GuardTest_*` в %TEMP%
+   (`ZTempCleanupPostconditionTests`, общая коллекция с гард-тестами).
+2. **`ИзолированныйПрофиль.Dispose` — все шаги независимы**: провал
+   утилизации оболочки/состава не отменяет очистку пула и удаление
+   каталога; ловятся любые исключения (не только узкий список), ошибка
+   `ClearAllPools` входит в итоговый провал; `ProfileCleanupException`
+   несёт причины всех шагов (вложенный `AggregateException` + `Data`),
+   флаг «каталог остался» и число попыток. Добавлены тесты инъекции
+   отказа утилизации состава и очистки пула (внутренние крючки
+   `ТестУтилизацияСостава`/`ТестОчисткаПула`).
+3. **PowerShell-скрипты fail-closed**: `$ErrorActionPreference='Stop'`;
+   fingerprint без `SilentlyContinue` (ошибка перечисления/чтения = FAIL,
+   `-Force` включает скрытые файлы); sentinel создаётся внутри
+   try/finally и удаляется с `-ErrorAction Stop`; **единый путь записи
+   evidence** (после cleanup и фиксации финальных статусов, один раз;
+   неудача записи = exit 1); fault-инъекции пишутся в отдельные файлы
+   (`emptybook-fault-<fault>.md`, `printflow-fault-<fault>.md`) с
+   `PASS_OF_CONTRACT: true` и никогда не перезаписывают happy-файл
+   (`emptybook-happy-evidence.md`, `printflow-happy-evidence.md`);
+   обычный провал — `*-failure-evidence.md`.
+
+Прогоны и результаты (2026-11-07, без UI-сценариев — запрещены задачей):
+
+    SOURCE_VERIFIED=true               — исходник сверен
+    BUILD_DEBUG_VERIFIED=true          — 0 ошибок / 0 предупреждений
+    BUILD_RELEASE_VERIFIED=true        — 0 ошибок / 0 предупреждений
+    BUILD_ACCEPTANCE_HARNESS_VERIFIED=true — harness 0 ошибок
+    TEST_DEBUG_VERIFIED=true           — полный non-COM Debug 1254/1254
+                                       (1251 + 3 новых теста: 2 хука
+                                       Dispose + постусловие P302GuardTest)
+    TEST_RELEASE_VERIFIED=true         — полный non-COM Release 1254/1254
+    PROFILE_SAFETY_VERIFIED=true       — гард 19/19 (0 fail, 0 skip);
+                                       reparse-ветви измерены фактически
+                                       (mklink /J и симлинк созданы и
+                                       проверены атрибутом reparse point)
+    SYMLINK_GUARD_VERIFIED=true        — junction-равенство, junction-
+                                       вложенность, dangling-симлинк,
+                                       зацикленная цепочка — все ветви
+                                       реально выполнены, silent return
+                                       исключён
+    ACCEPTANCE_EXIT_CODE_VERIFIED=PARTIAL — run-guard-negative свежий
+                                       прогон exit 0; fault
+                                       wrong-expectation exit 1 (без UI);
+                                       emptybook/printflow скрипты
+                                       переработаны, но с UI не
+                                       перезапускались — их exit-коды для
+                                       новой ревизии NOT_RUN_BY_SCOPE
+    EVIDENCE_WRITE_VERIFIED=PARTIAL    — контракт единой записи сверен по
+                                       исходнику; runtime-проверка отказа
+                                       записи — при следующем разрешённом
+                                       UI-прогоне
+    TEMP_CLEANUP_VERIFIED=true         — до: P302GuardTest_*=0,
+                                       Picket302Tests_*=0; после: 0/0;
+                                       keep-профилей 5 сохранены;
+                                       .bak/.lock = 0; процессов 0
+    NAG_RUNTIME_VERIFIED=true          — NAG отключён (DEFERRED_BY_OWNER),
+                                       без изменений
+    UI_VISUAL_VERIFIED=true            — скриншоты п. 6 (код UI не менялся)
+    REFERENCE_VISUAL_VERIFIED=PARTIAL  — без изменений; 70% — целевой
+                                       ориентир, количественно не измерялся
+    COM_VERIFIED=NOT_RUN_BY_SCOPE      — вне области
+    PRINT_VERIFIED=NOT_RUN_BY_SCOPE    — вне области
+    CODE_COVERAGE_MEASURED=false       — без изменений
+
+Карта evidence-файлов: happy-path — `emptybook-happy-evidence.md` /
+`printflow-happy-evidence.md` (появятся при следующем разрешённом
+UI-прогоне); fault-инъекции — `emptybook-fault-*.md` /
+`printflow-fault-*.md` (`PASS_OF_CONTRACT: true`); прежние основные файлы
+`emptybook-runtime-evidence.md` / `f5-f6-runtime-evidence.md` теперь
+указатели — их последние записи были fault-прогонами, перезаписавшими
+happy-evidence (дефект устранён; записи перемещены в fault-файлы).
 
 ## 9. Ограничения и что не проверялось
 

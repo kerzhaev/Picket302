@@ -1,4 +1,13 @@
-﻿# Emptybook runtime-доказательство
+﻿# Emptybook fault-injection: cleanup-false
+
+PASS_OF_CONTRACT: true — Инъекция P302_EMPTYBOOK_FAULT=cleanup-false корректно обнаружена, скрипт вернул 1.
+Запись перемещена из основного evidence-файла: прогон с fault-инъекцией
+не является happy-path-доказательством и не должен храниться под именем
+основного runtime-свидетельства (дефект перезаписи исправлен в скриптах
+ревизии fail-closed 2026-11-07).
+
+---
+# Emptybook runtime-доказательство
 
 Прогон: 2026-11-07 01:29:56, профиль: временный (guid), createDemoData=false.
 

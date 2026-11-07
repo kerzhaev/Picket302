@@ -1,4 +1,13 @@
-﻿# F5/F6 runtime-доказательство (acceptance harness)
+﻿# F5/F6 fault-injection: harness-exit
+
+PASS_OF_CONTRACT: true — Инъекция P302_PRINTFLOW_FAULT=harness-exit корректно обнаружена, скрипт вернул 1.
+Запись перемещена из основного evidence-файла: прогон с fault-инъекцией
+не является happy-path-доказательством и не должен храниться под именем
+основного runtime-свидетельства (дефект перезаписи исправлен в скриптах
+ревизии fail-closed 2026-11-07).
+
+---
+# F5/F6 runtime-доказательство (acceptance harness)
 
 Прогон: 2026-11-07 01:29:48, профиль: временный (guid), createDemoData=false.
 Физическая печать не выполнялась: F5 — «Отмена», F6 — «Закрыть» на предпросмотре.
