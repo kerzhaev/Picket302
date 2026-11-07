@@ -1,13 +1,13 @@
 ﻿# Пункт B: настоящий runtime-сценарий пустой адресной книги. Fail-closed:
-# любой провал — ненулевой код возврата. Единый контролируемый путь записи
-# evidence: сначала завершается cleanup (harness, финальный отпечаток с
-# fail-флагами дельты, sentinel), вычисляется ФИНАЛЬНЫЙ статус, затем
-# evidence записывается ОДИН раз и проверяется на наличие обязательных
-# маркеров текущего прогона. Happy-прогон — emptybook-happy-evidence.md;
-# fault-инъекция — отдельный emptybook-fault-<fault>.md (happy-файл не
-# перезаписывается); обычный провал — emptybook-failure-evidence.md.
-# Общий ресурс (реальный профиль + sentinel) защищён межпроцессной
-# блокировкой Enter-SharedTestLock.
+# любой провал — ненулевой код возврата. Порядок финализации: основная
+# работа → уборка (дерево процессов) → финальная fingerprint-проверка →
+# sentinel → ГАРАНТИРОВАННОЕ освобождение межпроцессной блокировки
+# (результат входит в failure) → финальный статус → evidence записывается
+# ОДИН раз с уже известным статусом и проверяется обязательными маркерами.
+# Happy-прогон — emptybook-happy-evidence.md; fault-инъекция — отдельный
+# emptybook-fault-<fault>.md (happy-файл не перезаписывается); обычный
+# провал — emptybook-failure-evidence.md. Общий ресурс (реальный профиль
+# + sentinel) защищён межпроцессной блокировкой Enter-SharedTestLock.
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\acceptance-lib.ps1"
 
@@ -31,6 +31,7 @@ $финальнаяДельтаNew = -1
 $финальнаяДельтаChanged = -1
 $финальнаяДельтаRemoved = -1
 $фaultПрименён = $false
+$убит = $false
 
 function Запись([string]$событие) {
     $срок = "[$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))] $событие"
@@ -84,11 +85,15 @@ try {
     if (Test-Path $скриншот) { $скриншотРазмер = (Get-Item $скриншот).Length }
     Запись "скриншот: $скриншот ($скриншотРазмер байт)"
 
-    # --- 5. Штатное завершение --------------------------------------------
-    $убит = Stop-Acceptance $h
+    # --- 5. Штатное завершение + проверка дерева --------------------------
+    # Stop-Acceptance не убивает сам: при таймауте — единый движок
+    # Stop-HarnessTree; дерево проверяется и после штатного выхода.
+    $остановка = Stop-Acceptance $h
+    $убит = -not $остановка.Graceful
     if ($h -ne $null -and -not $h.Proc.HasExited) { $h.Proc.WaitForExit() }
     $кодВыходаHarness = $h.Proc.ExitCode
-    Запись "harness exit code: $кодВыходаHarness; killed: $убит"
+    Запись "harness exit code: $кодВыходаHarness; killed: $убит; pid: $($остановка.Pid)"
+    Запись "дерево процессов: ok=$($остановка.TreeOk) остатки=[$($остановка.RemainingPids -join ';')] ошибка: $($остановка.TreeError)"
 
     # Проверки stdout — по накопленным строкам harness.
     $stdout = Get-HarnessLines $h
@@ -125,7 +130,7 @@ try {
         Запись 'FAULT-INJECT: cleanup = False'
     }
 
-    # --- 8. Условия happy-path ---------------------------------------------
+    # --- 8. Условия happy-path (включая чистоту дерева) ---------------------
     $условия = [ordered]@{
         'READY получен' = ($null -ne ($stdout | Where-Object { $_ -match '^READY ' }))
         'COUNTS получен' = ($null -ne $строкаСчётчиков)
@@ -141,6 +146,10 @@ try {
         'harness exit 0' = ($кодВыходаHarness -eq 0)
         'harness не убит' = (-not $убит)
         'нет FAIL в stdout' = ($отказовStdout -eq 0)
+        'дерево процессов чисто' = $остановка.TreeOk
+        'нет живых потомков harness' = ($остановка.RemainingPids.Count -eq 0)
+        'нет неподтверждённых потомков' = ($остановка.UnconfirmedPids.Count -eq 0)
+        'нет ошибки проверки дерева' = ($остановка.TreeError -eq '')
     }
 
     $сценарийПройден = $true
@@ -155,100 +164,135 @@ catch {
     $сценарийПройден = $false
 }
 finally {
-    # --- A. Аварийное завершение harness (дерево процессов, fail-флаг) ----
-    $аварийноУбит = Stop-HarnessTree $h
+    try {
+        # --- A. Аварийное завершение harness (дерево, fail-флаги) ----------
+        if ($h -ne $null -and $h.Proc -ne $null -and -not $h.Proc.HasExited) {
+            $остановкаФинал = Stop-HarnessTree $h.Proc
 
-    if ($аварийноУбит) {
-        $script:убит = $true
-        $неудачиОчистки.Add('emergency-kill')
-        Запись "SAFETY-FAIL: harness убит в finally (pid=$(if ($h -ne $null -and $h.Proc -ne $null) { $h.Proc.Id } else { '?' })) — happy-path PASS невозможен"
-    }
+            if (-not $остановкаФинал.Graceful) {
+                $script:убит = $true
+                $неудачиОчистки.Add('emergency-kill')
+                Запись "SAFETY-FAIL: harness убит в finally (pid=$($остановкаФинал.Pid)) — happy-path PASS невозможен"
+            }
 
-    # --- B. Финальная fingerprint-проверка (fail-closed, дельта = FAIL) ----
-    if ($null -ne $отпечатокДо) {
-        try {
-            $отпечатокФинал = Test-ProfileFingerprint $реальныйПрофиль
+            if (-not $остановкаФинал.TreeOk) {
+                $неудачиОчистки.Add('tree-cleanup-failed')
+                Запись "SAFETY-FAIL: дерево не чистое (pid=$($остановкаФинал.Pid)): $($остановкаФинал.TreeError)"
+            }
 
-            if ($env:P302_EMPTYBOOK_FAULT -eq 'final-delta') {
-                if ($отпечатокФинал.Count -gt 0) {
-                    $первый = @($отпечатокФинал.Keys)[0]
-                    $отпечатокФинал.Remove($первый)
+            if ($остановкаФинал.RemainingPids.Count -gt 0) {
+                $неудачиОчистки.Add('remaining-descendants')
+                Запись "SAFETY-FAIL: живые потомки после cleanup: [$($остановкаФинал.RemainingPids -join ';')]"
+            }
+
+            if ($остановкаФинал.UnconfirmedPids.Count -gt 0) {
+                $неудачиОчистки.Add('tree-unconfirmed-descendants')
+                Запись "SAFETY-FAIL: потомки с неподтверждённой идентичностью: [$($остановкаФинал.UnconfirmedPids -join ';')]"
+            }
+
+            if (-not $остановкаФинал.TreeConfirmed) {
+                $неудачиОчистки.Add('tree-verification-failed')
+                Запись 'SAFETY-FAIL: повторная проверка дерева не выполнена'
+            }
+        }
+
+        # --- B. Финальная fingerprint-проверка (fail-closed, дельта = FAIL)
+        if ($null -ne $отпечатокДо) {
+            try {
+                $отпечатокФинал = Test-ProfileFingerprint $реальныйПрофиль
+
+                if ($env:P302_EMPTYBOOK_FAULT -eq 'final-delta') {
+                    if ($отпечатокФинал.Count -gt 0) {
+                        $первый = @($отпечатокФинал.Keys)[0]
+                        $отпечатокФинал.Remove($первый)
+                    }
+                    Запись 'FAULT-INJECT: final delta Removed > 0'
                 }
-                Запись 'FAULT-INJECT: final delta Removed > 0'
-            }
 
-            $дельтаФинал = Compare-Fingerprints $отпечатокДо $отпечатокФинал
-            $финальнаяДельтаNew = $дельтаФинал.New.Count
-            $финальнаяДельтаChanged = $дельтаФинал.Changed.Count
-            $финальнаяДельтаRemoved = $дельтаФинал.Removed.Count
-            Запись "production delta (финально): new=$финальнаяДельтаNew changed=$финальнаяДельтаChanged removed=$финальнаяДельтаRemoved"
-            $дельтаФинал.New | ForEach-Object { Запись "  NEW: $_" }
-            $дельтаФинал.Changed | ForEach-Object { Запись "  CHANGED: $_" }
-            $дельтаФинал.Removed | ForEach-Object { Запись "  REMOVED: $_" }
+                $дельтаФинал = Compare-Fingerprints $отпечатокДо $отпечатокФинал
+                $финальнаяДельтаNew = $дельтаФинал.New.Count
+                $финальнаяДельтаChanged = $дельтаФинал.Changed.Count
+                $финальнаяДельтаRemoved = $дельтаФинал.Removed.Count
+                Запись "production delta (финально): new=$финальнаяДельтаNew changed=$финальнаяДельтаChanged removed=$финальнаяДельтаRemoved"
+                $дельтаФинал.New | ForEach-Object { Запись "  NEW: $_" }
+                $дельтаФинал.Changed | ForEach-Object { Запись "  CHANGED: $_" }
+                $дельтаФинал.Removed | ForEach-Object { Запись "  REMOVED: $_" }
 
-            if ($финальнаяДельтаNew -ne 0) {
-                $неудачиОчистки.Add('final-delta-new')
-                Запись 'SAFETY-FAIL: финальная дельта — новые файлы реального профиля'
+                if ($финальнаяДельтаNew -ne 0) {
+                    $неудачиОчистки.Add('final-delta-new')
+                    Запись 'SAFETY-FAIL: финальная дельта — новые файлы реального профиля'
+                }
+                if ($финальнаяДельтаChanged -ne 0) {
+                    $неудачиОчистки.Add('final-delta-changed')
+                    Запись 'SAFETY-FAIL: финальная дельта — изменённые файлы реального профиля'
+                }
+                if ($финальнаяДельтаRemoved -ne 0) {
+                    $неудачиОчистки.Add('final-delta-removed')
+                    Запись 'SAFETY-FAIL: финальная дельта — удалённые файлы реального профиля'
+                }
+            } catch {
+                $неудачиОчистки.Add('fingerprint-final-check')
+                Запись "SAFETY-FAIL: финальная fingerprint-проверка не выполнена: $($_.Exception.Message)"
             }
-            if ($финальнаяДельтаChanged -ne 0) {
-                $неудачиОчистки.Add('final-delta-changed')
-                Запись 'SAFETY-FAIL: финальная дельта — изменённые файлы реального профиля'
-            }
-            if ($финальнаяДельтаRemoved -ne 0) {
-                $неудачиОчистки.Add('final-delta-removed')
-                Запись 'SAFETY-FAIL: финальная дельта — удалённые файлы реального профиля'
-            }
-        } catch {
-            $неудачиОчистки.Add('fingerprint-final-check')
-            Запись "SAFETY-FAIL: финальная fingerprint-проверка не выполнена: $($_.Exception.Message)"
+        } else {
+            $неудачиОчистки.Add('fingerprint-before-missing')
+            Запись 'SAFETY-FAIL: отпечаток ДО не снят — финальная проверка невозможна'
         }
-    } else {
-        $неудачиОчистки.Add('fingerprint-before-missing')
-        Запись 'SAFETY-FAIL: отпечаток ДО не снят — финальная проверка невозможна'
-    }
 
-    # --- C. Sentinel удаляется с -ErrorAction Stop -------------------------
-    if (Test-Path $sentinel) {
-        try {
-            Remove-Item $sentinel -Force -ErrorAction Stop
-        } catch {
-            $неудачиОчистки.Add('sentinel-not-deleted')
-            Запись "SAFETY-FAIL: sentinel не удалён: $($_.Exception.Message)"
+        # --- C. Sentinel удаляется с -ErrorAction Stop ---------------------
+        if (Test-Path $sentinel) {
+            try {
+                Remove-Item $sentinel -Force -ErrorAction Stop
+            } catch {
+                $неудачиОчистки.Add('sentinel-not-deleted')
+                Запись "SAFETY-FAIL: sentinel не удалён: $($_.Exception.Message)"
+            }
         }
+
+        if (Test-Path $sentinel) {
+            $неудачиОчистки.Add('sentinel-still-present')
+            Запись 'SAFETY-FAIL: sentinel остался в реальном профиле после завершения'
+        }
+
+        # --- D. Выбор файла evidence: happy / fault / failure --------------
+        $фault = $env:P302_EMPTYBOOK_FAULT
+        $фaultПрименён = @($журнал | Where-Object { $_ -match 'FAULT-INJECT:' }).Count -gt 0
+
+        if ($сценарийПройден -and $фault) {
+            $файлEvidence = 'emptybook-fault-' + $фault + '.md'
+            $заголовокEvidence = 'Emptybook fault-injection: ' + $фault
+            Запись 'ANOMALY: fault применён, но условия прошли — файл fault-evidence'
+        } elseif ($сценарийПройден) {
+            $файлEvidence = 'emptybook-happy-evidence.md'
+            $заголовокEvidence = 'Emptybook runtime-доказательство (happy path)'
+        } elseif ($фaultПрименён) {
+            $файлEvidence = 'emptybook-fault-' + $фault + '.md'
+            $заголовокEvidence = 'Emptybook fault-injection: ' + $фault
+        } else {
+            $файлEvidence = 'emptybook-failure-evidence.md'
+            $заголовокEvidence = 'Emptybook runtime-доказательство (FAIL)'
+        }
+
+        if ($фault -eq 'evidence-fail') {
+            # Fault невозможности записи: имя с недопустимым символом Windows —
+            # Set-Content обязан бросить; happy-файл не пишется.
+            $файлEvidence = 'bad|name-evidence-fail.md'
+            Запись 'FAULT-INJECT: evidence write target invalid'
+        }
+    } catch {
+        $неудачиОчистки.Add('finalization-error')
+        Запись "SAFETY-FAIL: ошибка финализации: $($_.Exception.Message)"
     }
 
-    if (Test-Path $sentinel) {
-        $неудачиОчистки.Add('sentinel-still-present')
-        Запись 'SAFETY-FAIL: sentinel остался в реальном профиле после завершения'
+    # --- E. Гарантированное освобождение блокировки (до статуса и evidence)
+    $блокировкаРезультат = Exit-SharedTestLock $блокировка 'emptybook'
+
+    if (-not ($блокировкаРезультат.Released -and $блокировкаРезультат.Disposed)) {
+        $неудачиОчистки.Add('lock-release-failed')
+        Запись "SAFETY-FAIL: освобождение межпроцессной блокировки не подтверждено: $($блокировкаРезультат.Error)"
     }
 
-    # --- D. Выбор файла evidence: happy / fault / failure ------------------
-    $фault = $env:P302_EMPTYBOOK_FAULT
-    $фaultПрименён = @($журнал | Where-Object { $_ -match 'FAULT-INJECT:' }).Count -gt 0
-
-    if ($сценарийПройден -and $фault) {
-        $файлEvidence = 'emptybook-fault-' + $фault + '.md'
-        $заголовокEvidence = 'Emptybook fault-injection: ' + $фault
-        Запись 'ANOMALY: fault применён, но условия прошли — файл fault-evidence'
-    } elseif ($сценарийПройден) {
-        $файлEvidence = 'emptybook-happy-evidence.md'
-        $заголовокEvidence = 'Emptybook runtime-доказательство (happy path)'
-    } elseif ($фaultПрименён) {
-        $файлEvidence = 'emptybook-fault-' + $фault + '.md'
-        $заголовокEvidence = 'Emptybook fault-injection: ' + $фault
-    } else {
-        $файлEvidence = 'emptybook-failure-evidence.md'
-        $заголовокEvidence = 'Emptybook runtime-доказательство (FAIL)'
-    }
-
-    if ($фault -eq 'evidence-fail') {
-        # Fault невозможности записи: имя с недопустимым символом Windows —
-        # Set-Content обязан бросить; happy-файл не пишется.
-        $файлEvidence = 'bad|name-evidence-fail.md'
-        Запись 'FAULT-INJECT: evidence write target invalid'
-    }
-
-    # --- E. Финальный статус ДО записи evidence (входит в evidence) --------
+    # --- F. Финальный статус ДО записи evidence (входит в evidence) --------
     $happyПройден = $сценарийПройден -and ($неудачиОчистки.Count -eq 0) -and (-not $фault)
     $финальныйВердикт = if ($happyПройден) { 'PASS' } else { 'FAIL' }
     $ожидаемыйКод = if ($happyПройден) { 0 } else { 1 }
@@ -260,6 +304,7 @@ finally {
     Запись "временный профиль: $(if (Get-Variable -Name корень -ErrorAction SilentlyContinue) { $корень } else { 'не создан' })"
     Запись "createDemoData=false"
     Запись "FINAL DELTA: new=$финальнаяДельтаNew changed=$финальнаяДельтаChanged removed=$финальнаяДельтаRemoved"
+    Запись "LOCK RELEASE: released=$($блокировкаРезультат.Released) disposed=$($блокировкаРезультат.Disposed)"
     Запись "неудачи очистки: $(if ($неудачиОчистки.Count -gt 0) { $неудачиОчистки -join ';' } else { 'нет' })"
     Запись "FAULT: $(if ($фault) { $фault } else { 'нет' })"
     Запись "EXPECTED FINAL EXIT: $ожидаемыйКод"
@@ -269,10 +314,10 @@ finally {
         Запись "PASS_OF_CONTRACT: $(-not $happyПройден) (fault=$фault — инъекция корректно обнаружена, скрипт не вернёт 0)"
     }
 
-    # --- F. Единая запись evidence + пост-проверка -------------------------
+    # --- G. Единая запись evidence + пост-проверка -------------------------
     $evidenceOk = ЗаписатьEvidence $файлEvidence $заголовокEvidence 'createDemoData=false' $журнал
 
-    $маркеры = @('Режим: emptybook', 'FINAL VERDICT: ' + $финальныйВердикт, 'EXPECTED FINAL EXIT: ' + $ожидаемыйКод, 'createDemoData=false')
+    $маркеры = @('Режим: emptybook', 'FINAL VERDICT: ' + $финальныйВердикт, 'EXPECTED FINAL EXIT: ' + $ожидаемыйКод, 'LOCK RELEASE:', 'createDemoData=false')
     if ($фaultПрименён) { $маркеры += 'PASS_OF_CONTRACT:' }
     $evidenceOk = $evidenceOk -and (Test-EvidenceWritten $файлEvidence $маркеры)
 
@@ -282,9 +327,7 @@ finally {
         Запись 'FAIL: запись evidence не удалась или не подтверждена — exit 1'
     }
 
-    Exit-SharedTestLock $блокировка
-
-    # --- G. Код возврата ----------------------------------------------------
+    # --- H. Код возврата ----------------------------------------------------
     if ($happyПройден -and $evidenceOk) {
         $exitCode = 0
         Запись 'EMPTYBOOK PASS: True'

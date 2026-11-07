@@ -238,25 +238,42 @@ function Get-HarnessLines($h) {
     return @($h.Lines.ToArray())
 }
 
-# Штатное завершение: CLOSE -> ожидание 20 c -> Kill при необходимости.
-# Возвращает $true, если пришлось убивать процесс (для драйвера это FAIL).
+# Штатное завершение: graceful CLOSE, при таймауте — единый движок
+# Stop-HarnessTree (Вариант A). Stop-Acceptance сам НЕ убивает процесс:
+# вся force-логика и проверка дерева — в Stop-HarnessTree.
+# Возвращает структурированный результат остановки:
+#   Pid               — PID harness (сохранён до любых попыток завершения);
+#   Graceful          — завершился штатно (по CLOSE или уже был завершён);
+#   Killed            — потребовался force (для драйвера — FAIL);
+#   TreeOk            — дерево проверено и чисто;
+#   TreeConfirmed     — проверка дерева выполнена (CIM-ошибки = false);
+#   RemainingPids     — живые процессы дерева после cleanup;
+#   UnconfirmedPids   — потомки с неподтверждённой идентичностью (PID reuse);
+#   TreeError         — ошибки taskkill/CIM/проверки;
+#   KillOutput        — stdout/stderr taskkill для диагностики.
 function Stop-Acceptance($h) {
-    if ($h -eq $null -or $h.Proc -eq $null) { return $false }
-    if ($h.Proc.HasExited) { return $false }
-    try {
-        $h.Proc.StandardInput.WriteLine('CLOSE')
-    } catch {
-        # Неудачная доставка CLOSE означает, что harness уже завершается:
-        # сам по себе это не провал прогона — код возврата проверяется ниже.
-        Write-Host "  CLOSE не доставлен (harness завершается): $($_.Exception.Message)"
+    if ($h -eq $null -or $h.Proc -eq $null) {
+        $результат = New-StopResult
+        $результат.TreeError = 'harness не запускался (null)'
+        return $результат
     }
-    if (-not $h.Proc.WaitForExit(20000)) {
-        $h.Proc.Kill()
-        $h.Proc.WaitForExit()
-        Write-Host '  HARNESS KILLED (штатное завершение не сработало) — сценарий фиксируется FAIL'
-        return $true
+
+    return Stop-HarnessTree $h.Proc 20000
+}
+
+function New-StopResult {
+    return @{
+        Pid = 0
+        Graceful = $false
+        Killed = $false
+        TreeOk = $false
+        TreeConfirmed = $false
+        RemainingPids = @()
+        UnconfirmedPids = @()
+        TreeError = ''
+        KillOutput = @()
+        StartTimeKnown = $false
     }
-    return $false
 }
 
 function Wait-AppWindow([uint32]$procId, [string]$title, [int]$seconds = 30) {
@@ -335,52 +352,386 @@ function Enter-SharedTestLock([int]$seconds = 180) {
     return $мьютекс
 }
 
-function Exit-SharedTestLock($мьютекс) {
-    if ($мьютекс -eq $null) { return }
-    try {
-        $мьютекс.ReleaseMutex()
-    } catch {
-        Write-Host ("  LOCK: ReleaseMutex не выполнен: " + $_.Exception.Message)
+# Освобождение межпроцессной блокировки — fail-closed контракт: функция
+# возвращает структурированный результат и НИКОГДА не считает
+# непроверенное освобождение успешным:
+#   Attempted — попытка освобождения выполнена ($null = захват не
+#               выполнялся — это failure вызывающего кода, не успех);
+#   Released  — ReleaseMutex подтверждён;
+#   Disposed  — Dispose мьютекса подтверждён;
+#   Error     — диагностика: имя мьютекса, PID, сценарий, исключение.
+# Двойной вызов даёт Released=$false (повторный ReleaseMutex невозможен) —
+# ложного PASS нет. Fault-инъекция (только тестовый режим):
+# P302_LOCK_FAULT=release-fail | dispose-fail.
+function Exit-SharedTestLock($мьютекс, [string]$сценарий = '') {
+    $результат = @{ Attempted = $false; Released = $false; Disposed = $false; Error = '' }
+    $имяМьютекса = 'Local\Picket302.TestInfrastructure.SharedProfile'
+
+    if ($мьютекс -eq $null) {
+        $результат.Error = ('блокировка не захватывалась (передан $null) — ' +
+            "mutex=$имяМьютекса | pid=$PID | сценарий=$сценарий")
+        Write-Host ("  LOCK-FAIL: " + $результат.Error)
+        return $результат
     }
-    $мьютекс.Dispose()
+
+    $результат.Attempted = $true
+
+    $fault = $env:P302_LOCK_FAULT
+
+    if ($fault -eq 'release-fail') {
+        $результат.Error = ('fault-inject: lock release failure | ' +
+            "mutex=$имяМьютекса | pid=$PID | сценарий=$сценарий")
+        Write-Host "  FAULT-INJECT: lock release failure"
+    } elseif ($fault -eq 'dispose-fail') {
+        try {
+            $мьютекс.ReleaseMutex()
+            $результат.Released = $true
+        } catch {
+            $результат.Error = ('ReleaseMutex: ' + $_.Exception.GetType().Name + ': ' +
+                $_.Exception.Message + " | mutex=$имяМьютекса | pid=$PID | сценарий=$сценарий")
+            Write-Host ("  LOCK-FAIL: " + $результат.Error)
+        }
+
+        $результат.Error = ('fault-inject: mutex dispose failure | ' +
+            "mutex=$имяМьютекса | pid=$PID | сценарий=$сценарий")
+        Write-Host "  FAULT-INJECT: mutex dispose failure"
+        return $результат
+    } else {
+        try {
+            $мьютекс.ReleaseMutex()
+            $результат.Released = $true
+        } catch {
+            $результат.Error = ('ReleaseMutex: ' + $_.Exception.GetType().Name + ': ' +
+                $_.Exception.Message + " | mutex=$имяМьютекса | pid=$PID | сценарий=$сценарий")
+            Write-Host ("  LOCK-FAIL: " + $результат.Error)
+        }
+    }
+
+    try {
+        $мьютекс.Dispose()
+        $результат.Disposed = $true
+    } catch {
+        $сообщение = ('Dispose: ' + $_.Exception.GetType().Name + ': ' +
+            $_.Exception.Message + " | mutex=$имяМьютекса | pid=$PID | сценарий=$сценарий")
+        if ($результат.Error) {
+            $результат.Error = $результат.Error + '; ' + $сообщение
+        } else {
+            $результат.Error = $сообщение
+        }
+        Write-Host ("  LOCK-FAIL: " + $сообщение)
+    }
+
+    return $результат
 }
 
-# Аварийное завершение harness с деревом процессов: CLOSE -> Kill ->
-# taskkill /T /F + проверка дочерних процессов. Возвращает $true, если
-# пришлось убивать (драйвер обязан выставить fail-флаг — happy-path PASS
-# невозможен).
-function Stop-HarnessTree($h) {
-    if ($h -eq $null -or $h.Proc -eq $null) { return $false }
-    if ($h.Proc.HasExited) { return $false }
-    $pidHarness = $h.Proc.Id
+# --- Дерево процессов: сбор потомков, проверка, принудительная уборка ---
+
+# Рекурсивно собирает потомков процесса. Ошибка CIM — ИСКЛЮЧЕНИЕ
+# (fail-closed), а не пустой список: отсутствие данных не считается
+# «дерево чисто». Идентичность против PID reuse: потомок считается
+# нашим только при известном времени старта предка и собственном
+# CreationDate не старше старта корневого предка (секундный запас —
+# гранулярность часов CIM и .NET); неподтверждённые не убиваются
+# и возвращаются с Confirmed=$false (fail-closed диагностика).
+# Fault-инъекция (только тестовый режим): P302_TREE_FAULT=cim-fail.
+function Get-ProcessDescendants([int]$ancestorPid, [datetime]$ancestorStart, [bool]$startKnown) {
+    if ($env:P302_TREE_FAULT -eq 'cim-fail') {
+        throw 'fault-inject: CIM tree enumeration failure'
+    }
+
+    $найденные = @()
+
     try {
-        $h.Proc.StandardInput.WriteLine('CLOSE')
+        $записи = @(Get-CimInstance Win32_Process `
+            -Filter "ParentProcessId=$ancestorPid" `
+            -Property ProcessId,ParentProcessId,Name,CreationDate `
+            -ErrorAction Stop)
     } catch {
-        Write-Host "  CLOSE не доставлен (harness завершается): $($_.Exception.Message)"
+        throw ("SAFETY-FAIL: перечисление дерева процессов не выполнено " +
+            "(ParentProcessId=$ancestorPid): " + $_.Exception.Message)
     }
-    if (-not $h.Proc.WaitForExit(20000)) {
-        Write-Host "  HARNESS KILL: штатное завершение не сработало (pid=$pidHarness) — taskkill /T /F"
-        & taskkill /T /F /PID $pidHarness | Out-Null
-        try { $h.Proc.Kill() } catch {
-            Write-Host "  HARNESS KILL: Kill не выполнен: $($_.Exception.Message)"
-        }
-        try { $h.Proc.WaitForExit(10000) | Out-Null } catch {}
 
-        if (-not $h.Proc.HasExited) {
-            Write-Host "  SAFETY-FAIL: harness не завершён после Kill (pid=$pidHarness)"
-        }
+    foreach ($запись in $записи) {
+        $подтверждён = $startKnown -and $null -ne $запись.CreationDate -and $запись.CreationDate -ge $ancestorStart.AddSeconds(-1)
+        $найденные += @{ Pid = [int]$запись.ProcessId; Name = $запись.Name; Confirmed = $подтверждён }
 
-        # Дочерние процессы дерева: проверка и принудительное завершение.
-        $дети = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$pidHarness" -ErrorAction SilentlyContinue)
-        foreach ($дочерний in $дети) {
-            Write-Host "  HARNESS CHILD: pid=$($дочерний.ProcessId) name=$($дочерний.Name) — принудительное завершение"
-            & taskkill /T /F /PID $дочерний.ProcessId | Out-Null
+        if ($подтверждён) {
+            # Рекурсия вглубь: прямых детей недостаточно, если внутри
+            # harness есть более глубокое дерево.
+            $найденные += Get-ProcessDescendants $запись.ProcessId $ancestorStart $startKnown
         }
-
-        Write-Host "  HARNESS KILLED (pid=$pidHarness) — happy-path PASS невозможен"
-        return $true
     }
-    return $false
+
+    return $найденные
+}
+
+# Проверяет жив ли процесс по PID.
+function Test-ProcessAlive([int]$идентификатор) {
+    try {
+        return $null -ne (Get-Process -Id $идентификатор -ErrorAction Stop)
+    } catch {
+        return $false
+    }
+}
+
+# Пост-проверка дерева: процесс завершился и живых подтверждённых
+# потомков нет; ошибки CIM и неподтверждённые потомки — failure
+# (fail-closed). Ничего не убивает. Fault (только тестовый режим):
+# P302_GUARD_FAULT=tree-cleanup-fail.
+function Test-ProcessTreeGone($proc) {
+    $результат = @{
+        Pid = 0
+        Ok = $false
+        RemainingPids = @()
+        UnconfirmedPids = @()
+        Error = ''
+    }
+
+    if ($proc -eq $null) {
+        $результат.Error = 'процесс не запускался (null)'
+        return $результат
+    }
+
+    try {
+        $результат.Pid = $proc.Id
+    } catch {
+        $результат.Error = "PID недоступен: $($_.Exception.Message)"
+        return $результат
+    }
+
+    if ($env:P302_GUARD_FAULT -eq 'tree-cleanup-fail') {
+        $результат.Error = 'fault-inject: tree verification failure'
+        Write-Host "  FAULT-INJECT: tree verification failure"
+        return $результат
+    }
+
+    try {
+        $старт = $proc.StartTime
+    } catch {
+        $старт = [datetime]::MinValue
+    }
+
+    if (-not $proc.HasExited) {
+        $результат.RemainingPids = @($результат.Pid)
+        $результат.Error = 'процесс ещё жив'
+        return $результат
+    }
+
+    try {
+        $потомки = @(Get-ProcessDescendants $результат.Pid $старт ($старт -ne [datetime]::MinValue))
+    } catch {
+        $результат.Error = $_.Exception.Message
+        return $результат
+    }
+
+    $результат.UnconfirmedPids = @($потомки | Where-Object { -not $_.Confirmed } | ForEach-Object { $_.Pid })
+    $результат.RemainingPids = @($потомки | Where-Object { $_.Confirmed } | Where-Object { Test-ProcessAlive $_.Pid } | ForEach-Object { $_.Pid })
+
+    if ($результат.RemainingPids.Count -gt 0) {
+        $результат.Error = 'живые потомки дерева: ' + ($результат.RemainingPids -join '; ')
+    }
+
+    if ($результат.UnconfirmedPids.Count -gt 0 -and -not $результат.Error) {
+        $результат.Error = 'потомки с неподтверждённой идентичностью (PID reuse риск): ' + ($результат.UnconfirmedPids -join '; ')
+    }
+
+    $результат.Ok = ($результат.Error -eq '')
+    return $результат
+}
+
+# Единый движок аварийной уборки дерева (Вариант A):
+#   1) PID и StartTime сохраняются ДО любых попыток завершения;
+#   2) graceful CLOSE, при таймауте — taskkill /T /F + Kill;
+#   3) $LASTEXITCODE taskkill проверяется; «процесс уже завершён»
+#      (код 128) отличён от реальной ошибки;
+#   4) потомки собираются РЕКУРСИВНО; ошибка CIM — fail-closed
+#      (не пустой список);
+#   5) отдельный повторный скан после завершения; подтверждённые
+#      остатки добиваются, затем третий скан;
+#   6) оставшиеся PID / неподтверждённые / ошибки проверки → TreeOk=$false
+#      (драйвер обязан выставить fail-флаги и exit 1).
+# Fault-инъекции (только тестовый режим): P302_TREE_FAULT=kill-fail |
+# cim-fail | descendant-remains.
+function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
+    $результат = New-StopResult
+
+    if ($proc -eq $null) {
+        $результат.TreeError = 'процесс не запускался (null)'
+        return $результат
+    }
+
+    try {
+        $результат.Pid = $proc.Id
+    } catch {
+        $результат.TreeError = "PID недоступен: $($_.Exception.Message)"
+        return $результат
+    }
+
+    $пид = $результат.Pid
+
+    # 1. Идентичность ДО любых попыток завершения (PID reuse).
+    try {
+        $старт = $proc.StartTime
+        $результат.StartTimeKnown = $true
+    } catch {
+        $старт = [datetime]::MinValue
+        $результат.StartTimeKnown = $false
+        Write-Host "  TREE: StartTime недоступен заранее (pid=$пид) — идентичность потомков не подтвердить, проверка fail-closed"
+    }
+
+    # 2. Graceful, если жив.
+    if (-not $proc.HasExited) {
+        if ($proc.StandardInput -ne $null) {
+            try {
+                $proc.StandardInput.WriteLine('CLOSE')
+            } catch {
+                Write-Host "  CLOSE не доставлен (процесс завершается): $($_.Exception.Message)"
+            }
+        }
+
+        if ($proc.WaitForExit($waitMs)) {
+            $результат.Graceful = $true
+            Write-Host "  TREE: штатное завершение подтверждено (pid=$пид) — следует проверка дерева"
+        } else {
+            # 3. Force: taskkill /T /F с обязательной проверкой кода.
+            Write-Host "  HARNESS KILL: штатное завершение не сработало (pid=$пид) — taskkill /T /F"
+            $кодTaskkill = 1
+            $выводForce = @()
+
+            if ($env:P302_TREE_FAULT -eq 'kill-fail') {
+                $кодTaskkill = 1
+                $выводForce = @('fault-inject: taskkill failure simulated')
+                $результат.TreeError = "taskkill вернул 1 (pid=$пид): fault-inject: taskkill failure simulated"
+            } else {
+                $выводForce = & taskkill /T /F /PID $пид 2>&1
+                $кодTaskkill = $LASTEXITCODE
+
+                try { $proc.Kill() } catch {
+                    if (-not $proc.HasExited) {
+                        Write-Host "  HARNESS KILL: Kill не выполнен: $($_.Exception.Message)"
+                    }
+                }
+                try { $proc.WaitForExit(10000) | Out-Null } catch {}
+            }
+
+            $результат.KillOutput = @($выводForce)
+            $результат.Killed = $true
+
+            if ($кодTaskkill -ne 0 -and $кодTaskkill -ne 128) {
+                # 128 = «процесс не найден» — уже завершён (безопасный
+                # случай); остальные коды — реальная ошибка.
+                $сообщение = "taskkill вернул $кодTaskkill (pid=$пид): $($выводForce -join ' | ')"
+                if ($результат.TreeError) {
+                    $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                } else {
+                    $результат.TreeError = $сообщение
+                }
+                Write-Host "  SAFETY-FAIL: $сообщение"
+            }
+
+            if (-not $proc.HasExited) {
+                Write-Host "  SAFETY-FAIL: процесс не завершён после Kill (pid=$пид)"
+            }
+        }
+    } else {
+        # Родитель уже завершён к моменту уборки: «родитель завершился»
+        # НЕ доказательство чистоты дерева — потомки проверяются ниже по
+        # сохранённому PID.
+        $результат.Graceful = $true
+    }
+
+    # 4. Первый скан дерева (рекурсивно; CIM-ошибка — fail-closed).
+    $потомки = @()
+    $сканОк = $false
+
+    try {
+        $потомки = @(Get-ProcessDescendants $пид $старт $результат.StartTimeKnown)
+        $сканОк = $true
+    } catch {
+        $сообщение = $_.Exception.Message
+        if ($результат.TreeError) {
+            $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+        } else {
+            $результат.TreeError = $сообщение
+        }
+    }
+
+    if ($сканОк) {
+        # 5. Подтверждённые живые остатки добиваются, затем ПОВТОРНЫЙ
+        # скан (отдельный шаг).
+        foreach ($остаток in $потомки) {
+            if (-not $остаток.Confirmed) { continue }
+            if (-not (Test-ProcessAlive $остаток.Pid)) { continue }
+
+            if ($env:P302_TREE_FAULT -eq 'descendant-remains') {
+                $сообщение = 'fault-inject: descendant remains after cleanup (pid=' + $остаток.Pid + ')'
+                if ($результат.TreeError) {
+                    $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                } else {
+                    $результат.TreeError = $сообщение
+                }
+                Write-Host "  FAULT-INJECT: descendant remains (pid=$($остаток.Pid))"
+                continue
+            }
+
+            Write-Host "  HARNESS DESCENDANT: pid=$($остаток.Pid) name=$($остаток.Name) — принудительное завершение"
+            $выводОстатка = & taskkill /T /F /PID $остаток.Pid 2>&1
+            $кодОстатка = $LASTEXITCODE
+
+            if ($кодОстатка -ne 0 -and $кодОстатка -ne 128) {
+                $сообщение = "taskkill потомка вернул $кодОстатка (pid=$($остаток.Pid)): $($выводОстатка -join ' | ')"
+                if ($результат.TreeError) {
+                    $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                } else {
+                    $результат.TreeError = $сообщение
+                }
+            }
+        }
+
+        # 6. Повторный скан — итоговая проверка чистоты.
+        try {
+            $потомки2 = @(Get-ProcessDescendants $пид $старт $результат.StartTimeKnown)
+            $результат.TreeConfirmed = $true
+            $результат.UnconfirmedPids = @($потомки2 | Where-Object { -not $_.Confirmed } | ForEach-Object { $_.Pid })
+            $результат.RemainingPids = @($потомки2 | Where-Object { $_.Confirmed } | Where-Object { Test-ProcessAlive $_.Pid } | ForEach-Object { $_.Pid })
+        } catch {
+            $сообщение = $_.Exception.Message
+            if ($результат.TreeError) {
+                $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+            } else {
+                $результат.TreeError = $сообщение
+            }
+        }
+
+        if (-not $proc.HasExited) {
+            $результат.RemainingPids = @($результат.Pid) + @($результат.RemainingPids)
+            $сообщение = "родительский процесс жив после cleanup (pid=$пид)"
+            if ($результат.TreeError) {
+                $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+            } else {
+                $результат.TreeError = $сообщение
+            }
+        }
+    }
+
+    # 7. Итог: чисто = без остатков, без неподтверждённых, без ошибок.
+    $результат.TreeOk = (
+        $результат.TreeConfirmed -and
+        $результат.RemainingPids.Count -eq 0 -and
+        $результат.UnconfirmedPids.Count -eq 0 -and
+        -not $результат.TreeError
+    )
+
+    if ($результат.Killed) {
+        Write-Host "  HARNESS KILLED (pid=$пид) — happy-path PASS невозможен"
+    }
+
+    if (-not $результат.TreeOk) {
+        $списокОстатков = if ($результат.RemainingPids.Count -gt 0) { $результат.RemainingPids -join ';' } else { 'нет' }
+        Write-Host ("  SAFETY-FAIL: дерево не чистое (pid=$пид): остатки [$списокОстатков]; ошибка: " + $результат.TreeError)
+    }
+
+    return $результат
 }
 
 # Пост-проверка записи evidence: файл существует, не пуст и содержит
