@@ -298,13 +298,13 @@ WinForms-форм в параллельных коллекциях и глоба
 Не запускались (вне области): `FullyQualifiedName~ComAutomation`,
 `FullyQualifiedName~Acceptance`.
 
-## 8. Статусы (свежие прогоны 2026-11-07, третья серия замечаний)
+## 8. Статусы (HISTORICAL — прогоны 2026-11-07, третья серия замечаний)
 
-> **Примечание (ревизия 2026-11-07, четвёртая серия).** Таблица ниже
-> описывает прогоны скриптов ревизии 794cb4e. После ревизии fail-closed
-> (см. 8.1) сценарии `run-emptybook.ps1` и `run-printflow.ps1` с UI не
-> перезапускались — их runtime-статусы читайте в 8.1 (NOT_RUN_BY_SCOPE),
-> а не в этой таблице.
+> **HISTORICAL.** Таблица ниже описывает прогоны скриптов ревизии 794cb4e.
+> Актуальные статусы — в разделе 8.2 (после неё эта таблица и раздел 8.1
+> сохранены как история, рядом с прежним `ACCEPTANCE_EXIT_CODE_VERIFIED=true`
+> читайте новое `PARTIAL` в 8.2: сценарии emptybook/printflow с UI не
+> перезапускались — NOT_RUN_BY_SCOPE).
 
     SOURCE_VERIFIED=true              — исходник сверён, все правки в ветке
     BUILD_DEBUG_VERIFIED=true         — 0 ошибок / 0 предупреждений
@@ -358,7 +358,12 @@ WinForms-форм в параллельных коллекциях и глоба
     CODE_COVERAGE_MEASURED=false      — coverage-collector не
                                       устанавливался, артефакта нет
 
-### 8.1. Статусы ревизии fail-closed (четвёртая серия замечаний, 2026-11-07)
+### 8.1. Статусы ревизии fail-closed (HISTORICAL — четвёртая серия замечаний, 2026-11-07)
+
+> **HISTORICAL (частично заменена 8.2).** В четвёртой серии
+> `ACCEPTANCE_EXIT_CODE_VERIFIED=true` для emptybook/printflow был преждевременным:
+> fault-прогоны скриптов делались на их тогдашней ревизии, а после неё UI-прогоны
+> не выполнялись — актуальное значение `PARTIAL`, см. 8.2.
 
 Исправлены дефекты acceptance/тестовой инфраструктуры, при которых PASS мог
 не означать выполнение проверки:
@@ -440,6 +445,121 @@ UI-прогоне); fault-инъекции — `emptybook-fault-*.md` /
 `emptybook-runtime-evidence.md` / `f5-f6-runtime-evidence.md` теперь
 указатели — их последние записи были fault-прогонами, перезаписавшими
 happy-evidence (дефект устранён; записи перемещены в fault-файлы).
+
+### 8.2. Статусы ревизии межпроцессной сериализации (пятая серия замечаний, 2026-11-07)
+
+Закрыты дефекты, при которых PASS двух независимых testhost-процессов и
+финализация evidence не были гарантированы:
+
+1. **Межпроцессная сериализация общих ресурсов** (`БлокировкаОбщихРесурсов`):
+   xUnit-коллекции сериализуют только внутри одного testhost-процесса; при
+   параллельном Debug+Release (два агента, ручной прогон + acceptance)
+   воспроизводились ложные падения — постусловие видело чужой
+   `P302GuardTest_*`, ProfileIsolationTests видел чужой sentinel. Введён
+   named mutex `Local\Picket302.TestInfrastructure.SharedProfile` (один
+   идентификатор для C#-инфраструктуры и PowerShell-драйверов). Особенность
+   реализации: Windows-мьютекс привязан к потоку (`ReleaseMutex` только из
+   потока `WaitOne`), а асинхронные тесты продолжаются в другом потоке —
+   владение вынесено в выделенный фоновый поток-владелец, вызывающий код
+   сигнализирует освобождение. Таймаут ограничен (2 мин), отказ —
+   fail-closed исключение; `AbandonedMutexException` (владелец умер) —
+   диагностика в stderr, блокировка выдаётся следующему; аварийное
+   завершение процесса освобождает мьютекс механизмами ОС. Блокировка
+   применена: guard reparse-тесты, постусловие (фикстура + Z-тест),
+   4 production-теста `ProfileIsolationTests`, все 3 PowerShell-драйвера.
+2. **Гарантированное постусловие жизненного цикла** (`ПостусловиеЧистотыGuard`,
+   `ICollectionFixture` коллекции): teardown фикстуры выполняется после
+   ВСЕХ тестов коллекции — имя класса «Z» не является гарантией порядка и
+   осталось лишь дополнительной проверкой. Остатки `P302GuardTest_*`
+   фиксируются ПОЛНЫМ списком в диагностику до удаления, ошибка teardown —
+   красный прогон.
+3. **Evidence-контракт**: финальный статус вычисляется ДО записи evidence
+   (Режим/UTC/PID/профили/FINAL DELTA/FAULT/EXPECTED FINAL EXIT/
+   FINAL VERDICT/PASS_OF_CONTRACT — все в журнале, попадающем в файл);
+   после записи выполняется пост-проверка (файл существует, не пуст,
+   содержит обязательные маркеры текущего прогона) — проверка без
+   «cmdlet не бросил = успех»; финальная fingerprint-дельта переводит
+   прогон в FAIL (fail-флаги, а не только лог); аварийное завершение в
+   finally — `Stop-HarnessTree` (CLOSE → Kill → `taskkill /T /F` +
+   проверка дочерних процессов), `$убит=true` + fail-флаг + PID.
+4. **Новые fault-сценарии**: `final-delta` (все 3 драйвера; для
+   guard-negative доказан безоконно: exit 1, SAFETY-FAIL removed=1) и
+   `evidence-fail` (невозможность записи evidence → exit 1; требует UI —
+   NOT_RUN_BY_SCOPE).
+
+Прогоны и результаты (2026-11-07, UI-сценарии emptybook/printflow не
+запускались — запрещены постановкой):
+
+    SOURCE_VERIFIED=true                    — исходник сверен
+    BUILD_DEBUG_VERIFIED=true               — 0 ошибок / 0 предупреждений
+    BUILD_RELEASE_VERIFIED=true             — 0 ошибок / 0 предупреждений
+    BUILD_ACCEPTANCE_HARNESS_VERIFIED=true  — harness 0 ошибок
+    TEST_DEBUG_VERIFIED=true                — полный non-COM Debug
+                                            1256/1256 (1254 + 2 теста
+                                            блокировки), 0 fail, 0 skip
+    TEST_RELEASE_VERIFIED=true              — полный non-COM Release
+                                            1256/1256, 0 fail, 0 skip
+    GUARD_VERIFIED=true                     — guard reparse 19/19,
+                                            0 skip (целевой прогон)
+    OWNERSHIP_VERIFIED=true                 — ownership 7/7
+    INTERPROCESS_TEST_LOCK_VERIFIED=true    — второй процесс не получает
+                                            блокировку (таймаут, exit 1),
+                                            после освобождения получает
+                                            (exit 0); смерть владельца без
+                                            ReleaseMutex (abandoned) —
+                                            диагностика, владение
+                                            следующему (БлокировкаОбщих
+                                            РесурсовTests, child=PowerShell
+                                            с тем же именем мьютекса)
+    PARALLEL_TESTHOST_VERIFIED=true         — ОДНОВРЕМЕННЫЙ запуск Debug и
+                                            Release testhost: оба
+                                            1256/1256, exit 0; ни одного
+                                            ложного P302GuardTest_*; ни
+                                            одного ложного sentinel; логи:
+                                            %TEMP%\p302-parallel-verify\
+                                            debug.log, release.log
+    POSTCONDITION_LIFECYCLE_VERIFIED=true   — teardown ICollectionFixture
+                                            после всей коллекции; полный
+                                            список остатков в диагностике
+                                            до удаления
+    FINAL_EVIDENCE_STATUS_VERIFIED=PARTIAL  — контракт (финал ДО записи +
+                                            пост-проверка маркеров) сверен
+                                            по исходнику и статически;
+                                            runtime-прогон записи — при
+                                            следующем разрешённом UI-прогоне
+    FINAL_FINGERPRINT_FAIL_CLOSED_VERIFIED=true — ненулевая финальная
+                                            дельта переводит прогон в FAIL:
+                                            fault final-delta на
+                                            guard-negative (безоконно) —
+                                            removed=1, SAFETY-FAIL, exit 1
+    PROFILE_SAFETY_VERIFIED=true            — production delta 0/0/0 во
+                                            всех прогонах; sentinel
+                                            создаётся/удаляется под
+                                            блокировкой; после прогонов
+                                            sentinel отсутствует
+    ACCEPTANCE_EXIT_CODE_VERIFIED=PARTIAL   — guard-negative: happy exit 0,
+                                            wrong-expectation exit 1,
+                                            final-delta exit 1 (свежие
+                                            прогоны); emptybook/printflow
+                                            переработаны, но с UI не
+                                            перезапускались — их exit-коды
+                                            NOT_RUN_BY_SCOPE
+    EVIDENCE_WRITE_VERIFIED=PARTIAL         — контракт записи сверен;
+                                            runtime happy/failure-запись
+                                            не проверялась заново (нужен UI)
+    TEMP_CLEANUP_VERIFIED=true              — после последовательных и
+                                            параллельных прогонов:
+                                            P302GuardTest_*=0,
+                                            Picket302Tests_*=0, keep=5,
+                                            процессов 0, .bak/.lock=0
+    UI_VISUAL_VERIFIED=true                 — без изменений (код UI не
+                                            менялся)
+    REFERENCE_VISUAL_VERIFIED=PARTIAL       — без изменений; 70% — целевой
+                                            ориентир, количественно не
+                                            измерялся
+    COM_VERIFIED=NOT_RUN_BY_SCOPE           — вне области
+    PRINT_VERIFIED=NOT_RUN_BY_SCOPE         — вне области
+    CODE_COVERAGE_MEASURED=false            — без изменений
 
 ## 9. Ограничения и что не проверялось
 
