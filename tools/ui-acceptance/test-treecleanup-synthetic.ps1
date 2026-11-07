@@ -75,13 +75,29 @@ function ПодождатьФайл([string]$путь, [int]$секунд) {
     return (Test-Path -LiteralPath $путь)
 }
 
-function ЗавершитьПоПид([int]$идентификатор) {
-    try {
-        if ($null -ne (Get-Process -Id $идентификатор -ErrorAction Stop)) {
-            & taskkill /T /F /PID $идентификатор | Out-Null
-        }
-    } catch {
-        # Уже завершён — безопасный случай.
+# Завершение синтетического процесса: через безопасный helper
+# Invoke-TaskKillSafe — гонка «процесс исчез между проверкой и
+# taskkill» диагностируется (already-exited race), а НЕ превращается в
+# необработанное исключение (иначе аварийная уборка в finally сама
+# роняла бы suite).
+function ЗавершитьПоПид([int]$идентификатор, [string]$метка = 'synthetic') {
+    if ($идентификатор -le 0) { return }
+
+    $результат = Invoke-TaskKillSafe $идентификатор $метка
+
+    if ($результат.NotFound -or $результат.AlreadyExited) {
+        Write-Host "  TREE RACE: процесс уже завершён (pid=$идентификатор, метка=$метка) — benign race"
+        return
+    }
+
+    if ($результат.Exception) {
+        Write-Host "  ошибка taskkill (pid=$идентификатор, метка=$метка): $($результат.Exception)"
+        return
+    }
+
+    if (-not $результат.Success) {
+        Write-Host "  taskkill вернул $($результат.ExitCode) (pid=$идентификатор, метка=$метка)"
+        return
     }
 }
 
@@ -264,6 +280,82 @@ try {
         Start-Sleep -Milliseconds 500
     }
 
+    # --- F. Детерминированная гонка: descendant исчез до taskkill --------------
+    Write-Host '=== F: race descendant-disappears-before-taskkill (исчез между scan и taskkill)'
+    $маркерФ = Join-Path $каталогВрем 'f-child.marker'
+    $скриптФ = Join-Path $каталогВрем 'parent-f.ps1'
+    ЗаписатьДочернийСкрипт $скриптФ $маркерФ 1
+    $родительФ = ЗапуститьРодителя $скриптФ
+    $идРебёнкаФ = 0
+
+    if (ПодождатьФайл "$маркерФ.родитель" 15) {
+        $идРебёнкаФ = [int](Get-Content -LiteralPath "$маркерФ.родитель" -Raw).Trim()
+        $оставленныеПроцессы.Add($идРебёнкаФ)
+    } else {
+        $провалы.Add('F: родитель не сообщил о ребёнке')
+    }
+
+    $env:P302_TREE_FAULT = 'descendant-disappears-before-taskkill'
+    try {
+        # Шов гарантирует: потомок найден первым scan И исчезает до
+        # taskkill (taskkill честно вернёт not-found) — гонка
+        # воспроизводится детерминированно, без случайного окна.
+        $результатФ = Stop-HarnessTree $родительФ 2000
+    } catch {
+        $результатФ = $null
+        $провалы.Add('F: Stop-HarnessTree бросил необработанное исключение')
+        Write-Host "  FAIL: Stop-HarnessTree бросил исключение: $($_.Exception.Message)"
+    } finally {
+        Remove-Item Env:P302_TREE_FAULT -ErrorAction SilentlyContinue
+    }
+
+    if ($результатФ -ne $null) {
+        Проверить ($результатФ.TreeConfirmed -eq $true) 'F: post-scan выполнен (TreeConfirmed)'
+        Проверить ($результатФ.RemainingPids.Count -eq 0) 'F: остатков нет' ($результатФ.RemainingPids -join ';')
+        Проверить ($результатФ.UnconfirmedPids.Count -eq 0) 'F: неподтверждённых нет' ($результатФ.UnconfirmedPids -join ';')
+        Проверить ($результатФ.TaskKillRacePids.Count -ge 1) 'F: диагностическая отметка race присутствует'
+        Проверить ($результатФ.TaskKillTimedOutPids.Count -eq 0) 'F: таймаутов taskkill нет'
+        Проверить ($результатФ.TreeOk -eq $true) 'F: benign race → TreeOk=true' $результатФ.TreeError
+    }
+
+    # --- G. Тот же сценарий, но PID ЖИВ: результат обязан остаться failure ----
+    Write-Host '=== G: race descendant-not-found-but-alive (PID жив)'
+    $маркерГ = Join-Path $каталогВрем 'g-child.marker'
+    $скриптГ = Join-Path $каталогВрем 'parent-g.ps1'
+    ЗаписатьДочернийСкрипт $скриптГ $маркерГ 1
+    $родительГ = ЗапуститьРодителя $скриптГ
+    $идРебёнкаГ = 0
+
+    if (ПодождатьФайл "$маркерГ.родитель" 15) {
+        $идРебёнкаГ = [int](Get-Content -LiteralPath "$маркерГ.родитель" -Raw).Trim()
+        $оставленныеПроцессы.Add($идРебёнкаГ)
+    } else {
+        $провалы.Add('G: родитель не сообщил о ребёнке')
+    }
+
+    $env:P302_TREE_FAULT = 'descendant-not-found-but-alive'
+    try {
+        $результатГ = Stop-HarnessTree $родительГ 2000
+    } catch {
+        $результатГ = $null
+        $провалы.Add('G: Stop-HarnessTree бросил необработанное исключение')
+        Write-Host "  FAIL: Stop-HarnessTree бросил исключение: $($_.Exception.Message)"
+    } finally {
+        Remove-Item Env:P302_TREE_FAULT -ErrorAction SilentlyContinue
+    }
+
+    if ($результатГ -ne $null) {
+        Проверить ($результатГ.TreeOk -eq $false) 'G: живой PID → TreeOk=false' $результатГ.TreeError
+        Проверить ($результатГ.RemainingPids.Count -ge 1) 'G: живой PID в RemainingPids' ($результатГ.RemainingPids -join ';')
+        Проверить ($результатГ.TreeError -ne '') 'G: TreeError содержит причину'
+    }
+
+    if ($идРебёнкаГ -gt 0 -and (Test-ProcessAlive $идРебёнкаГ)) {
+        # Fault намеренно оставляет потомка живым: внешняя уборка.
+        ЗавершитьПоПид $идРебёнкаГ 'g-manual'
+        Start-Sleep -Milliseconds 500
+    }
+
     # --- Итог: synthetic-процессов не осталось -----------------------------------
     Write-Host '=== Финал: synthetic-процессы'
     foreach ($идентификатор in $оставленныеПроцессы) {
@@ -289,8 +381,15 @@ catch {
 }
 finally {
     # Аварийная уборка синтетики: ни один fault не оставляет процесс.
+    # Каждый вызов изолирован: ошибка уборки одного PID не прерывает
+    # уборку остальных и не роняет suite.
     foreach ($идентификатор in $оставленныеПроцессы) {
-        ЗавершитьПоПид $идентификатор
+        try {
+            ЗавершитьПоПид $идентификатор 'finally'
+        } catch {
+            Write-Host "  ошибка финальной уборки (pid=$идентификатор): $($_.Exception.Message)"
+            $exitCode = 1
+        }
     }
 
     Start-Sleep -Milliseconds 300

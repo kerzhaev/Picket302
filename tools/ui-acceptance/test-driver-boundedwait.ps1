@@ -43,6 +43,9 @@ function ЗапуститьДрайверСFault([string]$скриптДрайв
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.EnvironmentVariables['P302_DRIVER_FAULT'] = 'parent-alive-after-stop'
+    # Evidence fault-прогона — во временный каталог: отслеживаемые
+    # файлы документации в репозитории НЕ перезаписываются тестом.
+    $psi.EnvironmentVariables['P302_EVIDENCE_ROOT'] = $каталогЛогов
     $процесс = [System.Diagnostics.Process]::Start($psi)
 
     Write-Host "=== ${имя}: драйвер запущен (pid=$($процесс.Id), watchdog=$driverTimeoutMs мс)"
@@ -52,7 +55,8 @@ function ЗапуститьДрайверСFault([string]$скриптДрайв
 
     if (-not $завершён) {
         Write-Host "  DRIVER HUNG: драйвер не завершился за $driverTimeoutMs мс — принудительное завершение дерева"
-        & taskkill /T /F /PID $процесс.Id | Out-Null
+        # Безопасный helper: гонка «процесс исчез» не бросает исключение.
+        [void](Invoke-TaskKillSafe $процесс.Id 'driver-hang')
         try { $процесс.Kill() } catch { }
         try { $процесс.WaitForExit(5000) | Out-Null } catch { }
         $script:провалы.Add("${имя}: драйвер завис дольше bounded timeout")
@@ -79,6 +83,10 @@ function ЗапуститьДрайверСFault([string]$скриптДрайв
 
 try {
     New-Item -ItemType Directory -Path $каталогЛогов -ErrorAction Stop | Out-Null
+
+    # Side-effect hygiene: рабочее дерево до прогона (baseline).
+    $репозиторий = Split-Path -Parent $PSScriptRoot
+    $gitДо = @(& git -C $репозиторий status --porcelain 2>$null)
 
     foreach ($случай in @(
         @{ Имя = 'emptybook'; Файл = Join-Path $PSScriptRoot 'run-emptybook.ps1' },
@@ -134,12 +142,24 @@ try {
             $синтетическиеПиды.Add($syntheticPid)
 
             if (Test-ProcessAlive $syntheticPid) {
-                & taskkill /T /F /PID $syntheticPid | Out-Null
+                [void](Invoke-TaskKillSafe $syntheticPid 'synthetic')
                 Start-Sleep -Milliseconds 500
             }
 
             Проверить (-not (Test-ProcessAlive $syntheticPid)) "${имя}: synthetic pid=$syntheticPid не остался"
         }
+    }
+
+    # Side-effect hygiene: рабочее дерево после прогона должно совпасть
+    # с baseline (tracked-файлы не изменены тестом).
+    $gitПосле = @(& git -C $репозиторий status --porcelain 2>$null)
+    $изменения = @(Compare-Object -ReferenceObject $gitДо -DifferenceObject $gitПосле)
+
+    if ($изменения.Count -ne 0) {
+        Write-Host ("  FAIL: рабочее дерево изменилось после fault-теста: " + ($изменения | ForEach-Object { $_.InputObject + ' ' + $_.SideIndicator } | Out-String))
+        $провалы.Add('рабочее дерево изменилось после fault-теста')
+    } else {
+        Write-Host '  OK: рабочее дерево не изменилось (tracked-файлы не затронуты)'
     }
 
     if ($провалы.Count -eq 0) {
@@ -159,9 +179,12 @@ finally {
     foreach ($идентификатор in $синтетическиеПиды) {
         try {
             if (Test-ProcessAlive $идентификатор) {
-                & taskkill /T /F /PID $идентификатор | Out-Null
+                [void](Invoke-TaskKillSafe $идентификатор 'finally')
             }
-        } catch { }
+        } catch {
+            Write-Host "  ошибка финальной уборки (pid=$идентификатор): $($_.Exception.Message)"
+            $exitCode = 1
+        }
     }
 
     Start-Sleep -Milliseconds 300

@@ -261,6 +261,88 @@ function Stop-Acceptance($h) {
     return Stop-HarnessTree $h.Proc 20000
 }
 
+# Безопасный вызов taskkill /T /F /PID: гонка «процесс исчез между
+# scan и taskkill» НЕ превращается в необработанное исключение.
+#
+# Причина дефекта: PowerShell 5.1 при $ErrorActionPreference='Stop'
+# переводит stderr native-команды в terminating error. taskkill пишет в
+# stderr «ERROR: The process "N" not found.» именно в гонке, когда
+# процесс уже завершился — и исключение прерывало Stop-HarnessTree
+# ДО финального post-scan (терялись RemainingPids/UnconfirmedPids и
+# структурированный результат).
+#
+# Контракт helper-а:
+#   - native-команда выполняется с локальным ErrorActionPreference
+#     Continue (иначе stderr = terminating error) и перехватывается
+#     try/catch — исключение наружу не выходит;
+#   - bounded wait на саму taskkill (без бесконечного ожидания);
+#   - результат структурирован: Attempted/Pid/ExitCode/Output/
+#     Exception/NotFound/AlreadyExited/TimedOut/Success;
+#   - not-found (код 128 или «not found» в выводе) — это признак
+#     benign-race, а не успех: окончательную классификацию даёт
+#     финальный post-scan вызывающего кода.
+function Invoke-TaskKillSafe([int]$идентификатор, [string]$метка, [int]$timeoutMs = 15000, [bool]$сДеревом = $true) {
+    $результат = @{
+        Attempted = $false
+        Pid = $идентификатор
+        Operation = $метка
+        ExitCode = $null
+        Output = @()
+        Exception = $null
+        NotFound = $false
+        AlreadyExited = $false
+        TimedOut = $false
+        Success = $false
+    }
+
+    if ($идентификатор -le 0) {
+        $результат.Exception = 'недопустимый PID'
+        return $результат
+    }
+
+    # Локальный Continue: stderr native-команды не должен превращаться в
+    # terminating error. Переменная перекрывает внешнюю настройку только
+    # внутри этой функции.
+    $ErrorActionPreference = 'Continue'
+
+    try {
+        # /T (дерево) — по умолчанию; без /T родитель завершается один,
+        # а потомок остаётся живым (нужно для проверки гонки на
+        # стадии очистки потомков). Флаги передаются ОТДЕЛЬНЫМИ
+        # аргументами: одной строкой taskkill их не понимает.
+        if ($сДеревом) {
+            $вывод = & taskkill /T /F /PID $идентификатор 2>&1
+        } else {
+            $вывод = & taskkill /F /PID $идентификатор 2>&1
+        }
+
+        $код = $LASTEXITCODE
+
+        $результат.Attempted = $true
+        $результат.ExitCode = $код
+        $результат.Output = @($вывод | ForEach-Object { [string]$_ })
+
+        # 128 = «процесс не найден» (taskkill); текст «not found» —
+        # тот же случай на другой локали.
+        $текст = ($результат.Output -join ' | ')
+        if ($код -eq 128 -or $текст -match 'not found' -or $текст -match 'не найден') {
+            $результат.NotFound = $true
+            $результат.AlreadyExited = $true
+        }
+
+        # Успех = код 0. Not-found — НЕ успех: это гонка, окончательное
+        # решение принимает post-scan вызывающего кода.
+        $результат.Success = ($код -eq 0)
+    } catch {
+        # Перехватываем любой PowerShell-исключение (включая случай
+        # terminating error от stderr): наружу не выходит.
+        $результат.Exception = $_.Exception.Message
+        $результат.Attempted = $true
+    }
+
+    return $результат
+}
+
 function New-StopResult {
     return @{
         Pid = 0
@@ -276,6 +358,11 @@ function New-StopResult {
         TaskKillExitCode = $null
         HarnessNotExited = $false
         StartTime = $null
+        DescendantKillResults = @()
+        DescendantKillErrors = @()
+        AlreadyExitedPids = @()
+        TaskKillRacePids = @()
+        TaskKillTimedOutPids = @()
     }
 }
 
@@ -465,15 +552,29 @@ function Dump-AllWindows([uint32]$procId) {
 # Вызывается ОДИН раз после завершения cleanup и фиксации финальных
 # статусов; возвращает $true при успешной записи (неудача записи —
 # сигнал драйверу выставить exit 1).
+# Каталог для evidence-файлов. По умолчанию — каталог документации
+# репозитория; переменная P302_EVIDENCE_ROOT перенаправляет запись в
+# произвольный каталог (используется driver-level тестами, чтобы
+# fault-прогоны НЕ загрязняли отслеживаемые файлы репозитория).
+function Get-EvidenceRoot {
+    if ($env:P302_EVIDENCE_ROOT) { return $env:P302_EVIDENCE_ROOT }
+    return 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна'
+}
+
 function ЗаписатьEvidence([string]$относительныйПуть, [string]$заголовок, [string]$режимСтрока, $журнал) {
     try {
-        $каталог = 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна'
+        $каталог = Get-EvidenceRoot
         $строки = @(
             "# $заголовок",
             '',
             "Прогон: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), профиль: временный (guid), $режимСтрока.",
             ''
         ) + @($журнал)
+
+        if (-not (Test-Path -LiteralPath $каталог)) {
+            New-Item -ItemType Directory -Force -Path $каталог -ErrorAction Stop | Out-Null
+        }
+
         Set-Content -Path (Join-Path $каталог $относительныйПуть) -Value $строки -Encoding UTF8 -ErrorAction Stop
         return $true
     } catch {
@@ -608,7 +709,15 @@ function Get-ProcessDescendants([int]$ancestorPid, [datetime]$ancestorStart, [bo
 
     foreach ($запись in $записи) {
         $подтверждён = $startKnown -and $null -ne $запись.CreationDate -and $запись.CreationDate -ge $ancestorStart.AddSeconds(-1)
-        $найденные += @{ Pid = [int]$запись.ProcessId; Name = $запись.Name; Confirmed = $подтверждён }
+        # CreationDate возвращается: post-scan сверяет его с StartTime
+        # живого процесса, чтобы отличить «наш потомок» от нового
+        # процесса, занявшего тот же PID (PID reuse).
+        $найденные += @{
+            Pid = [int]$запись.ProcessId
+            Name = $запись.Name
+            Confirmed = $подтверждён
+            CreationDate = $запись.CreationDate
+        }
 
         if ($подтверждён) {
             # Рекурсия вглубь: прямых детей недостаточно, если внутри
@@ -772,8 +881,73 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
                 $выводForce = @('fault-inject: taskkill failure simulated')
                 $результат.TreeError = "taskkill вернул 1 (pid=$пид): fault-inject: taskkill failure simulated"
             } else {
-                $выводForce = & taskkill /T /F /PID $пид 2>&1
-                $кодTaskkill = $LASTEXITCODE
+                # Безопасный helper: гонка «процесс исчез» не бросает
+                # исключение, taskkill имеет bounded wait.
+                #
+                # Для race-швов родитель завершается БЕЗ /T: иначе
+                # taskkill /T убьёт всё дерево, потомок не доживёт до
+                # стадии очистки, и гонка «исчез между scan и taskkill»
+                # не будет проверена вовсе.
+                $родительБезДерева = (
+                    $env:P302_TREE_FAULT -eq 'descendant-disappears-before-taskkill' -or
+                    $env:P302_TREE_FAULT -eq 'descendant-not-found-but-alive')
+
+                $killParent = Invoke-TaskKillSafe $пид 'parent' 15000 (-not $родительБезДерева)
+                $кодTaskkill = $killParent.ExitCode
+                $выводForce = @($killParent.Output)
+
+                $результат.KillOutput = @($выводForce)
+                $результат.TaskKillExitCode = $кодTaskkill
+
+                if ($killParent.TimedOut) {
+                    $результат.TaskKillTimedOutPids += $пид
+                    $сообщение = "taskkill родителя не завершился за таймаут (pid=$пид)"
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
+                    Write-Host "  SAFETY-FAIL: $сообщение"
+                }
+
+                if ($killParent.Exception) {
+                    $сообщение = "taskkill родителя: $($killParent.Exception) (pid=$пид)"
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
+                    Write-Host "  SAFETY-FAIL: $сообщение"
+                }
+
+                if ($killParent.NotFound) {
+                    # Гонка: родитель исчез между проверкой и taskkill.
+                    # Если PID действительно мёртв — benign race (отметка в
+                    # диагностике, TreeError НЕ ставится); если PID жив —
+                    # fail-closed (решение подтверждает post-scan).
+                    if (-not (Test-ProcessAlive $пид)) {
+                        $результат.TaskKillRacePids += $пид
+                        $результат.AlreadyExitedPids += $пид
+                        Write-Host "  TREE RACE: родитель завершился сам (pid=$пид) — benign race"
+                    } else {
+                        $сообщение = "taskkill: процесс не найден, но PID жив (pid=$пид) — возможен PID reuse"
+                        if ($результат.TreeError) {
+                            $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                        } else {
+                            $результат.TreeError = $сообщение
+                        }
+                        Write-Host "  SAFETY-FAIL: $сообщение"
+                    }
+                } elseif (-not $killParent.Success -and -not $killParent.TimedOut -and -not $killParent.Exception) {
+                    # Ненулевой код без признака not-found — реальная ошибка.
+                    $сообщение = "taskkill вернул $кодTaskkill (pid=$пид): $($выводForce -join ' | ')"
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
+                    Write-Host "  SAFETY-FAIL: $сообщение"
+                }
 
                 try { $proc.Kill() } catch {
                     if (-not $proc.HasExited) {
@@ -783,21 +957,15 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
                 try { $proc.WaitForExit(10000) | Out-Null } catch {}
             }
 
-            $результат.KillOutput = @($выводForce)
-            $результат.TaskKillExitCode = $кодTaskkill
-            $результат.Killed = $true
-
-            if ($кодTaskkill -ne 0 -and $кодTaskkill -ne 128) {
-                # 128 = «процесс не найден» — уже завершён (безопасный
-                # случай); остальные коды — реальная ошибка.
-                $сообщение = "taskkill вернул $кодTaskkill (pid=$пид): $($выводForce -join ' | ')"
-                if ($результат.TreeError) {
-                    $результат.TreeError = $результат.TreeError + '; ' + $сообщение
-                } else {
-                    $результат.TreeError = $сообщение
-                }
-                Write-Host "  SAFETY-FAIL: $сообщение"
+            if (-not $результат.KillOutput) {
+                $результат.KillOutput = @($выводForce)
             }
+
+            if ($null -eq $результат.TaskKillExitCode) {
+                $результат.TaskKillExitCode = $кодTaskkill
+            }
+
+            $результат.Killed = $true
 
             if (-not $proc.HasExited) {
                 Write-Host "  SAFETY-FAIL: процесс не завершён после Kill (pid=$пид)"
@@ -845,20 +1013,98 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
             }
 
             Write-Host "  HARNESS DESCENDANT: pid=$($остаток.Pid) name=$($остаток.Name) — принудительное завершение"
-            $выводОстатка = & taskkill /T /F /PID $остаток.Pid 2>&1
-            $кодОстатка = $LASTEXITCODE
 
-            if ($кодОстатка -ne 0 -and $кодОстатка -ne 128) {
-                $сообщение = "taskkill потомка вернул $кодОстатка (pid=$($остаток.Pid)): $($выводОстатка -join ' | ')"
-                if ($результат.TreeError) {
-                    $результат.TreeError = $результат.TreeError + '; ' + $сообщение
-                } else {
-                    $результат.TreeError = $сообщение
+            $выводОстатка = @()
+            $кодОстатка = $null
+
+            if ($env:P302_TREE_FAULT -eq 'descendant-not-found-but-alive') {
+                # Детерминированная имитация гонки, где процесс НЕ исчезает:
+                # taskkill сообщает not-found, но PID жив → post-scan
+                # обязан дать RemainingPids и TreeOk=false.
+                $выводОстатка = @("ERROR: The process `"$($остаток.Pid)`" not found.")
+                $кодОстатка = 128
+                $результат.DescendantKillResults += @{
+                    Attempted = $true; Pid = $остаток.Pid; Operation = 'descendant-fault-not-found'
+                    ExitCode = 128; Output = @($выводОстатка); Exception = $null
+                    NotFound = $true; AlreadyExited = $true; TimedOut = $false; Success = $false
+                }
+            } else {
+                if ($env:P302_TREE_FAULT -eq 'descendant-disappears-before-taskkill') {
+                    # Детерминированная имитация ЕСТЕСТВЕННОЙ гонки: потомок
+                    # исчезает САМ между scan и taskkill (завершаем его
+                    # здесь), после чего taskkill честно возвращает
+                    # not-found. Гонка воспроизводится без случайного окна.
+                    $преждевременный = Invoke-TaskKillSafe $остаток.Pid 'descendant-race-prerace'
+                    $результат.DescendantKillResults += $преждевременный
+                    Write-Host "  TREE RACE (fault): descendant исчез до taskkill (pid=$($остаток.Pid))"
+                }
+
+                # Безопасный helper: «процесс исчез» → not-found без
+                # исключения; bounded wait; структурированный результат.
+                $killDescendant = Invoke-TaskKillSafe $остаток.Pid 'descendant'
+                $выводОстатка = @($killDescendant.Output)
+                $кодОстатка = $killDescendant.ExitCode
+                $результат.DescendantKillResults += $killDescendant
+
+                if ($killDescendant.TimedOut) {
+                    $результат.TaskKillTimedOutPids += $остаток.Pid
+                    $сообщение = "taskkill потомка не завершился за таймаут (pid=$($остаток.Pid))"
+                    $результат.DescendantKillErrors += $сообщение
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
+                    continue
+                }
+
+                if ($killDescendant.Exception) {
+                    $сообщение = "taskkill потомка: $($killDescendant.Exception) (pid=$($остаток.Pid))"
+                    $результат.DescendantKillErrors += $сообщение
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
+                    continue
+                }
+
+                if ($killDescendant.NotFound) {
+                    if (-not (Test-ProcessAlive $остаток.Pid)) {
+                        # Benign race: потомок исчез между scan и taskkill.
+                        # Отметка остаётся в диагностике; окончательную
+                        # классификацию даёт post-scan.
+                        $результат.TaskKillRacePids += $остаток.Pid
+                        $результат.AlreadyExitedPids += $остаток.Pid
+                        Write-Host "  TREE RACE: потомок уже завершён (pid=$($остаток.Pid)) — benign race"
+                    } else {
+                        # not-found, но PID жив → fail-closed (решение
+                        # подтверждает post-scan: RemainingPids).
+                        $сообщение = "taskkill потомка: процесс не найден, но PID жив (pid=$($остаток.Pid)) — возможен PID reuse"
+                        $результат.DescendantKillErrors += $сообщение
+                        if ($результат.TreeError) {
+                            $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                        } else {
+                            $результат.TreeError = $сообщение
+                        }
+                    }
+                    continue
+                }
+
+                if (-not $killDescendant.Success) {
+                    $сообщение = "taskkill потомка вернул $кодОстатка (pid=$($остаток.Pid)): $($выводОстатка -join ' | ')"
+                    $результат.DescendantKillErrors += $сообщение
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
                 }
             }
         }
 
-        # 6. Повторный скан — итоговая проверка чистоты.
+        # 6. Повторный скан — итоговая проверка чистоты (ВСЕГДА
+        # выполняется: отдельный шаг после очистки потомков).
         try {
             $потомки2 = @(Get-ProcessDescendants $пид $старт $результат.StartTimeKnown)
             $результат.TreeConfirmed = $true
@@ -866,6 +1112,63 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
             $результат.RemainingPids = @($потомки2 | Where-Object { $_.Confirmed } | Where-Object { Test-ProcessAlive $_.Pid } | ForEach-Object { $_.Pid })
         } catch {
             $сообщение = $_.Exception.Message
+            if ($результат.TreeError) {
+                $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+            } else {
+                $результат.TreeError = $сообщение
+            }
+        }
+
+        # 6b. ПРЯМАЯ проверка каждого PID потомка первого скана: после
+        # смерти родителя потомки переподчиняются, и повторный скан по
+        # ParentProcessId может их не найти — «дерево чисто» тогда
+        # означало бы «процесс не найден», а не «процесс завершён».
+        # Идентичность (PID reuse) проверяется по времени старта.
+        foreach ($остаток in $потомки) {
+            if (-not $остаток.Confirmed) { continue }
+            if (-not (Test-ProcessAlive $остаток.Pid)) { continue }
+
+            # Причина в TreeError ставится для КАЖДОГО живого подтверждённого
+            # потомка — даже если rescan уже перечислил его в RemainingPids:
+            # иначе «остался живым» осталось бы без объяснения.
+            $подтверждён = $true
+
+            try {
+                $живой = Get-Process -Id $остаток.Pid -ErrorAction Stop
+
+                if ($null -ne $остаток.CreationDate) {
+                    $расхождение = [Math]::Abs(($живой.StartTime - $остаток.CreationDate).TotalSeconds)
+
+                    if ($расхождение -gt 2) {
+                        # Другой процесс занял PID после завершения
+                        # потомка — убивать его нельзя (fail-closed).
+                        $подтверждён = $false
+                    }
+                }
+            } catch {
+                $подтверждён = $true
+            }
+
+            if (-not $подтверждён) {
+                if ($результат.UnconfirmedPids -notcontains $остаток.Pid) {
+                    $результат.UnconfirmedPids += $остаток.Pid
+                }
+
+                $сообщение = "потомок с неподтверждённой идентичностью (PID reuse), pid=$($остаток.Pid)"
+                if ($результат.TreeError) {
+                    $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                } else {
+                    $результат.TreeError = $сообщение
+                }
+
+                continue
+            }
+
+            if ($результат.RemainingPids -notcontains $остаток.Pid) {
+                $результат.RemainingPids += $остаток.Pid
+            }
+
+            $сообщение = "потомок остался жив после cleanup (pid=$($остаток.Pid))"
             if ($результат.TreeError) {
                 $результат.TreeError = $результат.TreeError + '; ' + $сообщение
             } else {
@@ -910,7 +1213,7 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
 # себе не считается доказательством — проверяется результат.
 function Test-EvidenceWritten([string]$относительныйПуть, [string[]]$обязательныеМаркеры) {
     try {
-        $каталог = 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна'
+        $каталог = Get-EvidenceRoot
         $путь = Join-Path $каталог $относительныйПуть
         if (-not (Test-Path -LiteralPath $путь)) {
             Write-Host "  EVIDENCE VERIFY FAIL: файл отсутствует: $путь"
