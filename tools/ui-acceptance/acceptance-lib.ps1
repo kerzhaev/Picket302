@@ -309,3 +309,106 @@ function ЗаписатьEvidence([string]$относительныйПуть, [
         return $false
     }
 }
+
+# --- Межпроцессная блокировка общих ресурсов тестовой инфраструктуры ---
+# Named mutex с тем же идентификатором, что и C#-хелпер
+# БлокировкаОбщихРесурсов (tests/.../БлокировкаОбщихРесурсов.cs): защищает
+# реальный профиль %AppData%\Picket302, sentinel, шаблон
+# %TEMP%\P302GuardTest_* и acceptance-каталоги между НЕЗАВИСИМЫМИ
+# процессами (параллельный testhost, ручной прогон, CI-агент).
+# Таймаут ограничен, отказ — fail-closed; AbandonedMutexException
+# (владелец умер) обрабатывается с диагностикой — мьютекс при этом получен.
+function Enter-SharedTestLock([int]$seconds = 180) {
+    $мьютекс = New-Object System.Threading.Mutex($false, 'Local\Picket302.TestInfrastructure.SharedProfile')
+    $получен = $false
+    try {
+        $получен = $мьютекс.WaitOne([TimeSpan]::FromSeconds($seconds))
+    } catch [System.Threading.AbandonedMutexException] {
+        Write-Host '  LOCK: предыдущий владелец умер, не освободив мьютекс (abandoned) — блокировка получена, ресурс мог остаться неубранным'
+        $получен = $true
+    }
+    if (-not $получен) {
+        $мьютекс.Dispose()
+        throw ("FAIL: общая блокировка тестовой инфраструктуры не получена за ${seconds} с — " +
+            'общий ресурс занят другим процессом (параллельный прогон). Продолжение запрещено (fail-closed).')
+    }
+    return $мьютекс
+}
+
+function Exit-SharedTestLock($мьютекс) {
+    if ($мьютекс -eq $null) { return }
+    try {
+        $мьютекс.ReleaseMutex()
+    } catch {
+        Write-Host ("  LOCK: ReleaseMutex не выполнен: " + $_.Exception.Message)
+    }
+    $мьютекс.Dispose()
+}
+
+# Аварийное завершение harness с деревом процессов: CLOSE -> Kill ->
+# taskkill /T /F + проверка дочерних процессов. Возвращает $true, если
+# пришлось убивать (драйвер обязан выставить fail-флаг — happy-path PASS
+# невозможен).
+function Stop-HarnessTree($h) {
+    if ($h -eq $null -or $h.Proc -eq $null) { return $false }
+    if ($h.Proc.HasExited) { return $false }
+    $pidHarness = $h.Proc.Id
+    try {
+        $h.Proc.StandardInput.WriteLine('CLOSE')
+    } catch {
+        Write-Host "  CLOSE не доставлен (harness завершается): $($_.Exception.Message)"
+    }
+    if (-not $h.Proc.WaitForExit(20000)) {
+        Write-Host "  HARNESS KILL: штатное завершение не сработало (pid=$pidHarness) — taskkill /T /F"
+        & taskkill /T /F /PID $pidHarness | Out-Null
+        try { $h.Proc.Kill() } catch {
+            Write-Host "  HARNESS KILL: Kill не выполнен: $($_.Exception.Message)"
+        }
+        try { $h.Proc.WaitForExit(10000) | Out-Null } catch {}
+
+        if (-not $h.Proc.HasExited) {
+            Write-Host "  SAFETY-FAIL: harness не завершён после Kill (pid=$pidHarness)"
+        }
+
+        # Дочерние процессы дерева: проверка и принудительное завершение.
+        $дети = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$pidHarness" -ErrorAction SilentlyContinue)
+        foreach ($дочерний in $дети) {
+            Write-Host "  HARNESS CHILD: pid=$($дочерний.ProcessId) name=$($дочерний.Name) — принудительное завершение"
+            & taskkill /T /F /PID $дочерний.ProcessId | Out-Null
+        }
+
+        Write-Host "  HARNESS KILLED (pid=$pidHarness) — happy-path PASS невозможен"
+        return $true
+    }
+    return $false
+}
+
+# Пост-проверка записи evidence: файл существует, не пуст и содержит
+# обязательные маркеры ТЕКУЩЕГО прогона. Успех cmdlet-а записи сам по
+# себе не считается доказательством — проверяется результат.
+function Test-EvidenceWritten([string]$относительныйПуть, [string[]]$обязательныеМаркеры) {
+    try {
+        $каталог = 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна'
+        $путь = Join-Path $каталог $относительныйПуть
+        if (-not (Test-Path -LiteralPath $путь)) {
+            Write-Host "  EVIDENCE VERIFY FAIL: файл отсутствует: $путь"
+            return $false
+        }
+        $файл = Get-Item -LiteralPath $путь
+        if ($файл.Length -le 0) {
+            Write-Host "  EVIDENCE VERIFY FAIL: файл пуст: $путь"
+            return $false
+        }
+        $содержимое = Get-Content -LiteralPath $путь -Raw
+        foreach ($маркер in $обязательныеМаркеры) {
+            if (-not $содержимое.Contains($маркер)) {
+                Write-Host "  EVIDENCE VERIFY FAIL: нет маркера «$маркер» в $путь"
+                return $false
+            }
+        }
+        return $true
+    } catch {
+        Write-Host "  EVIDENCE VERIFY FAIL: $($_.Exception.Message)"
+        return $false
+    }
+}

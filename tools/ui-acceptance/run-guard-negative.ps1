@@ -5,11 +5,15 @@
 # Ожидание: код возврата 3, stdout без PROFILE/READY, реальный профиль
 # не изменён, sentinel создаётся внутри try/finally и удаляется с
 # -ErrorAction Stop (неудача удаления — exit 1).
-# Fail-closed: $ErrorActionPreference='Stop' — ошибка любого шага (включая
-# fingerprint) даёт ненулевой код возврата.
+# Fail-closed: $ErrorActionPreference='Stop'; финальная fingerprint-
+# проверка в finally переводит прогон в FAIL при ненулевой дельте;
+# общий ресурс (реальный профиль + sentinel) защищён межпроцессной
+# блокировкой Enter-SharedTestLock.
 $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName System.Security
+
+. "$PSScriptRoot\acceptance-lib.ps1"
 
 $applicationData = [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData)
 $реальныйПрофиль = Join-Path $applicationData 'Picket302'
@@ -45,8 +49,16 @@ function Get-SentinelState([string]$path) {
 
 $exitCode = 1
 $неудачиОчистки = [System.Collections.Generic.List[string]]::new()
+$сценарийПройден = $false
+$отпечатокДо = $null
+$sentinelДо = $null
+$блокировка = $null
 
 try {
+    # Межпроцессная блокировка общего ресурса (реальный профиль + sentinel):
+    # отказ получения — fail-closed exit 1.
+    $блокировка = Enter-SharedTestLock
+
     # Создание production-каталога и sentinel внутри try/finally:
     # невозможность создать sentinel — FAIL с exit 1 (EAP='Stop').
     New-Item -ItemType Directory -Force -Path $реальныйПрофиль -ErrorAction Stop | Out-Null
@@ -97,32 +109,58 @@ try {
         Write-Host '  OK: код 3, приложение не запускалось'
     }
 
-    # Отпечатки после обоих отказов
-    $отпечатокПосле = Test-Fingerprint $реальныйПрофиль
     $sentinelПосле = Get-SentinelState $sentinel
-
-    $новые = @($отпечатокПосле.Keys | Where-Object { -not $отпечатокДо.ContainsKey($_) })
-    $изменённые = @($отпечатокПосле.Keys | Where-Object { $отпечатокДо.ContainsKey($_) -and $отпечатокДо[$_] -ne $отпечатокПосле[$_] })
-
     Write-Host "sentinel unchanged: $($sentinelДо -eq $sentinelПосле)"
-    Write-Host "new files: $($новые.Count); changed files: $($изменённые.Count)"
 
     if ($sentinelДо -ne $sentinelПосле) { throw 'FAIL: sentinel изменён' }
 
-    $удалённые = @($отпечатокДо.Keys | Where-Object { -not $отпечатокПосле.ContainsKey($_) })
-    Write-Host "removed files: $($удалённые.Count)"
-    if ($удалённые.Count -ne 0) { throw "FAIL: удалены файлы реального профиля: $($удалённые -join '; ')" }
-    if ($новые.Count -ne 0) { throw "FAIL: появились новые файлы: $($новые -join '; ')" }
-    if ($изменённые.Count -ne 0) { throw "FAIL: изменены файлы: $($изменённые -join '; ')" }
-
-    Write-Host 'GUARD-NEGATIVE PASS: True'
-    $exitCode = 0
+    $сценарийПройден = $true
 }
 catch {
     Write-Host "GUARD-NEGATIVE FAIL: $($_.Exception.Message)"
-    $exitCode = 1
+    $сценарийПройден = $false
 }
 finally {
+    # --- Финальная fingerprint-проверка (fail-closed, ненулевая дельта = FAIL)
+    if ($null -ne $отпечатокДо) {
+        try {
+            $отпечатокФинал = Test-Fingerprint $реальныйПрофиль
+
+            if ($env:P302_GUARD_FAULT -eq 'final-delta') {
+                if ($отпечатокФинал.Count -gt 0) {
+                    $первый = @($отпечатокФинал.Keys)[0]
+                    $отпечатокФинал.Remove($первый)
+                }
+                Write-Host 'FAULT-INJECT: final delta Removed > 0'
+            }
+
+            $новые = @($отпечатокФинал.Keys | Where-Object { -not $отпечатокДо.ContainsKey($_) })
+            $изменённые = @($отпечатокФинал.Keys | Where-Object { $отпечатокДо.ContainsKey($_) -and $отпечатокДо[$_] -ne $отпечатокФинал[$_] })
+            $удалённые = @($отпечатокДо.Keys | Where-Object { -not $отпечатокФинал.ContainsKey($_) })
+
+            Write-Host "final delta: new=$($новые.Count) changed=$($изменённые.Count) removed=$($удалённые.Count)"
+
+            if ($новые.Count -ne 0) {
+                Write-Host "  SAFETY-FAIL: появились новые файлы реального профиля: $($новые -join '; ')"
+                $неудачиОчистки.Add('final-delta-new')
+            }
+            if ($изменённые.Count -ne 0) {
+                Write-Host "  SAFETY-FAIL: изменены файлы реального профиля: $($изменённые -join '; ')"
+                $неудачиОчистки.Add('final-delta-changed')
+            }
+            if ($удалённые.Count -ne 0) {
+                Write-Host "  SAFETY-FAIL: удалены файлы реального профиля: $($удалённые -join '; ')"
+                $неудачиОчистки.Add('final-delta-removed')
+            }
+        } catch {
+            $неудачиОчистки.Add('fingerprint-final-check')
+            Write-Host "SAFETY-FAIL: финальная fingerprint-проверка не выполнена: $($_.Exception.Message)"
+        }
+    } else {
+        $неудачиОчистки.Add('fingerprint-before-missing')
+        Write-Host 'SAFETY-FAIL: отпечаток ДО не снят — финальная проверка невозможна'
+    }
+
     # Sentinel удаляется с -ErrorAction Stop: неудача удаления — FAIL.
     if (Test-Path $sentinel) {
         try {
@@ -133,7 +171,21 @@ finally {
         }
     }
 
-    if ($неудачиОчистки.Count -gt 0) { $exitCode = 1 }
+    # Реальный профиль не должен содержать sentinel после завершения.
+    if (Test-Path $sentinel) {
+        Write-Host 'SAFETY-FAIL: sentinel остался в реальном профиле после завершения'
+        $неудачиОчистки.Add('sentinel-still-present')
+    }
+
+    Exit-SharedTestLock $блокировка
+
+    if ($сценарийПройден -and $неудачиОчистки.Count -eq 0) {
+        $exitCode = 0
+        Write-Host 'GUARD-NEGATIVE PASS: True'
+    } else {
+        $exitCode = 1
+        Write-Host 'GUARD-NEGATIVE PASS: False'
+    }
 }
 
 exit $exitCode

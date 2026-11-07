@@ -22,6 +22,11 @@ public sealed class ProfileIsolationTests
     [Fact]
     public async Task СоставПриложенияВИзолированномПрофиле_НеИзменяетРеальныйПрофиль()
     {
+        // Реальный профиль — общий ресурс: межпроцессная блокировка
+        // защищает отпечатки от параллельного testhost/acceptance-прогона
+        // (владение мьютексом в выделенном потоке — безопасно для async).
+        using var блокировка = БлокировкаОбщихРесурсов.Захватить();
+
         var до = СнятьОтпечатки();
 
         using (var профиль = new ИзолированныйПрофиль())
@@ -51,6 +56,9 @@ public sealed class ProfileIsolationTests
     [Fact]
     public async Task РеквизитыПодключения_СоздаютсяТолькоВоВременномПрофиле()
     {
+        // Реальный профиль — общий ресурс (см. первый тест класса).
+        using var блокировка = БлокировкаОбщихРесурсов.Захватить();
+
         var реальныйПуть = Path.Combine(КаталогПрофиля, Picket302ProfilePaths.ИмяФайлаПодключения);
         var отпечатокДо = ОтпечатокФайла(реальныйПуть);
 
@@ -200,6 +208,11 @@ public sealed class ProfileIsolationTests
     [Fact]
     public async Task SentinelФайлРеальногоПрофиля_НеИзменяетсяПрогоном()
     {
+        // Sentinel в реальном профиле — общий ресурс: без блокировки
+        // параллельный testhost/acceptance-прогон со своим sentinel
+        // давал ложный «новый файл реального профиля».
+        using var блокировка = БлокировкаОбщихРесурсов.Захватить();
+
         Directory.CreateDirectory(КаталогПрофиля);
 
         var sentinel = Path.Combine(КаталогПрофиля, "picket302-review-sentinel.tmp");
@@ -242,6 +255,9 @@ public sealed class ProfileIsolationTests
     [Fact]
     public void ЖурналСбоевТестовогоКонтура_ПишетВоВременныйПрофиль()
     {
+        // Реальный профиль — общий ресурс (см. первый тест класса).
+        using var блокировка = БлокировкаОбщихРесурсов.Захватить();
+
         var журналРеальногоДо = СнятьОтпечатки()
             .Where(пара => пара.Key.StartsWith("logs", StringComparison.Ordinal))
             .ToDictionary(пара => пара.Key, пара => пара.Value);

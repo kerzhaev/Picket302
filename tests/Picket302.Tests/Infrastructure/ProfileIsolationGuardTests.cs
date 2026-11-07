@@ -24,6 +24,19 @@ public sealed class ProfileIsolationGuardTests
     /// <summary>Синтетический производственный каталог.</summary>
     private const string Производственный = @"C:\prod\Root\Picket302";
 
+    /// <summary>
+    /// Фикстура постусловия коллекции: внедряется явно, чтобы xUnit
+    /// гарантированно создал её и выполнил teardown после всех тестов.
+    /// </summary>
+    private readonly ПостусловиеЧистотыGuard _постусловие;
+
+    /// <summary>Создаёт тест с фикстурой постусловия коллекции.</summary>
+    /// <param name="постусловие">Фикстура постусловия коллекции.</param>
+    public ProfileIsolationGuardTests(ПостусловиеЧистотыGuard постусловие)
+    {
+        _постусловие = постусловие;
+    }
+
     /// <summary>Атрибут reparse point (FILE_ATTRIBUTE_REPARSE_POINT).</summary>
     private const uint АтрибутReparsePoint = 0x00000400;
 
@@ -122,6 +135,11 @@ public sealed class ProfileIsolationGuardTests
     [Fact]
     public void Кандидат_ЧерезReparseНаПроизводственный_Отклоняется()
     {
+        // Общий ресурс %TEMP%\P302GuardTest_* защищён межпроцессной
+        // блокировкой: xUnit-коллекция сериализует только внутри одного
+        // testhost-процесса. Отказ получения — красный тест (fail-closed).
+        using var блокировка = БлокировкаОбщихРесурсов.Захватить();
+
         var база = НовыйТестовыйКаталог();
         var цель = Path.Combine(база, "prod-target");
         var ссылка = Path.Combine(база, "prod-link");
@@ -176,6 +194,10 @@ public sealed class ProfileIsolationGuardTests
     [Fact]
     public void Кандидат_DanglingСсылка_КанонизируетсяКЦели()
     {
+        // Общий ресурс %TEMP%\P302GuardTest_* защищён межпроцессной
+        // блокировкой (см. Кандидат_ЧерезReparseНаПроизводственный).
+        using var блокировка = БлокировкаОбщихРесурсов.Захватить();
+
         var база = НовыйТестовыйКаталог();
         var цель = Path.Combine(база, "missing-target");
         var ссылка = Path.Combine(база, "dangling-link");
@@ -225,6 +247,10 @@ public sealed class ProfileIsolationGuardTests
     [Fact]
     public void Кандидат_ЗацикленнаяЦепочкаСсылок_FailClosed()
     {
+        // Общий ресурс %TEMP%\P302GuardTest_* защищён межпроцессной
+        // блокировкой (см. Кандидат_ЧерезReparseНаПроизводственный).
+        using var блокировка = БлокировкаОбщихРесурсов.Захватить();
+
         var база = НовыйТестовыйКаталог();
         var ссылкаА = Path.Combine(база, "loop-a");
         var ссылкаБ = Path.Combine(база, "loop-b");
