@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Picket302.Infrastructure;
 using Xunit;
 
@@ -9,10 +10,51 @@ namespace Picket302.Tests.Infrastructure;
 /// Тесты используют синтетические пути — реальный производственный
 /// профиль не читается и не изменяется.
 /// </summary>
+/// <remarks>
+/// Контракт reparse-ветвей (обязательная Windows acceptance-среда):
+/// невозможность создать junction/symbolic link — <see cref="Fail"/>
+/// (красный тест), а не тихий <c>return</c>; создание проверяется
+/// низкоуровневым атрибутом reparse point через
+/// <c>GetFileAttributesW</c>; cleanup ссылок и временной базы
+/// проверяется, ошибка cleanup делает тест красным.
+/// </remarks>
+[Collection("ИнфраструктурнаяУборка")]
 public sealed class ProfileIsolationGuardTests
 {
     /// <summary>Синтетический производственный каталог.</summary>
     private const string Производственный = @"C:\prod\Root\Picket302";
+
+    /// <summary>Атрибут reparse point (FILE_ATTRIBUTE_REPARSE_POINT).</summary>
+    private const uint АтрибутReparsePoint = 0x00000400;
+
+    /// <summary>Возвращаемое значение GetFileAttributesW для отсутствующего пути.</summary>
+    private const uint НесуществующийАтрибут = 0xFFFFFFFF;
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern uint GetFileAttributesW(string имя);
+
+    /// <summary>
+    /// Путь существует (низкоуровневая проверка, пригодная для
+    /// dangling-ссылок, которые ни File.Exists, ни Directory.Exists
+    /// не видят).
+    /// </summary>
+    private static bool СуществуетПуть(string путь) =>
+        GetFileAttributesW(путь) != НесуществующийАтрибут;
+
+    /// <summary>
+    /// Путь является reparse point (junction или symbolic link);
+    /// работает и для dangling-ссылок.
+    /// </summary>
+    private static bool ЯвляетсяReparsePoint(string путь)
+    {
+        var атрибуты = GetFileAttributesW(путь);
+
+        return атрибуты != НесуществующийАтрибут && (атрибуты & АтрибутReparsePoint) != 0;
+    }
+
+    /// <summary>Уникальный временный каталог reparse-тестов.</summary>
+    private static string НовыйТестовыйКаталог() =>
+        Path.Combine(Path.GetTempPath(), "P302GuardTest_" + Guid.NewGuid().ToString("N"));
 
     [Theory]
     [InlineData(@"C:\prod\Root\Picket302")]
@@ -75,141 +117,105 @@ public sealed class ProfileIsolationGuardTests
 
     /// <summary>
     /// Кандидат через junction/symlink на производственный каталог
-    /// отклоняется после канонизации. Реализуемо только если среда
-    /// позволяет создать переопределение; иначе тест пропускает проверку
-    /// и SYMLINK_GUARD считается не измеренным.
+    /// отклоняется после канонизации.
     /// </summary>
     [Fact]
     public void Кандидат_ЧерезReparseНаПроизводственный_Отклоняется()
     {
-        var база = Path.Combine(Path.GetTempPath(), "P302GuardTest_" + Guid.NewGuid().ToString("N"));
+        var база = НовыйТестовыйКаталог();
         var цель = Path.Combine(база, "prod-target");
         var ссылка = Path.Combine(база, "prod-link");
         var кореньСсылка = Path.Combine(база, "root-link");
+
+        Exception? основная = null;
 
         try
         {
             Directory.CreateDirectory(цель);
 
-            var создано = СоздатьJunction(ссылка, цель);
-
-            if (!создано)
-            {
-                // Среда не позволяет создать переопределение: проверка
-                // reparse-ветви не измеряется (см. SYMLINK_GUARD_VERIFIED).
-                return;
-            }
-
             // Ссылка → цель, совпадающая с production: отказ по равенству.
+            СоздатьJunctionОбязательно(ссылка, цель);
+
             var причина = ProfileIsolationGuard.ПричинаОтказа(ссылка, цель);
 
             Assert.NotNull(причина);
             Assert.Contains("совпадает", причина, StringComparison.Ordinal);
 
-            // Ссылка → цель = корень production: отказ по вложенности.
+            // Ссылка → подкаталог цели: отказ по вложенности.
             Directory.CreateDirectory(Path.Combine(цель, "inner"));
+            СоздатьJunctionОбязательно(кореньСсылка, Path.Combine(цель, "inner"));
 
-            if (СоздатьJunction(кореньСсылка, Path.Combine(цель, "inner")))
-            {
-                var причина2 = ProfileIsolationGuard.ПричинаОтказа(
-                    Path.Combine(кореньСсылка, "Picket302"), цель);
+            var причина2 = ProfileIsolationGuard.ПричинаОтказа(
+                Path.Combine(кореньСсылка, "Picket302"), цель);
 
-                Assert.NotNull(причина2);
-                Assert.Contains("внутри производственного", причина2, StringComparison.Ordinal);
-            }
+            Assert.NotNull(причина2);
+            Assert.Contains("внутри производственного", причина2, StringComparison.Ordinal);
         }
-        finally
+        catch (Exception ошибка)
         {
-            // Ссылки удаляются до рекурсивного удаления базы: рекурсивный
-            // обход заходит внутрь цели ссылки и падает на ней.
-            try
-            {
-                if (Directory.Exists(ссылка))
-                {
-                    Directory.Delete(ссылка, false);
-                }
-            }
-            catch (IOException)
-            {
-            }
-
-            try
-            {
-                if (Directory.Exists(кореньСсылка))
-                {
-                    Directory.Delete(кореньСсылка, false);
-                }
-            }
-            catch (IOException)
-            {
-            }
-
-            try
-            {
-                if (Directory.Exists(база))
-                {
-                    Directory.Delete(база, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Временная база теста: сбой удаления не влияет на результат.
-            }
+            основная = ошибка;
         }
+
+        // Ссылки удаляются до рекурсивного удаления базы: рекурсивный
+        // обход заходит внутрь цели ссылки. Ошибка cleanup — красный тест.
+        var ошибкиУборки = new List<Exception>();
+        УдалитьСсылкуОбязательно(кореньСсылка, ошибкиУборки);
+        УдалитьСсылкуОбязательно(ссылка, ошибкиУборки);
+        УдалитьБазуОбязательно(база, ошибкиУборки);
+        СообщитьИтог(основная, ошибкиУборки);
     }
 
     /// <summary>
     /// Dangling ссылка канонизируется к целевому пути: запись через
     /// ссылку попадает в цель, поэтому канонизированный кандидат и есть
-    /// цель (проверка разрешимости dangling-ссылок).
+    /// цель. Существование ссылки проверяется низкоуровнево:
+    /// <c>File.GetAttributes</c> на dangling-ссылке бросает
+    /// <see cref="FileNotFoundException"/>, поэтому используется
+    /// <c>GetFileAttributesW</c>.
     /// </summary>
     [Fact]
     public void Кандидат_DanglingСсылка_КанонизируетсяКЦели()
     {
-        var база = Path.Combine(Path.GetTempPath(), "P302GuardTest_" + Guid.NewGuid().ToString("N"));
+        var база = НовыйТестовыйКаталог();
         var цель = Path.Combine(база, "missing-target");
         var ссылка = Path.Combine(база, "dangling-link");
+
+        Exception? основная = null;
 
         try
         {
             Directory.CreateDirectory(база);
+            Directory.CreateSymbolicLink(ссылка, цель);
 
-            if (!СоздатьСимлинк(ссылка, цель))
-            {
-                // Прав на symbolic link нет: ветвь остаётся NOT_MEASURED.
-                return;
-            }
+            // Обязательная среда: создание проверяется, провал — FAIL.
+            Assert.True(
+                ЯвляетсяReparsePoint(ссылка),
+                "dangling-симлинк не создан (reparse-атрибут отсутствует): " + ссылка);
 
-            // Канонизированный кандидат — целевой путь, поэтому сравнение с
-            // той же целью даёт «совпадает».
+            // Цель отсутствует; существование самой ссылки подтверждается
+            // только низкоуровневым атрибутом: File.GetAttributes на
+            // dangling-ссылке бросает FileNotFoundException, а обычный
+            // Exists проверяет саму ссылку и на dangling-цель молчит.
+            Assert.False(СуществуетПуть(цель), "цель dangling-ссылки должна отсутствовать");
+            Assert.False(File.Exists(ссылка), "каталог-симлинк не является файлом");
+
+            // Канонизированный кандидат — целевой путь, поэтому сравнение
+            // с той же целью даёт «совпадает»: гард не признаёт ссылку
+            // безопасной молча.
             var причина = ProfileIsolationGuard.ПричинаОтказа(ссылка, цель);
 
             Assert.NotNull(причина);
             Assert.Contains("совпадает", причина, StringComparison.Ordinal);
         }
-        finally
+        catch (Exception ошибка)
         {
-            try
-            {
-                if (File.Exists(ссылка))
-                {
-                    File.Delete(ссылка);
-                }
-                else if (Directory.Exists(ссылка))
-                {
-                    Directory.Delete(ссылка, false);
-                }
-
-                if (Directory.Exists(база))
-                {
-                    Directory.Delete(база, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Временная база теста: сбой удаления не влияет на результат.
-            }
+            основная = ошибка;
         }
+
+        var ошибкиУборки = new List<Exception>();
+        УдалитьСсылкуОбязательно(ссылка, ошибкиУборки);
+        УдалитьБазуОбязательно(база, ошибкиУборки);
+        СообщитьИтог(основная, ошибкиУборки);
     }
 
     /// <summary>
@@ -219,106 +225,168 @@ public sealed class ProfileIsolationGuardTests
     [Fact]
     public void Кандидат_ЗацикленнаяЦепочкаСсылок_FailClosed()
     {
-        var база = Path.Combine(Path.GetTempPath(), "P302GuardTest_" + Guid.NewGuid().ToString("N"));
+        var база = НовыйТестовыйКаталог();
         var ссылкаА = Path.Combine(база, "loop-a");
         var ссылкаБ = Path.Combine(база, "loop-b");
+
+        Exception? основная = null;
 
         try
         {
             Directory.CreateDirectory(база);
 
-            var созданоА = СоздатьJunction(ссылкаА, ссылкаБ);
-            var созданоБ = СоздатьJunction(ссылкаБ, ссылкаА);
-
-            if (!созданоА || !созданоБ)
-            {
-                // Переопределения недоступны: ветвь остаётся NOT_MEASURED.
-                return;
-            }
+            СоздатьJunctionОбязательно(ссылкаА, ссылкаБ);
+            СоздатьJunctionОбязательно(ссылкаБ, ссылкаА);
 
             Assert.Throws<InvalidOperationException>(() =>
                 ProfileIsolationGuard.ПричинаОтказа(ссылкаА, Производственный));
         }
-        finally
+        catch (Exception ошибка)
         {
-            // Ссылки удаляются до рекурсивного удаления базы.
-            foreach (var ссылка in new[] { ссылкаА, ссылкаБ })
+            основная = ошибка;
+        }
+
+        var ошибкиУборки = new List<Exception>();
+        УдалитьСсылкуОбязательно(ссылкаА, ошибкиУборки);
+        УдалитьСсылкуОбязательно(ссылкаБ, ошибкиУборки);
+        УдалитьБазуОбязательно(база, ошибкиУборки);
+        СообщитьИтог(основная, ошибкиУборки);
+    }
+
+    /// <summary>
+    /// Создаёт junction (не требует привилегий). Обязательная среда:
+    /// любой отказ — красный тест через <see cref="Assert.True"/> вместо
+    /// тихого пропуска ветви.
+    /// </summary>
+    /// <param name="ссылка">Путь ссылки.</param>
+    /// <param name="цель">Путь цели.</param>
+    private static void СоздатьJunctionОбязательно(string ссылка, string цель)
+    {
+        using var процесс = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = "/c mklink /J \"" + ссылка + "\" \"" + цель + "\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+
+        процесс!.WaitForExit(10000);
+
+        Assert.True(
+            процесс.ExitCode == 0,
+            "mklink /J не создал junction (код " + процесс.ExitCode + "): " + ссылка);
+
+        // Создание подтверждается низкоуровневым атрибутом reparse point:
+        // одного кода возврата mklink недостаточно.
+        Assert.True(
+            ЯвляетсяReparsePoint(ссылка),
+            "mklink /J вернул успех, но reparse point не обнаружен: " + ссылка);
+    }
+
+    /// <summary>
+    /// Удаляет reparse point и проверяет отсутствие. Ошибки собираются в
+    /// <paramref name="ошибки"/> — cleanup не проглатывает исключения.
+    /// Существование определяется низкоуровнево: dangling-ссылка не видна
+    /// ни <c>File.Exists</c>, ни <c>Directory.Exists</c>.
+    /// </summary>
+    /// <param name="путь">Путь ссылки.</param>
+    /// <param name="ошибки">Список ошибок cleanup.</param>
+    private static void УдалитьСсылкуОбязательно(string путь, List<Exception> ошибки)
+    {
+        try
+        {
+            if (СуществуетПуть(путь))
             {
+                // Ссылка на несуществующую цель (dangling) может
+                // определяться как файл или как каталог — удаляются
+                // обе формы; reparse point снимается самим удалением.
                 try
                 {
-                    if (Directory.Exists(ссылка))
-                    {
-                        Directory.Delete(ссылка, false);
-                    }
+                    Directory.Delete(путь, recursive: false);
                 }
-                catch (IOException)
+                catch (Exception ошибка) when (ошибка is DirectoryNotFoundException or FileNotFoundException)
                 {
+                    File.Delete(путь);
                 }
             }
 
-            try
+            if (СуществуетПуть(путь))
             {
-                if (Directory.Exists(база))
+                throw new InvalidOperationException("ссылка не удалена: " + путь);
+            }
+        }
+        catch (Exception ошибка)
+        {
+            ошибки.Add(new InvalidOperationException("cleanup ссылки не удался: " + путь, ошибка));
+        }
+    }
+
+    /// <summary>
+    /// Рекурсивно удаляет временную базу reparse-теста с повторными
+    /// попытками и проверкой результата. Ошибка — в
+    /// <paramref name="ошибки"/>, не проглатывается.
+    /// </summary>
+    /// <param name="база">Путь временной базы.</param>
+    /// <param name="ошибки">Список ошибок cleanup.</param>
+    private static void УдалитьБазуОбязательно(string база, List<Exception> ошибки)
+    {
+        try
+        {
+            for (var попытка = 0; попытка < 5; попытка++)
+            {
+                if (!СуществуетПуть(база))
+                {
+                    break;
+                }
+
+                try
                 {
                     Directory.Delete(база, recursive: true);
                 }
+                catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+                {
+                    // Windows нередко отдаёт IOException на первом
+                    // рекурсивном удалении — повторяем в рамках бюджета.
+                    Thread.Sleep(200);
+                }
             }
-            catch (IOException)
+
+            if (СуществуетПуть(база))
             {
-                // Временная база теста: сбой удаления не влияет на результат.
+                throw new InvalidOperationException("временная база не удалена: " + база);
             }
+        }
+        catch (Exception ошибка)
+        {
+            ошибки.Add(new InvalidOperationException("cleanup базы не удался: " + база, ошибка));
         }
     }
 
     /// <summary>
-    /// Создаёт junction (не требует привилегий). Возвращает успех.
+    /// Итог reparse-теста: ошибка тела и ошибки cleanup не маскируют друг
+    /// друга — обе доводятся до жёлто-красного результата xUnit.
     /// </summary>
-    /// <param name="ссылка">Путь ссылки.</param>
-    /// <param name="цель">Путь цели.</param>
-    /// <returns><see langword="true"/> — junction создан.</returns>
-    private static bool СоздатьJunction(string ссылка, string цель)
+    /// <param name="основная">Ошибка тела теста, если была.</param>
+    /// <param name="ошибкиУборки">Ошибки cleanup.</param>
+    private static void СообщитьИтог(Exception? основная, List<Exception> ошибкиУборки)
     {
-        try
+        if (основная is not null && ошибкиУборки.Count > 0)
         {
-            var процесс = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/c mklink /J \"{ссылка}\" \"{цель}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            });
-
-            процесс!.WaitForExit(10000);
-
-            return процесс.ExitCode == 0 && Directory.Exists(ссылка);
+            throw new AggregateException(
+                "Ошибка теста и ошибки cleanup reparse-ветви",
+                new[] { основная }.Concat(ошибкиУборки));
         }
-        catch (Exception ошибка) when (ошибка is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            return false;
-        }
-    }
 
-    /// <summary>
-    /// Создаёт symbolic link (может требовать привилегий). Возвращает успех.
-    /// </summary>
-    /// <param name="ссылка">Путь ссылки.</param>
-    /// <param name="цель">Путь цели.</param>
-    /// <returns><see langword="true"/> — ссылка создана.</returns>
-    private static bool СоздатьСимлинк(string ссылка, string цель)
-    {
-        try
+        if (ошибкиУборки.Count > 0)
         {
-            Directory.CreateSymbolicLink(ссылка, цель);
-
-            // Dangling-ссылка не существует как каталог: успех определяется
-            // наличием переопределения, а не Exists.
-            return (File.GetAttributes(ссылка) & FileAttributes.ReparsePoint) != 0;
+            throw new AggregateException("Ошибка cleanup reparse-ветви", ошибкиУборки);
         }
-        catch (Exception ошибка) when (ошибка is UnauthorizedAccessException or IOException or System.ComponentModel.Win32Exception)
+
+        if (основная is not null)
         {
-            return false;
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(основная).Throw();
         }
     }
 }

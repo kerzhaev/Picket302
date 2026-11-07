@@ -3,8 +3,11 @@
 #      его в производственный профиль);
 #   2) корень = сам производственный каталог данных.
 # Ожидание: код возврата 3, stdout без PROFILE/READY, реальный профиль
-# не изменён, sentinel удалён в finally.
-$ErrorActionPreference = 'Continue'
+# не изменён, sentinel создаётся внутри try/finally и удаляется с
+# -ErrorAction Stop (неудача удаления — exit 1).
+# Fail-closed: $ErrorActionPreference='Stop' — ошибка любого шага (включая
+# fingerprint) даёт ненулевой код возврата.
+$ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName System.Security
 
@@ -15,11 +18,13 @@ $sentinel = Join-Path $реальныйПрофиль 'picket302-review-sentinel
 $exe = Join-Path $PSScriptRoot 'bin\x64\Release\net8.0-windows\UiAcceptance.exe'
 
 function Test-Fingerprint([string]$dir) {
+    # Fail-closed: ошибка перечисления или чтения файла = исключение.
+    # -Force включает скрытые файлы — частичный отпечаток невозможен.
     $map = @{}
     if (-not (Test-Path $dir)) { return $map }
     $хеш = [System.Security.Cryptography.SHA256]::Create()
     try {
-        Get-ChildItem -Recurse -File $dir -ErrorAction SilentlyContinue | ForEach-Object {
+        Get-ChildItem -Recurse -File -Force $dir | ForEach-Object {
             $байты = $хеш.ComputeHash([System.IO.File]::ReadAllBytes($_.FullName))
             $sha = [System.BitConverter]::ToString($байты).Replace('-', '')
             $map[$_.FullName] = "$sha|$($_.LastWriteTimeUtc.Ticks)"
@@ -39,10 +44,14 @@ function Get-SentinelState([string]$path) {
 }
 
 $exitCode = 1
-New-Item -ItemType Directory -Force -Path $реальныйПрофиль | Out-Null
-Set-Content -Path $sentinel -Value ("sentinel-" + [Guid]::NewGuid().ToString('N'))
+$неудачиОчистки = [System.Collections.Generic.List[string]]::new()
 
 try {
+    # Создание production-каталога и sentinel внутри try/finally:
+    # невозможность создать sentinel — FAIL с exit 1 (EAP='Stop').
+    New-Item -ItemType Directory -Force -Path $реальныйПрофиль -ErrorAction Stop | Out-Null
+    Set-Content -Path $sentinel -Value ("sentinel-" + [Guid]::NewGuid().ToString('N')) -ErrorAction Stop
+
     $отпечатокДо = Test-Fingerprint $реальныйПрофиль
     $sentinelДо = Get-SentinelState $sentinel
     Write-Host "sentinel before: $sentinelДо"
@@ -71,8 +80,9 @@ try {
         Write-Host ("  stdout: " + ($stdout -replace $nl, ' | '))
         Write-Host ("  stderr (первые 3 строки): " + ((($stderr -split $nl) | Select-Object -First 3) -join ' | '))
 
-        # Fault-inject: намеренно неверное ожидание доказывает fail-closed
-        # (несработавший assertion обязан дать ненулевой exit).
+        # Fault-inject (без UI: harness завершается с кодом 3 до создания
+        # окна): намеренно неверное ожидание доказывает fail-closed —
+        # несработавший assertion обязан дать ненулевой exit.
         $ожидаемыйКод = 3
         if ($env:P302_GUARD_FAULT -eq 'wrong-expectation') { $ожидаемыйКод = 0 }
 
@@ -113,12 +123,17 @@ catch {
     $exitCode = 1
 }
 finally {
-    $удалениеОк = $true
+    # Sentinel удаляется с -ErrorAction Stop: неудача удаления — FAIL.
     if (Test-Path $sentinel) {
-        try { Remove-Item $sentinel -Force -ErrorAction Stop; $удалениеОк = $true }
-        catch { Write-Host "FAIL: sentinel не удалён: $($_.Exception.Message)"; $удалениеОк = $false }
+        try {
+            Remove-Item $sentinel -Force -ErrorAction Stop
+        } catch {
+            Write-Host "SAFETY-FAIL: sentinel не удалён: $($_.Exception.Message)"
+            $неудачиОчистки.Add('sentinel-not-deleted')
+        }
     }
-    if (-not $удалениеОк) { $exitCode = 1 }
+
+    if ($неудачиОчистки.Count -gt 0) { $exitCode = 1 }
 }
 
 exit $exitCode

@@ -3,12 +3,17 @@
 # неожиданные MessageBox/диалоги = FAIL; весь ход — в evidence.
 # Физическая печать не выполняется: F5 — «Отмена», F6 — «Закрыть» на
 # предпросмотре (DialogResult != OK, спулер не вызывается).
-$ErrorActionPreference = 'Continue'
+# Единый контролируемый путь записи evidence: сначала завершается cleanup
+# (harness, финальный отпечаток, sentinel), фиксируются финальные статусы,
+# затем evidence записывается ОДИН раз. Happy-прогон —
+# printflow-happy-evidence.md; fault-инъекция — отдельный
+# printflow-fault-<fault>.md (happy-файл не перезаписывается); обычный
+# провал — printflow-failure-evidence.md.
+$ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\acceptance-lib.ps1"
 
 $exe = "$PSScriptRoot\bin\x64\Release\net8.0-windows\UiAcceptance.exe"
 $out = 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна'
-$evidence = Join-Path $out 'f5-f6-runtime-evidence.md'
 $applicationData = Get-ApplicationDataFolder
 $реальныйПрофиль = Join-Path $applicationData 'Picket302'
 $sentinel = Join-Path $реальныйПрофиль 'picket302-review-sentinel.tmp'
@@ -19,6 +24,28 @@ $h = $null
 $журнал = [System.Collections.Generic.List[string]]::new()
 $отпечатокДо = $null
 $sentinelДо = $null
+$сценарийПройден = $false
+$неудачиОчистки = [System.Collections.Generic.List[string]]::new()
+$файлEvidence = 'printflow-failure-evidence.md'
+$заголовокEvidence = 'F5/F6 runtime-доказательство (FAIL)'
+
+# Раздельные флаги итога (PRINTFLOW PASS только при истинности всех).
+$успех = $false
+$f5Passed = $false
+$f6Passed = $false
+$harnessPassed = $false
+$cleanupPassed = $false
+$profileSafetyPassed = $false
+$unexpectedFired = $false
+$evidenceOk = $false
+$живF5 = $false
+$живF6 = $false
+$убит = $false
+$кодВыходаHarness = 1
+$hasSelect = $false
+$hasF5 = $false
+$hasF6 = $false
+$отказовStdout = -1
 
 function Запись([string]$событие) {
     $срок = "[$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))][pid=$([uint32]$script:h.Proc.Id)] $событие"
@@ -67,9 +94,10 @@ function Wait-ОжидаемоеОкно([uint32]$procId, [string]$title, [strin
 }
 
 try {
-    # --- 1. Отпечатки реального профиля ДО --------------------------------
-    New-Item -ItemType Directory -Force -Path $реальныйПрофиль | Out-Null
-    Set-Content -Path $sentinel -Value ("sentinel-" + [Guid]::NewGuid().ToString('N'))
+    # --- 1. Sentinel и отпечатки реального профиля ДО (fail-closed) -------
+    # Невозможность создать sentinel = исключение = FAIL с exit 1.
+    New-Item -ItemType Directory -Force -Path $реальныйПрофиль -ErrorAction Stop | Out-Null
+    Set-Content -Path $sentinel -Value ("sentinel-" + [Guid]::NewGuid().ToString('N')) -ErrorAction Stop
     $отпечатокДо = Test-ProfileFingerprint $реальныйПрофиль
     $sentinelДо = Get-SentinelState $sentinel
     Запись "sentinel before: $sentinelДо"
@@ -94,9 +122,6 @@ try {
     Start-Sleep -Seconds 2
 
     $успех = $true
-    $f5Passed = $false
-    $f6Passed = $false
-    $unexpectedFired = $false
     $всёОк = {
         param($условие, $сообщение)
         if ($условие) { Запись "OK: $сообщение" } else { Запись "FAIL: $сообщение"; $script:успех = $false }
@@ -163,7 +188,6 @@ try {
         }
     }
 
-    $живF5 = $false
     if ($успех) {
         $живF5 = [AccWin]::Responsive($h.Hwnd, 5000)
         Запись "UI отвечает после F5 (WM_NULL): $живF5"
@@ -324,7 +348,6 @@ try {
         }
     }
 
-    $живF6 = $false
     if ($успех) {
         $живF6 = [AccWin]::Responsive($h.Hwnd, 5000)
         Запись "UI отвечает после F6 (WM_NULL): $живF6"
@@ -339,7 +362,7 @@ try {
     # --- 5. Завершение и уборка --------------------------------------------
     $убит = Stop-Acceptance $h
     if ($h -ne $null -and -not $h.Proc.HasExited) { $h.Proc.WaitForExit() }
-    $кодВыходаHarness = if ($h -ne $null) { $h.Proc.ExitCode } else { 1 }
+    if ($h -ne $null) { $кодВыходаHarness = $h.Proc.ExitCode }
     Запись "harness exit code: $кодВыходаHarness; killed: $убит"
 
     # Проверки stdout — по накопленным строкам harness.
@@ -360,8 +383,7 @@ try {
     Запись "sentinel unchanged: $($sentinelДо -eq $sentinelПосле)"
     Запись "production delta: new=$($дельта.New.Count) changed=$($дельта.Changed.Count) removed=$($дельта.Removed.Count)"
 
-    # --- 7. Итог ------------------------------------------------------------
-    # Fault-inject (в памяти, production не трогается).
+    # --- 7. Fault-inject (в памяти, production не трогается) ---------------
     if ($env:P302_PRINTFLOW_FAULT -eq 'delta-removed') {
         $дельта.Removed = @('C:' + [IO.Path]::DirectorySeparatorChar + 'fake' + [IO.Path]::DirectorySeparatorChar + 'injected.file')
         Запись 'FAULT-INJECT: delta Removed > 0'
@@ -382,6 +404,7 @@ try {
         Запись 'FAULT-INJECT: harness exit = 7'
     }
 
+    # --- 8. Итоговые флаги (PRINTFLOW PASS только при всех) ----------------
     & $всёОк $hasSelect 'SELECT подтверждён stdout (OK SELECT)'
     & $всёОк ($отказовStdout -eq 0) 'нет FAIL-строк в stdout harness'
 
@@ -402,55 +425,97 @@ try {
     Запись "harness: exit=$кодВыходаHarness killed=$убит -> $harnessPassed"
     Запись "cleanup: $cleanupPassed; profile safety: $profileSafetyPassed"
 
-    $всёХорошо = $успех -and $f5Passed -and $f6Passed -and (-not $unexpectedFired) -and
-        $harnessPassed -and $cleanupPassed -and $profileSafetyPassed
-
-    if ($всёХорошо) {
-        $exitCode = 0
-        Запись 'итоговый exit code: 0 (PASS)'
-        $evidenceOk = ЗаписатьEvidence 'f5-f6-runtime-evidence.md' 'F5/F6 runtime-доказательство (acceptance harness)' 'createDemoData=false' $журнал
-        Запись "evidence записан: $evidenceOk"
-
-        if (-not $evidenceOk) { $exitCode = 1; Запись 'PRINTFLOW PASS: False (evidence не записан)' }
-        else { Запись 'PRINTFLOW PASS: True' }
-    } else {
-        Запись 'PRINTFLOW PASS: False'
-    }
+    $сценарийПройден = $успех -and $f5Passed -and $f6Passed -and (-not $unexpectedFired) -and $harnessPassed -and $cleanupPassed -and $profileSafetyPassed
+    Запись "сценарий (все флаги): $сценарийПройден"
 }
 catch {
     Запись "EXCEPTION: $($_.Exception.Message)"
-    [void](ЗаписатьEvidence 'f5-f6-runtime-evidence.md' 'F5/F6 runtime-доказательство (FAIL)' 'createDemoData=false' $журнал)
-    $exitCode = 1
+    $сценарийПройден = $false
 }
 finally {
+    # --- A. Аварийное завершение harness (если ещё жив) --------------------
     if ($h -ne $null -and $h.Proc -ne $null -and -not $h.Proc.HasExited) {
-        Write-Host '  finally: аварийное завершение harness'
-        try { $h.Proc.StandardInput.WriteLine('CLOSE') } catch {}
+        Запись 'finally: аварийное завершение harness'
+        try {
+            $h.Proc.StandardInput.WriteLine('CLOSE')
+        } catch {
+            Запись "CLOSE не доставлен (harness завершается): $($_.Exception.Message)"
+        }
         if (-not $h.Proc.WaitForExit(10000)) { $h.Proc.Kill() }
     }
 
-    try {
-        if ($отпечатокДо -ne $null) {
-            $отпечатокПосле = Test-ProfileFingerprint $реальныйПрофиль
-            $дельта = Compare-Fingerprints $отпечатокДо $отпечатокПосле
-            Запись "production delta (finally): new=$($дельта.New.Count) changed=$($дельта.Changed.Count) removed=$($дельта.Removed.Count)"
-            $дельта.New | ForEach-Object { Запись "  NEW: $_" }
-            $дельта.Changed | ForEach-Object { Запись "  CHANGED: $_" }
+    # --- B. Финальная fingerprint-проверка (fail-closed, не глотается) -----
+    if ($null -ne $отпечатокДо) {
+        try {
+            $отпечатокФинал = Test-ProfileFingerprint $реальныйПрофиль
+            $дельтаФинал = Compare-Fingerprints $отпечатокДо $отпечатокФинал
+            Запись "production delta (финально): new=$($дельтаФинал.New.Count) changed=$($дельтаФинал.Changed.Count) removed=$($дельтаФинал.Removed.Count)"
+            $дельтаФинал.New | ForEach-Object { Запись "  NEW: $_" }
+            $дельтаФинал.Changed | ForEach-Object { Запись "  CHANGED: $_" }
+            $дельтаФинал.Removed | ForEach-Object { Запись "  REMOVED: $_" }
+        } catch {
+            $неудачиОчистки.Add('fingerprint-final-check')
+            Запись "SAFETY-FAIL: финальная fingerprint-проверка не выполнена: $($_.Exception.Message)"
         }
-    } catch {}
+    } else {
+        $неудачиОчистки.Add('fingerprint-before-missing')
+        Запись 'SAFETY-FAIL: отпечаток ДО не снят — финальная проверка невозможна'
+    }
 
-    if (Test-Path $sentinel) { Remove-Item $sentinel -Force }
+    # --- C. Sentinel удаляется с -ErrorAction Stop -------------------------
+    if (Test-Path $sentinel) {
+        try {
+            Remove-Item $sentinel -Force -ErrorAction Stop
+        } catch {
+            $неудачиОчистки.Add('sentinel-not-deleted')
+            Запись "SAFETY-FAIL: sentinel не удалён: $($_.Exception.Message)"
+        }
+    }
 
-    try {
-        $строки = @(
-            '# F5/F6 runtime-доказательство (acceptance harness)',
-            '',
-            "Прогон: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), профиль: временный (guid), createDemoData=false.",
-            'Физическая печать не выполнялась: F5 — «Отмена», F6 — «Закрыть» на предпросмотре.',
-            ''
-        ) + $журнал
-        Set-Content -Path $evidence -Value $строки -Encoding UTF8
-    } catch {}
+    # --- D. Выбор файла evidence: happy / fault / failure ------------------
+    $фault = $env:P302_PRINTFLOW_FAULT
+    $фaultПрименён = $журнал | Where-Object { $_ -match 'FAULT-INJECT:' }
+
+    if ($сценарийПройден -and $фault) {
+        $файлEvidence = 'printflow-fault-' + $фault + '.md'
+        $заголовокEvidence = 'F5/F6 fault-injection: ' + $фault
+        Запись 'ANOMALY: fault применён, но условия прошли — файл fault-evidence'
+    } elseif ($сценарийПройден) {
+        $файлEvidence = 'printflow-happy-evidence.md'
+        $заголовокEvidence = 'F5/F6 runtime-доказательство (happy path)'
+    } elseif ($фaultПрименён) {
+        $файлEvidence = 'printflow-fault-' + $фault + '.md'
+        $заголовокEvidence = 'F5/F6 fault-injection: ' + $фault
+    } else {
+        $файлEvidence = 'printflow-failure-evidence.md'
+        $заголовокEvidence = 'F5/F6 runtime-доказательство (FAIL)'
+    }
+
+    # --- E. Итог (до записи evidence, чтобы войти в неё) -------------------
+    $happyПройден = $сценарийПройден -and ($неудачиОчистки.Count -eq 0) -and (-not $фault)
+
+    if ($фaultПрименён) {
+        $пасПоКонтракту = (-not $happyПройден)
+        Запись "PASS_OF_CONTRACT: $пасПоКонтракту (fault=$фault — инъекция корректно обнаружена, скрипт не вернёт 0)"
+    }
+
+    # --- F. Единая запись evidence (после cleanup и финальных статусов) ----
+    $evidenceOk = ЗаписатьEvidence $файлEvidence $заголовокEvidence 'createDemoData=false' $журнал
+
+    if ($evidenceOk) {
+        Запись "evidence записан: $файлEvidence"
+    } else {
+        Запись 'FAIL: запись evidence не удалась — exit 1'
+    }
+
+    # --- G. Код возврата ----------------------------------------------------
+    if ($happyПройден -and $evidenceOk) {
+        $exitCode = 0
+        Запись 'PRINTFLOW PASS: True'
+    } else {
+        $exitCode = 1
+        Запись 'PRINTFLOW PASS: False'
+    }
 }
 
 exit $exitCode

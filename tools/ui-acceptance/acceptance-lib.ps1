@@ -5,7 +5,10 @@
 # - fingerprint реального профиля через [Environment]::GetFolderPath
 #   (переменная APPDATA не используется — она может отличаться от
 #   фактического пути Known Folder).
-$ErrorActionPreference = 'Continue'
+# Fail-closed: $ErrorActionPreference = 'Stop' — любая ошибка cmdlet-а
+# превращается в исключение и ненулевой код возврата драйвера; никакие
+# шаги не заглушаются SilentlyContinue.
+$ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
@@ -147,11 +150,15 @@ function Get-ApplicationDataFolder {
 }
 
 function Test-ProfileFingerprint([string]$dir) {
+    # Отпечаток профиля — fail-closed: ошибка перечисления каталога или
+    # чтения файла бросает исключение (частичный отпечаток невозможен).
+    # -Force включает скрытые файлы: невидимый для перечисления файл
+    # мог бы измениться незамеченным.
     $map = @{}
     if (-not (Test-Path $dir)) { return $map }
     $хеш = [System.Security.Cryptography.SHA256]::Create()
     try {
-        Get-ChildItem -Recurse -File $dir -ErrorAction SilentlyContinue | ForEach-Object {
+        Get-ChildItem -Recurse -File -Force $dir | ForEach-Object {
             $байты = $хеш.ComputeHash([System.IO.File]::ReadAllBytes($_.FullName))
             $sha = [System.BitConverter]::ToString($байты).Replace('-', '')
             $map[$_.FullName] = "$sha|$($_.LastWriteTimeUtc.Ticks)"
@@ -236,7 +243,13 @@ function Get-HarnessLines($h) {
 function Stop-Acceptance($h) {
     if ($h -eq $null -or $h.Proc -eq $null) { return $false }
     if ($h.Proc.HasExited) { return $false }
-    try { $h.Proc.StandardInput.WriteLine('CLOSE') } catch {}
+    try {
+        $h.Proc.StandardInput.WriteLine('CLOSE')
+    } catch {
+        # Неудачная доставка CLOSE означает, что harness уже завершается:
+        # сам по себе это не провал прогона — код возврата проверяется ниже.
+        Write-Host "  CLOSE не доставлен (harness завершается): $($_.Exception.Message)"
+    }
     if (-not $h.Proc.WaitForExit(20000)) {
         $h.Proc.Kill()
         $h.Proc.WaitForExit()
@@ -276,7 +289,10 @@ function Dump-AllWindows([uint32]$procId) {
     return $список
 }
 
-# Пишет evidence-файл прогона; возвращает $true при успешной записи.
+# Единственный контролируемый путь записи evidence-файла прогона.
+# Вызывается ОДИН раз после завершения cleanup и фиксации финальных
+# статусов; возвращает $true при успешной записи (неудача записи —
+# сигнал драйверу выставить exit 1).
 function ЗаписатьEvidence([string]$относительныйПуть, [string]$заголовок, [string]$режимСтрока, $журнал) {
     try {
         $каталог = 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна'

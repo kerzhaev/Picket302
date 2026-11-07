@@ -114,18 +114,59 @@ public sealed class ИзолированныйПрофиль : IDisposable
     }
 
     /// <summary>
-    /// Исключение утилизации профиля: временный каталог не удалён — среда
-    /// не чистая. Бросается из <see cref="Dispose"/>, чтобы провал cleanup
-    /// делал тест красным (машинно видимый), а не только печатался.
+    /// Тестовый крючок: подменяет утилизацию состава, чтобы воспроизвести
+    /// её провал. <see langword="null"/> — штатная утилизация. Крючок
+    /// получает состав и обязан сам выполнить его утилизацию (инъекция
+    /// отказа ставится после реальной утилизации, чтобы cleanup остальных
+    /// шагов шёл в реалистичных условиях).
+    /// </summary>
+    internal Func<AppServices, Task>? ТестУтилизацияСостава { get; set; }
+
+    /// <summary>
+    /// Тестовый крючок: подменяет очистку пула соединений, чтобы
+    /// воспроизвести её провал. <see langword="null"/> — штатная очистка.
+    /// </summary>
+    internal Action? ТестОчисткаПула { get; set; }
+
+    /// <summary>
+    /// Исключение утилизации профиля: cleanup завершился с ошибкой или
+    /// временный каталог не удалён — среда не чистая. Бросается из
+    /// <see cref="Dispose"/>, чтобы провал cleanup делал тест красным
+    /// (машинно видимый), а не только печатался. Исходные причины всех
+    /// неудавшихся шагов сохраняются во вложенном
+    /// <see cref="AggregateException"/> и в <c>Data</c>.
     /// </summary>
     public sealed class ProfileCleanupException : InvalidOperationException
     {
-        /// <summary>Создаёт исключение с путём остаточного каталога.</summary>
-        /// <param name="каталог">Неудалённый каталог.</param>
-        public ProfileCleanupException(string каталог)
-            : base("ИзолированныйПрофиль: временный каталог не удалён после 5 попыток и остался: " + каталог)
+        /// <summary>Создаёт исключение утилизации с полной диагностикой.</summary>
+        /// <param name="каталог">Корень профиля.</param>
+        /// <param name="причины">Ошибки отдельных шагов cleanup.</param>
+        /// <param name="каталогОстался">Остался ли временный каталог.</param>
+        /// <param name="попытокУдаления">Число выполненных попыток удаления.</param>
+        public ProfileCleanupException(
+            string каталог,
+            IReadOnlyList<Exception> причины,
+            bool каталогОстался,
+            int попытокУдаления)
+            : base(
+                "ИзолированныйПрофиль: cleanup завершился с ошибкой (каталог: " + каталог
+                + "; каталог остался: " + каталогОстался
+                + "; попыток удаления: " + попытокУдаления
+                + (причины.Count > 0
+                    ? "; причины: " + string.Join(" | ", причины.Select(п => п.Message))
+                    : string.Empty)
+                + ")",
+                причины.Count > 0 ? new AggregateException(причины) : null)
         {
+            КаталогОстался = каталогОстался;
+            ПопытокУдаления = попытокУдаления;
         }
+
+        /// <summary>Остался ли временный каталог после всех попыток.</summary>
+        public bool КаталогОстался { get; }
+
+        /// <summary>Число выполненных попыток удаления каталога.</summary>
+        public int ПопытокУдаления { get; }
     }
 
     /// <summary>
@@ -144,52 +185,77 @@ public sealed class ИзолированныйПрофиль : IDisposable
 
         _утилизирован = true;
 
-        Exception? ошибкаОболочки = null;
-        Exception? ошибкаСостава = null;
+        // Каждый шаг cleanup изолирован: провал одного не отменяет
+        // остальные, а все причины собираются в общий итог — ничего не
+        // теряется ни в Console.Error, ни при последующих шагах.
+        var причины = new List<Exception>();
+        string? сообщениеОболочки = null;
+        string? сообщениеСостава = null;
+        string? сообщениеПула = null;
+        string? сообщениеУдаления = null;
 
-        // Оболочка, состав, пул и каталог освобождаются независимо: провал
-        // одного не должен оставить остальные необработанными.
         try
         {
             _оболочка?.Dispose();
         }
-        catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException)
+        catch (Exception ошибка)
         {
-            ошибкаОболочки = ошибка;
+            сообщениеОболочки = ошибка.Message;
+            причины.Add(Обернуть("утилизация оболочки", ошибка));
         }
 
         try
         {
-            _состав?.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        }
-        catch (Exception ошибка) when (ошибка is InvalidOperationException or ObjectDisposedException or SqliteException)
-        {
-            ошибкаСостава = ошибка;
-        }
-
-        try
-        {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (_состав is not null)
+            {
+                var утилизация = ТестУтилизацияСостава
+                    ?? (состав => состав.DisposeAsync().AsTask());
+                утилизация(_состав).GetAwaiter().GetResult();
+            }
         }
         catch (Exception ошибка)
         {
-            Console.Error.WriteLine("ИзолированныйПрофиль: ошибка очистки пула: " + ошибка.Message);
+            сообщениеСостава = ошибка.Message;
+            причины.Add(Обернуть("утилизация состава", ошибка));
         }
 
-        for (var попытка = 0; попытка < 5; попытка++)
+        try
         {
-            try
-            {
-                if (Directory.Exists(Корень))
-                {
-                    Directory.Delete(Корень, recursive: true);
-                }
+            var очистка = ТестОчисткаПула
+                ?? (() => Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools());
+            очистка();
+        }
+        catch (Exception ошибка)
+        {
+            сообщениеПула = ошибка.Message;
+            причины.Add(Обернуть("очистка пула соединений", ошибка));
+        }
 
+        // Каталог удаляется независимо, с повторными попытками: Windows
+        // нередко отдаёт IOException «directory not empty» на первом
+        // рекурсивном удалении. Удачная повторная попытка завершает шаг
+        // успешно (штатное поведение повторов, а не потерянная ошибка);
+        // неудача всех попыток — провал cleanup. Ошибка последней попытки
+        // попадает в диагностику выброшенного исключения.
+        var попытокУдаления = 0;
+        Exception? последняяОшибкаУдаления = null;
+
+        for (var попытка = 1; попытка <= 5; попытка++)
+        {
+            попытокУдаления = попытка;
+
+            if (!Directory.Exists(Корень))
+            {
                 break;
             }
-            catch (IOException)
+
+            try
             {
-                // Каталог ещё занят завершающимися соединениями — повторяем.
+                Directory.Delete(Корень, recursive: true);
+            }
+            catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+            {
+                последняяОшибкаУдаления = ошибка;
                 Thread.Sleep(200);
             }
         }
@@ -197,21 +263,28 @@ public sealed class ИзолированныйПрофиль : IDisposable
         if (Directory.Exists(Корень))
         {
             ОставшийсяКаталог = Корень;
+
+            if (последняяОшибкаУдаления is not null)
+            {
+                сообщениеУдаления = последняяОшибкаУдаления.Message;
+                причины.Add(Обернуть("удаление временного каталога", последняяОшибкаУдаления));
+            }
         }
 
-        // Ошибки утилизации и cleanup сообщаются вместе, чтобы ни одна не
-        // маскировала другую.
-        if (ошибкаОболочки is not null
-            || ошибкаСостава is not null
-            || ОставшийсяКаталог is not null)
+        // Любой провал cleanup — машинно видимый: исключение, а не печать.
+        if (причины.Count > 0 || ОставшийсяКаталог is not null)
         {
-            throw new ProfileCleanupException(ОставшийсяКаталог ?? Корень)
+            throw new ProfileCleanupException(
+                Корень, причины, ОставшийсяКаталог is not null, попытокУдаления)
             {
                 Data =
                 {
-                    ["ошибкаОболочки"] = ошибкаОболочки?.Message ?? string.Empty,
-                    ["ошибкаСостава"] = ошибкаСостава?.Message ?? string.Empty,
+                    ["ошибкаОболочки"] = сообщениеОболочки ?? string.Empty,
+                    ["ошибкаСостава"] = сообщениеСостава ?? string.Empty,
+                    ["ошибкаПула"] = сообщениеПула ?? string.Empty,
+                    ["ошибкаУдаления"] = сообщениеУдаления ?? string.Empty,
                     ["каталогОстался"] = ОставшийсяКаталог is not null,
+                    ["попытокУдаления"] = попытокУдаления,
                 },
             };
         }
@@ -233,20 +306,14 @@ public sealed class ИзолированныйПрофиль : IDisposable
         {
             // Занятый параллельным тестом каталог удалит последний тест.
         }
-
-        if (ошибкаОболочки is not null || ошибкаСостава is not null)
-        {
-            throw new ProfileCleanupException(Корень)
-            {
-                Data =
-                {
-                    ["ошибкаОболочки"] = ошибкаОболочки?.Message ?? string.Empty,
-                    ["ошибкаСостава"] = ошибкаСостава?.Message ?? string.Empty,
-                    ["каталогОстался"] = false,
-                },
-            };
-        }
     }
+
+    /// <summary>Оборачивает ошибку шага cleanup с именем шага.</summary>
+    /// <param name="шаг">Имя шага cleanup.</param>
+    /// <param name="ошибка">Исходная ошибка.</param>
+    /// <returns>Исключение с контекстом шага и сохранённой причиной.</returns>
+    private static InvalidOperationException Обернуть(string шаг, Exception ошибка) =>
+        new("ИзолированныйПрофиль: шаг cleanup «" + шаг + "» завершился ошибкой: " + ошибка.Message, ошибка);
 
     private bool _утилизирован;
 }
