@@ -767,6 +767,115 @@ emptybook/printflow — NOT_RUN_BY_SCOPE (запрещены постановк�
     COM_VERIFIED / PRINT_VERIFIED        — NOT_RUN_BY_SCOPE
     CODE_COVERAGE_MEASURED=false         — без изменений
 
+### 8.5. Статусы ревизии race-safety уборки дерева (восьмая серия замечаний, 2026-11-08)
+
+Закрыт race-condition в синтетической уборке дерева: первый запуск
+`test-treecleanup-synthetic.ps1` иногда завершался exit 1 с
+`TREE-CLEANUP-SYNTHETIC EXCEPTION: ERROR: The process "28840" not found.`
+
+**Причина гонки.** PowerShell 5.1 при `$ErrorActionPreference='Stop'`
+переводит stderr native-команды в terminating error. `taskkill` пишет в
+stderr «ERROR: The process "N" not found.» именно в гонке, когда
+процесс уже завершился между scan и taskkill — и исключение
+прерывало `Stop-HarnessTree` ДО финального post-scan: терялись
+`RemainingPids`, `UnconfirmedPids` и структурированный результат.
+
+**Исправление (общий production-like helper, не только тест C):**
+
+1. `Invoke-TaskKillSafe` — единая безопасная обёртка над
+   `taskkill /T /F /PID`: локальный `ErrorActionPreference='Continue'`
+   (stderr native-команды не превращается в terminating error) плюс
+   try/catch (исключение наружу не выходит), bounded wait, структурированный
+   результат `Attempted/Pid/Operation/ExitCode/Output/Exception/
+   NotFound/AlreadyExited/TimedOut/Success`. Not-found (код 128 или
+   «not found» в выводе) — это **признак гонки, а не успех**: окончательную
+   классификацию даёт post-scan.
+2. `Stop-HarnessTree`: прямые вызовы `taskkill` заменены на helper
+   (родитель и потомки); добавлены поля `DescendantKillResults`,
+   `DescendantKillErrors`, `AlreadyExitedPids`, `TaskKillRacePids`,
+   `TaskKillTimedOutPids` (существующие `TaskKillExitCode`, `KillOutput`,
+   `RemainingPids`, `UnconfirmedPids`, `TreeError`, `TreeConfirmed`,
+   `HarnessNotExited` сохранены). Гонка классифицируется:
+   процесс исчез и post-scan подтвердил отсутствие → benign race с
+   отметкой в диагностике (`TreeError` НЕ ставится); PID жив →
+   `RemainingPids` + `TreeOk=false`; идентичность не подтверждена →
+   `UnconfirmedPids` + `TreeOk=false`.
+3. **Пост-скан всегда выполняется** (отдельный шаг) и дополнен **прямой
+   проверкой каждого PID потомка первого скана**: после смерти родителя
+   потомки переподчиняются, и rescan по `ParentProcessId` их может не
+   найти — «дерево чисто» тогда означало бы «процесс не найден», а не
+   «процесс завершён». Идентичность сверяется по `CreationDate` (PID
+   reuse не приводит к убийству чужого процесса).
+4. `test-treecleanup-synthetic.ps1`: `ЗавершитьПоПид` — через
+   `Invoke-TaskKillSafe` (гонка диагностируется как already-exited race,
+   а не роняет suite); финальная уборка в `finally` изолирована
+   per-PID (ошибка одного не прерывает остальные).
+5. `test-driver-boundedwait.ps1`: все `taskkill` — через helper;
+   **evidence изолирован**: `P302_EVIDENCE_ROOT` направляет fault-evidence
+   во временный каталог, отслеживаемые файлы репозитория тестом не
+   перезаписываются; добавлена проверка side-effect hygiene (git
+   status до/после).
+
+**Детерминированные race-швы** (не полагаются на случайное окно между
+scan и taskkill):
+
+- `P302_TREE_FAULT=descendant-disappears-before-taskkill` — родитель
+  завершается БЕЗ `/T` (иначе `/T` убил бы всё дерево, и потомок не
+  дожил бы до стадии очистки), затем потомок исчезает сам перед
+  taskkill → taskkill честно возвращает not-found → post-scan
+  подтверждает отсутствие → `TreeOk=true`, в диагностике остаётся
+  отметка race (`TaskKillRacePids`).
+- `P302_TREE_FAULT=descendant-not-found-but-alive` — тот же сценарий, но
+  PID живой: `RemainingPids` непуст, `TreeError` содержит причину,
+  `TreeOk=false`.
+
+Инъекции `kill-fail`, `cim-fail`, `descendant-remains` остаются
+fail-closed (проверено в synthetic suite).
+
+Прогоны (2026-11-08, всё без UI/COM/печати):
+
+    TREE_CLEANUP_RACE_SAFE_VERIFIED=true      — Stop-HarnessTree больше
+                                               не бросает необработанное
+                                               исключение; гонка
+                                               диагностируется
+                                               структурированно
+    TREE_CLEANUP_REPEATABILITY_VERIFIED=true  — synthetic suite 10 прогонов
+                                               подряд: 10/10 PASS, 0 FAIL
+    SYNTHETIC_TREE_SUITE_VERIFIED=true        — synthetic suite PASS (48
+                                               проверок), exit 0
+    EVIDENCE_SIDE_EFFECT_FREE_VERIFIED=true   — driver-level suite не
+                                               изменяет tracked-файлы
+                                               (git status до/после
+                                               совпадает); evidence во
+                                               временном каталоге
+    DRIVER_NO_HANG_VERIFIED=true              — без изменений (седьмая
+                                               серия): watchdog не истёк
+    BUILD_DEBUG_VERIFIED / BUILD_RELEASE_VERIFIED / HARNESS_BUILD_VERIFIED
+                                           = true — 0 ошибок, 0 предупреждений
+    TEST_DEBUG_VERIFIED / TEST_RELEASE_VERIFIED = true — 1258/1258,
+                                               0 fail, 0 skip
+    LOCK_RELEASE_VERIFIED=true               — fault-прогоны: released=True
+    PROCESS_TREE_CLEANUP_VERIFIED=true       — tree suite PASS
+    PROCESS_TREE_POSTCHECK_VERIFIED=true     — post-scan всегда; прямая
+                                               проверка PID потомков
+    FAIL_CLOSED_VERIFIED=true                — kill-fail, cim-fail,
+                                               descendant-remains,
+                                               descendant-not-found-but-
+                                               alive — все failure
+    PROFILE_SAFETY_VERIFIED=true             — дельта 0/0/0, sentinel
+                                               отсутствует
+    TEMP_CLEANUP_VERIFIED=true               — все префиксы 0, keep=5,
+                                               .bak/.lock=0, процессов 0
+    EVIDENCE_WRITE_VERIFIED=PARTIAL          — fault-evidence записаны и
+                                               проверены; runtime happy-
+                                               запись — при разрешённом
+                                               UI-прогоне
+    UI_RUNTIME_VERIFIED=NOT_RUN_BY_SCOPE     — UI не запускался
+    REFERENCE_VISUAL_VERIFIED=PARTIAL         — без изменений; 70% —
+                                               целевой ориентир
+    COM_VERIFIED / PRINT_VERIFIED = NOT_RUN_BY_SCOPE
+    CODE_COVERAGE_MEASURED=false              — без изменений
+
 ## 9. Ограничения и что не проверялось
 
 - COM-активация, реестр, SCM — вне области (не запускались).

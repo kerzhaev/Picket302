@@ -503,6 +503,46 @@ guard-negative: happy 0, пять fault'ов exit 1; перепись чиста
 не запускались (запрещены постановкой) — NOT_RUN_BY_SCOPE; таблица
 флагов — `docs/UX-REDESIGN-2026-11-05.md`, раздел 8.4.
 
+**Ревизия race-safety уборки дерева 2026-11-08 (восьмая серия замечаний).**
+Устранён race-condition, из-за которого `test-treecleanup-synthetic.ps1`
+иногда падал с `TREE-CLEANUP-SYNTHETIC EXCEPTION: ERROR: The process "N"
+not found.`: PowerShell 5.1 при `$ErrorActionPreference='Stop'` переводит
+stderr native-команды в terminating error, а `taskkill` пишет в stderr
+«not found» именно в гонке, когда процесс исчез между scan и taskkill —
+исключение прерывало `Stop-HarnessTree` до финального post-scan. Введён
+общий helper `Invoke-TaskKillSafe` (локальный `ErrorActionPreference=
+'Continue'` + try/catch, bounded wait, структурированный результат
+`Attempted/Pid/ExitCode/Output/Exception/NotFound/AlreadyExited/TimedOut/
+Success`; not-found — признак гонки, а не успех). `Stop-HarnessTree`
+переведён на helper (родитель и потомки), добавлены поля
+`DescendantKillResults/DescendantKillErrors/AlreadyExitedPids/
+TaskKillRacePids/TaskKillTimedOutPids`; пост-скан выполняется ВСЕГДА и
+дополнен прямой проверкой каждого PID потомка первого скана (после смерти
+родителя потомки переподчиняются — rescan их мог не найти; идентичность
+сверяется по CreationDate, PID reuse не приводит к убийству чужого
+процесса). Детерминированные race-швы:
+`P302_TREE_FAULT=descendant-disappears-before-taskkill` (benign: потомок
+исчезает сам, taskkill → not-found, post-scan подтверждает отсутствие →
+TreeOk=true с отметкой race) и `descendant-not-found-but-alive` (PID
+живой → RemainingPids, TreeError, TreeOk=false); `kill-fail`, `cim-fail`,
+`descendant-remains` остаются fail-closed. `ЗавершитьПоПид` и финальная
+уборка синтетики — через helper, ошибка одного PID не роняет suite.
+Evidence driver-level suite изолирован через `P302_EVIDENCE_ROOT`
+(fault-evidence во временный каталог, tracked-файлы репозитория не
+перезаписываются) + проверка side-effect hygiene (git status до/после).
+Контроль: **synthetic suite 10 прогонов подряд — 10/10 PASS** (48
+проверок каждый), driver-level suite 3/3 PASS (оба драйвера exit 1,
+watchdog не истёк, lock released/disposed=True, sentinel удалён,
+synthetic PID отсутствуют, рабочее дерево не изменилось); parse 6 файлов —
+0 ошибок; `rg -nP "\.WaitForExit\(\s*\)" tools/ui-acceptance` — 0
+совпадений; сборки Debug/Release/harness 0/0; lock-тесты 4/4;
+guard/ownership/postcondition 27/27; полные non-COM Debug и Release
+**1258/1258**; перепись чистая (процессы 0, префиксы 0, keep=5,
+.bak/.lock=0, sentinel отсутствует, production 4 файла). UI/COM/печать не
+запускались. Флаги — `docs/UX-REDESIGN-2026-11-05.md`, раздел 8.5
+(TREE_CLEANUP_RACE_SAFE_VERIFIED, TREE_CLEANUP_REPEATABILITY_VERIFIED,
+SYNTHETIC_TREE_SUITE_VERIFIED, EVIDENCE_SIDE_EFFECT_FREE_VERIFIED).
+
 ## Приложение: сквозной приёмочный сценарий
 
 `tests/Picket302.Tests/Acceptance/AcceptanceScenarioTests.cs` — `Сквозной_сценарий_приёмки_от_демо_базы_до_восстановления_архива`:
