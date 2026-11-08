@@ -32,8 +32,10 @@ using Picket302.Printing.Preview;
 // Для обратного канала действует тот же явный контракт: Windows PowerShell
 // 5.1 при первом обращении к Process.StandardInput может отправить UTF-8 BOM,
 // а без фиксированной кодировки перенаправленный stdin декодируется OEM-кодовой
-// страницей и превращает даже ASCII-команду в «Я╗┐COUNTS». Драйверы отправляют
-// UTF-8 без BOM, поэтому harness должен явно читать stdin как UTF-8.
+// страницей и превращает даже ASCII-команду в «Я╗┐COUNTS». Драйверы формируют
+// команды в UTF-8; Windows PowerShell 5.1 может добавить один BOM при первом
+// обращении к StandardInput, поэтому harness явно читает stdin как UTF-8 и
+// принимает этот маркер только в начале протокола.
 Console.InputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 Console.SetOut(new StreamWriter(
     Console.OpenStandardOutput(),

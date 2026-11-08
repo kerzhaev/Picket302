@@ -243,11 +243,11 @@ function Start-Acceptance([string]$exe, [string]$mode, [string]$profileRoot, [bo
     }
 }
 
-# Отправляет одну строку в stdin harness в UTF-8 без BOM.
-# Нельзя использовать StandardInput.WriteLine: StreamWriter Windows
-# PowerShell 5.1 при первой записи добавляет UTF-8 BOM, и harness получает
-# «Я╗┐SEEDFIELDS» вместо команды. Драйверские команды ASCII, но UTF-8
-# используется намеренно как единый контракт протокола.
+# Отправляет одну строку в stdin harness в UTF-8. Запись байтами не добавляет
+# собственный BOM, но Windows PowerShell 5.1 создаёт StreamWriter при первом
+# обращении к Process.StandardInput и может отправить его автоматически.
+# Поэтому harness принимает ровно один такой маркер в начале протокола;
+# последующие команды остаются обычными UTF-8-строками без префикса.
 function Send-HarnessCommand($h, [string]$command) {
     if ($null -eq $h -or $null -eq $h.Proc -or $h.Proc.HasExited) {
         throw 'Нельзя отправить команду: harness уже завершён.'
