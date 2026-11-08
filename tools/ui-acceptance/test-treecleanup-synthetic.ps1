@@ -409,7 +409,16 @@ try {
         Проверить ($результатХ.TimedOut -eq $true) 'H: TimedOut=true'
         Проверить ($результатХ.Success -eq $false) 'H: Success=false'
         Проверить ($null -eq $результатХ.ExitCode) 'H: ExitCode=null (процесс не завершился штатно)' ("$($результатХ.ExitCode)")
-        Проверить ($результатХ.ContainsKey('Exception')) 'H: поле Exception присутствует'
+        # Exception — это заявленное поле результата, а не только
+        # Диагностика: проверяется СОДЕРЖИМОЕ (непустое + причина
+        # таймаута), а не голый факт наличия ключа.
+        Проверить (-not [string]::IsNullOrWhiteSpace([string]$результатХ.Exception)) 'H: Exception непустой при таймауте' ("[$($результатХ.Exception)]")
+        Проверить (
+            ([string]$результатХ.Exception -match 'timeout') -or
+            ([string]$результатХ.Exception -match 'таймаут') -or
+            ([string]$результатХ.Exception -match 'не завершилась') -or
+            ([string]$результатХ.Exception -match 'bounded')) 'H: Exception содержит причину timeout' ("[$($результатХ.Exception)]")
+        Проверить ([string]$результатХ.Exception -match "метка=helper-timeout") 'H: Exception содержит метку операции' ("[$($результатХ.Exception)]")
         Проверить ($результатХ.NotFound -eq $false) 'H: таймаут НЕ трактуется как not-found'
         # Фактическое ожидание ограничено таймаутом; общий elapsed — таймаут
         # плюс небольшой фиксированный запас на запуск и сбор диагностики.

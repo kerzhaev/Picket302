@@ -56,12 +56,6 @@ namespace Picket302.Tests.Acceptance;
 [Collection("ПрофильПриложения")]
 public sealed class AcceptanceScenarioTests : IDisposable
 {
-    /// <summary>Имя файла блокировки сериализации COM-приёмки в %TEMP%:
-    /// регистрация и завершение сервера используют общие ключи
-    /// HKCU\Software\Classes, и два одновременных тестовых процесса
-    /// порождают гонки unregister/register.</summary>
-    private const string ФайлБлокировкиПриёмки = "Picket302.ComAcceptance.lock";
-
     private readonly string _каталог = Path.Combine(
         Path.GetTempPath(),
         "Picket302Acceptance_" + Guid.NewGuid().ToString("N"));
@@ -969,39 +963,18 @@ public sealed class AcceptanceScenarioTests : IDisposable
     /// <summary>
     /// Захватывает файл блокировки COM-приёмки на весь сценарий: одновременный
     /// тестовый процесс ждёт освобождения в пределах указанного времени.
-    /// Блокировка не привязана к потоку и освобождается при закрытии потока,
-    /// в том числе при аварийном завершении процесса.
+    /// Реализация — <see cref="БлокировкаФайлаПриёмки.Захватить"/>:
+    /// <c>FileOptions.DeleteOnClose</c> гарантирует, что
+    /// <c>%TEMP%\Picket302.ComAcceptance.lock</c> удаляется ОС при закрытии
+    /// потока (штатном или аварийном), а <c>FileShare.None</c> сохраняет
+    /// межпроцессную сериализацию. Регистрация и завершение COM-сервера
+    /// используют общие ключи HKCU\Software\Classes, и два одновременных
+    /// тестовых процесса порождают гонки unregister/register.
     /// </summary>
     /// <param name="ожидание">Полное время ожидания освобождения.</param>
     /// <returns>Открытый поток блокировки.</returns>
-    private static FileStream ЗахватитьБлокировкуПриёмки(TimeSpan ожидание)
-    {
-        var путь = Path.Combine(Path.GetTempPath(), ФайлБлокировкиПриёмки);
-        var дедлайн = DateTime.UtcNow + ожидание;
-
-        while (true)
-        {
-            try
-            {
-                return new FileStream(
-                    путь,
-                    FileMode.OpenOrCreate,
-                    FileAccess.ReadWrite,
-                    FileShare.None);
-            }
-            catch (IOException)
-            {
-                if (DateTime.UtcNow >= дедлайн)
-                {
-                    throw new IOException(
-                        "Блокировка COM-приёмки не освобождена за 180 секунд: " +
-                        "параллельный тестовый прогон выполняет собственный COM-сценарий.");
-                }
-
-                Thread.Sleep(500);
-            }
-        }
-    }
+    private static FileStream ЗахватитьБлокировкуПриёмки(TimeSpan ожидание) =>
+        БлокировкаФайлаПриёмки.Захватить(БлокировкаФайлаПриёмки.ПутьПоУмолчанию(), ожидание);
 
     /// <summary>
     /// Останавливает процессы локального COM-сервера: сначала плавно — через

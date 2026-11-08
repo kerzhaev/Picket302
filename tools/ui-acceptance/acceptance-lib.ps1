@@ -287,7 +287,11 @@ function Stop-Acceptance($h) {
 #
 # При таймауте дочерний процесс принудительно завершается (Kill), после
 # чего выполняется ТОЛЬКО ограниченное ожидание (бесконечный
-# WaitForExit запрещён). Исключение наружу не выходит.
+# WaitForExit запрещён). Исключение наружу не выходит. При таймауте
+# поле Exception ОБЯЗАНО быть непустым и содержать причину (метку,
+# pid, таймаут): это заявленная часть результата — потребители
+# (Invoke-TaskKillSafe → Stop-HarnessTree → TreeError) читают именно
+# Exception, а не только Диагностика.
 function Invoke-BoundedCommand {
     param(
         [string]$FilePath,
@@ -358,13 +362,20 @@ function Invoke-BoundedCommand {
         if (-not $завершился) {
             $результат.TimedOut = $true
             $результат.Диагностика = "команда не завершилась за $TimeoutMs мс (метка=$label, pid=$($child.Id))"
+            # Exception обязателен при таймауте: это заявленное поле
+            # результата, а не только Диагностика. Invoke-TaskKillSafe
+            # копирует Exception наружу — нулевая диагностика timeout
+            # терялась бы потребителями.
+            $результат.Exception = $результат.Диагностика
             Write-Host "  BOUNDED-RUN TIMEOUT: $($результат.Диагностика)"
 
             try {
                 $child.Kill()
                 $результат.Killed = $true
             } catch {
-                $результат.Exception = "Kill не выполнен: $($_.Exception.Message)"
+                # Причину таймаута НЕ затираем: ошибка Kill добавляется
+                # к существующему сообщению.
+                $результат.Exception = ($результат.Exception + '; Kill не выполнен: ' + $_.Exception.Message)
             }
 
             # После Kill — ТОЛЬКО ограниченное ожидание.
