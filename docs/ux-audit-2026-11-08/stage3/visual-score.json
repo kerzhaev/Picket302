@@ -1,0 +1,62 @@
+{
+  "reference": "https://github.com/kerzhaev/Picket302",
+  "generatedAtUtc": "2026-11-08T18:00:00Z",
+  "note": "origin = the audited repository itself (HEAD aee4ea8, byte-identical). The published repo contains no image files, so the only pixel reference is the legacy main-window screenshot inside docs/ux-audit-2026-11-03/референс-2026-11-05/. Screens without a pixel reference are UNVERIFIED, not scored (brief §9).",
+  "screens": [
+    {
+      "id": "main-1280x720",
+      "referenceAvailable": true,
+      "score": 90,
+      "criticalDefects": [],
+      "evidence": [
+        "docs/ux-audit-2026-11-03/референс-2026-11-05/01-главное-адресная-книга.png",
+        "%TEMP%/p302-evidence-2026-11-08-stage3/main-1280x720.png",
+        "MainShellNarrowLayoutTests (6/6)",
+        "DialogAccessibilityContractTests (16/16)"
+      ]
+    },
+    {
+      "id": "main-1000x700",
+      "referenceAvailable": true,
+      "score": 90,
+      "criticalDefects": [],
+      "evidence": [
+        "docs/ux-audit-2026-11-03/референс-2026-11-05/01-главное-адресная-книга.png",
+        "%TEMP%/p302-evidence-2026-11-08-stage3/main-1000x700.png",
+        "MainShellNarrowLayoutTests.ГлавныйЭкран_1000x700_КнопкиДействий_ВКлиентскойОбласти"
+      ]
+    },
+    { "id": "address-book-with-data", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["main-1280x720.png (seeded)"] },
+    { "id": "address-book-empty", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["01-адресная-книга-пустая-1280x720.png", "emptybook-happy-evidence.md"] },
+    { "id": "counterparty-card", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["05-counterparty-card.png", "FormCounterpartyLayoutTests (9/9)"] },
+    { "id": "counterparty-three-addresses", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["05-counterparty-card.png"] },
+    { "id": "counterparty-custom-fields", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["05-counterparty-card.png"] },
+    { "id": "grid-long-values", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["main-1280x720.png (seeded long names)"] },
+    { "id": "grid-appearance-dialog", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["07-grid-appearance.png", "FormGridAppearanceTests (4/4)"] },
+    { "id": "distribution-editor", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["10-distribution-editor.png"] },
+    { "id": "mail-card", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["06-mail-card.png", "20-карточка-отправления-f5.png", "MailEditFormTests (5/5)"] },
+    { "id": "print-dialog-current-envelope", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["21-диалог-печати-f5.png", "PrintDialogsTests (16/16)"] },
+    { "id": "print-dialog-distribution", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["printflow-happy-evidence.md"] },
+    { "id": "feed-orientation-dialog", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["25-подача-конвертов-*.png"] },
+    { "id": "print-preview", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["32-предпросмотр-с-полями.png", "22-предпросмотр-f6.png", "previewflow-happy-evidence.md (PREVIEW-SCAN)"] },
+    { "id": "sent-tab", "referenceAvailable": false, "status": "NOT_CAPTURED" },
+    { "id": "sent-tab-empty", "referenceAvailable": false, "status": "NOT_CAPTURED" },
+    { "id": "blank-editor", "referenceAvailable": false, "status": "UNVERIFIED", "evidence": ["08-blank-editor.png"] },
+    { "id": "clipart-picker", "referenceAvailable": false, "status": "UNVERIFIED", "criticalDefects": [], "evidence": ["09-clipart-picker.png", "FormClipartPickerTests (4/4, incl. Show regression)"] },
+    { "id": "no-address-error", "referenceAvailable": false, "status": "RUNTIME_VERIFIED", "evidence": ["09-no-address-warning.png", "10-no-address-warning-f6.png", "noaddress-happy-evidence.md"] },
+    { "id": "missing-template-error", "referenceAvailable": false, "status": "NOT_CAPTURED" },
+    { "id": "missing-printer-error", "referenceAvailable": false, "status": "NOT_CAPTURED" },
+    { "id": "paper-size-warning", "referenceAvailable": false, "status": "NOT_CAPTURED" },
+    { "id": "narrow-1000x700", "referenceAvailable": false, "status": "RUNTIME_VERIFIED", "evidence": ["main-1000x700.png", "MainShellNarrowLayoutTests"] },
+    { "id": "window-1280x720", "referenceAvailable": false, "status": "RUNTIME_VERIFIED", "evidence": ["main-1280x720.png"] },
+    { "id": "os-scale-125", "referenceAvailable": false, "status": "NOT_RUN_ON_HOST" },
+    { "id": "os-scale-150", "referenceAvailable": false, "status": "NOT_RUN_ON_HOST" }
+  ],
+  "scoredScreens": 2,
+  "screensWithReference": 2,
+  "weightedScore": 90,
+  "weightedScoreNote": "Only reference-bearing screens are averaged (brief §9). Both scored screens are the same surface at two sizes; single-surface score 18/20.",
+  "criticalDefects": [],
+  "status": "PARTIAL",
+  "statusNote": "PARTIAL, not PASS: 24 of 26 surfaces have no pixel reference (REFERENCE_SCREEN_UNAVAILABLE / NOT_CAPTURED / NOT_RUN_ON_HOST); visual similarity is proven only for the main screen. No open critical defects."
+}
