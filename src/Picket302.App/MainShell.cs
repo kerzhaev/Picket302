@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using Microsoft.Data.Sqlite;
 using System.Globalization;
 using System.Windows.Forms;
@@ -45,6 +45,13 @@ namespace Picket302.App;
 /// </remarks>
 public sealed class MainShell : Form
 {
+    /// <summary>
+    /// Маркер версии раскладки панели отображения: печатается acceptance-
+    /// LAYOUTCHECK-ом в evidence каждого прогона — расхождение с бинарником
+    /// доказывает исполнение устаревшей сборки (ENV3-01, SMB-инкрементал).
+    /// </summary>
+    public const string МаркерРаскладкиПанелиОтображения = "lay3-01-top-dock";
+
     private const int ИдентификаторГорячейКлавиши = 0xA302;
     private const int СообщениеГорячейКлавиши = 0x0312;
 
@@ -1004,11 +1011,18 @@ public sealed class MainShell : Form
         // Каждая пара переключателей — собственная строка таблицы без рамки
         // (F-E16): в общем контейнере отметка «Адрес получателя» снимала
         // «С логотипом».
+        // Dock=Top, а не Fill (регрессия LAY3-01, 2026-11-09): при Fill
+        // AutoSize таблицы игнорируется — PreferredSize считался по
+        // НЕперенесённым высотам рядов, а при реальной раскладке в узкой
+        // колонке ряды переносились и переполняли зажатую высоту (нижний
+        // ряд «Клипарт» уходил за клиент на ~77 px на 96 DPI). Dock=Top
+        // растит таблицу (и группу) по фактическому содержимому.
         var переключатели = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             ColumnCount = 1,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Padding = new Padding(4, 2, 4, 2),
         };
 
@@ -1029,9 +1043,11 @@ public sealed class MainShell : Form
             AutoSize = true,
         };
 
+        // Без Dock=Fill (регрессия LAY3-01): AutoSize-ряд с Dock=Fill давал
+        // PreferredSize без учёта переноса; без Dock ряд честно считает
+        // высоту при ширине ячейки и переносит содержимое.
         var рядЛоготипа = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
 
@@ -1054,7 +1070,6 @@ public sealed class MainShell : Form
 
         var рядАдреса = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true,
@@ -1095,7 +1110,6 @@ public sealed class MainShell : Form
         // графического элемента для выбранного получателя и его удаление.
         var рядКлипарта = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true,

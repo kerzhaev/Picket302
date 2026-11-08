@@ -1354,6 +1354,8 @@ static void ПроверитьКомпоновку()
         return;
     }
 
+    var маркер = MainShell.МаркерРаскладкиПанелиОтображения;
+
     foreach (var форма in формы)
     {
         var нулевых = 0;
@@ -1420,7 +1422,7 @@ static void ПроверитьКомпоновку()
         }
 
         Console.Out.WriteLine(
-            $"LAYOUTCHECK форма={форма.Name} size={форма.Width}x{форма.Height} dpi={форма.DeviceDpi} "
+            $"LAYOUTCHECK маркер={маркер} форма={форма.Name} size={форма.Width}x{форма.Height} dpi={форма.DeviceDpi} "
             + $"нулевыхКнопок={нулевых} вне={вне} "
             + $"вЭкране={ВГраницахЭкрана(форма)} "
             + $"примеры=[{string.Join(",", примеры)}]");

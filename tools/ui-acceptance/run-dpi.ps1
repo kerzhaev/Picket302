@@ -104,7 +104,8 @@ function ПроверитьКомпоновкуDpi([int]$цельDpi) {
     }
 
     $все = @(Get-HarnessLines $h)
-    $строки = @($все[$грань..($все.Count - 1)] | Where-Object { $_ -match '^LAYOUTCHECK форма=' })
+    # Формат строки с маркером раскладки (свежесть бинарника, ENV3-01).
+    $строки = @($все[$грань..($все.Count - 1)] | Where-Object { $_ -match '^LAYOUTCHECK маркер=lay3-01-top-dock форма=' })
 
     if ($строки.Count -eq 0) {
         Запись 'FAIL: строки LAYOUTCHECK отсутствуют'
@@ -116,8 +117,14 @@ function ПроверитьКомпоновкуDpi([int]$цельDpi) {
     foreach ($строка in $строки) {
         Запись "LAYOUT: $($строка -replace '^LAYOUTCHECK ', '')"
 
+        if ($строка -notmatch 'маркер=lay3-01-top-dock ') {
+            $всёХорошо = $false
+            Запись 'FAIL: маркер раскладки не свежий (ENV3-01 — устаревший бинарник)'
+        }
+
         if ($строка -notmatch 'нулевыхКнопок=0 ') { $всёХорошо = $false }
         if ($строка -notmatch 'вЭкране=True') { $всёХорошо = $false }
+        if ($строка -notmatch ' вне=0 ') { $всёХорошо = $false }
         if ($строка -notmatch "dpi=$цельDpi ") { $всёХорошо = $false }
     }
 
@@ -283,8 +290,13 @@ try {
         Start-Sleep -Seconds 2
         $компоновка5 = ПроверитьКомпоновкуDpi 96
         Запись "компоновка 100 %: $компоновка5"
+
+        Захват $h.Hwnd (Join-Path $out '54-main-dpi100.png') | Out-Null
+        $размер54 = (Get-Item (Join-Path $out '54-main-dpi100.png') -ErrorAction SilentlyContinue).Length
+        Запись "скриншот D5: 54-main-dpi100.png ($размер54 байт)"
+
         $жив5 = [AccWin]::Responsive($h.Hwnd, 5000)
-        $этапы['D5 возврат-100-процентов'] = ($компоновка5 -and $жив5)
+        $этапы['D5 возврат-100-процентов'] = ($компоновка5 -and $жив5 -and $размер54 -gt 0)
     }
 
     foreach ($ключ in $этапы.Keys) {
