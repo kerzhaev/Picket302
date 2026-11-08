@@ -79,4 +79,48 @@ public sealed class FormClipartPickerTests
         Assert.Null(диалог.ВыбранныйId);
         Assert.Null(диалог.ВыбранныйPng);
     }
+
+    /// <summary>
+    /// Регрессия 2026-11-08: показ диалога НЕ падает с
+    /// «ArgumentException: Parameter is not valid» и значки каталога доступны
+    /// после создания дескриптора списка.
+    /// </summary>
+    /// <remarks>
+    /// Дефект: <c>ЗаполнитьКаталог</c> добавляла в ImageList исходный
+    /// рисунок, привязанный к потоку, и уничтожала его в конце итерации.
+    /// ImageList читает изображения отложенно — при создании дескриптора
+    /// списка на первый показ формы — и падал по уничтоженному Image
+    /// (стек: ListView.OnHandleCreated → ImageList.get_Handle →
+    /// CreateBitmap → Image.get_Width). Существующие тесты дефект не ловили,
+    /// потому что не показывали форму. Коллекция WinFormsПрофиль сериализует
+    /// показ форм между тестами.
+    /// </remarks>
+    [Fact]
+    public void Диалог_ПоказФормы_ЗначкиДоступныПослеСозданияДескриптора()
+    {
+        var каталог = new ClipartLibrary();
+        using var диалог = new FormClipartPicker(каталог);
+
+        var список = Обойти(диалог).OfType<ListView>().Single();
+
+        диалог.Show();
+        диалог.PerformLayout();
+        System.Windows.Forms.Application.DoEvents();
+
+        try
+        {
+            // Дескриптор списка создан при показе — значит, ImageList прочитал
+            // все добавленные изображения: сбой чтения уничтоженного рисунка
+            // проявился бы исключением на этой строке.
+            Assert.True(список.IsHandleCreated);
+            Assert.True(диалог.IsHandleCreated);
+
+            Assert.Equal(каталог.Items.Count, список.LargeImageList!.Images.Count);
+            Assert.Equal(каталог.Items.Count, список.Items.Count);
+        }
+        finally
+        {
+            диалог.Close();
+        }
+    }
 }

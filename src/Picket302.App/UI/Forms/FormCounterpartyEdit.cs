@@ -72,9 +72,12 @@ public sealed class FormCounterpartyEdit : Form
     private readonly TextBox _должность = new();
     private readonly TextBox _директор = new();
 
-    private readonly AddressEditor _юридическийАдрес = new("ЮРИДИЧЕСКИЙ АДРЕС:");
-    private readonly AddressEditor _фактическийАдрес = new("ФАКТИЧЕСКИЙ АДРЕС:");
-    private readonly AddressEditor _почтовыйАдрес = new("ПОЧТОВЫЙ АДРЕС:");
+    // Заголовки адресных блоков — обычными буквами: капитель допускается
+    // только для технических обозначений (ИНН, БИК, КПП) и заголовков
+    // столбцов таблиц (дизайн-контракт §2, правило C4).
+    private readonly AddressEditor _юридическийАдрес = new("Юридический адрес:");
+    private readonly AddressEditor _фактическийАдрес = new("Фактический адрес:");
+    private readonly AddressEditor _почтовыйАдрес = new("Почтовый адрес:");
 
     /// <summary>
     /// Адаптивная сетка трёх адресных блоков вкладки «Реквизиты»: две колонки
@@ -437,10 +440,15 @@ public sealed class FormCounterpartyEdit : Form
         _сохранить.Location = new Point(8, 4);
         _сохранить.Click += (_, _) => Сохранить();
 
+        // Доступные имена кнопок обязательны (дизайн-контракт §6, A1).
+        _сохранить.AccessibleName = "Сохранить карточку контрагента";
+        _сохранить.AccessibleDescription = "Сохраняет контрагента и закрывает карточку.";
+
         _отмена.Text = "Отмена";
         _отмена.Size = new Size(90, 24);
         _отмена.Location = new Point(104, 4);
         _отмена.DialogResult = DialogResult.Cancel;
+        _отмена.AccessibleName = "Закрыть карточку контрагента без сохранения";
 
         панель.Controls.Add(_сохранить);
         панель.Controls.Add(_отмена);

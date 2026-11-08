@@ -37,6 +37,10 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- Сборщик покрытия кода (аудит UX, серия stage3 2026-11-08): измеряемое
+         покрытие вместо декларации «не измерялось». Collector работает внутри
+         testhost, отдельного агента и внешнего сервиса не требует. -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
   </ItemGroup>
 
 </Project>

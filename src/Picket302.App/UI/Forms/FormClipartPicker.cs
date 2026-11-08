@@ -20,6 +20,14 @@ public sealed class FormClipartPicker : Form
     private readonly Button _отмена = new();
 
     /// <summary>
+    /// Значки, переданные в ImageList: WinForms читает их отложенно (при
+    /// создании дескриптора списка), поэтому копии держатся живыми до
+    /// утилизации формы и освобождаются в <see cref="Dispose"/>. Повторная
+    /// утилизация безопасна: <c>Image.Dispose</c> идемпотентен.
+    /// </summary>
+    private readonly List<Bitmap> _значкиДляОсвобождения = [];
+
+    /// <summary>
     /// Создаёт диалог выбора клипартa.
     /// </summary>
     /// <param name="каталог">Локальный каталог клипартов.</param>
@@ -110,10 +118,14 @@ public sealed class FormClipartPicker : Form
         _выбрать.AutoSize = true;
         _выбрать.Enabled = false;
         _выбрать.DialogResult = DialogResult.OK;
+        // Доступные имена кнопок обязательны (дизайн-контракт §6, A1).
+        _выбрать.AccessibleName = "Выбрать клипарт";
+        _выбрать.AccessibleDescription = "Назначает выбранный элемент логотипом получателя.";
 
         _отмена.Text = "Отмена";
         _отмена.AutoSize = true;
         _отмена.DialogResult = DialogResult.Cancel;
+        _отмена.AccessibleName = "Закрыть выбор клипарта без назначения";
 
         var кнопки = new FlowLayoutPanel
         {
@@ -138,6 +150,18 @@ public sealed class FormClipartPicker : Form
     }
 
     /// <summary>Заполняет список элементами каталога.</summary>
+    /// <remarks>
+    /// Копия растра добавляется в ImageList, а не исходный рисунок: WinForms
+    /// ImageList читает добавленные изображения ОТЛОЖЕННО — при создании
+    /// дескриптора списка (первый показ формы). Исходный рисунок привязан к
+    /// потоку и уничтожается в конце итерации, поэтому при показе формы
+    /// ImageList.read обращался к уничтоженному Image и падал
+    /// «ArgumentException: Parameter is not valid» (стек:
+    /// ListView.OnHandleCreated → ImageList.get_Handle → CreateBitmap →
+    /// Image.get_Width; runtime-доказательство 2026-11-08). Копия
+    /// <c>new Bitmap(источник)</c> отвязана от потока и живёт до утилизации
+    /// формы; освобождение — в <see cref="Dispose"/>.
+    /// </remarks>
     private void ЗаполнитьКаталог()
     {
         var значки = _список.LargeImageList!;
@@ -150,9 +174,12 @@ public sealed class FormClipartPicker : Form
             }
 
             using var поток = new MemoryStream(png);
-            using var рисунок = Image.FromStream(поток);
+            using var источник = Image.FromStream(поток);
 
-            значки.Images.Add(элемент.Id, рисунок);
+            var копия = new Bitmap(источник);
+            _значкиДляОсвобождения.Add(копия);
+
+            значки.Images.Add(элемент.Id, копия);
 
             var пункт = new ListViewItem(элемент.Name)
             {
@@ -223,5 +250,27 @@ public sealed class FormClipartPicker : Form
             _предпросмотр.Image?.Dispose();
             _предпросмотр.Image = null;
         }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Освобождает значки, переданные в ImageList (см.
+    /// <see cref="ЗаполнитьКаталог"/>): ImageList не гарантирует утилизацию
+    /// исходных изображений, а без показа формы дескриптор списка может так
+    /// и не создаться — тогда владельцем остаётся форма.
+    /// </remarks>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            foreach (var значок in _значкиДляОсвобождения)
+            {
+                значок.Dispose();
+            }
+
+            _значкиДляОсвобождения.Clear();
+        }
+
+        base.Dispose(disposing);
     }
 }

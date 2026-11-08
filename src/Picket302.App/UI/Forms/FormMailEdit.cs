@@ -100,6 +100,11 @@ public sealed class FormMailEdit : Form
             Location = new Point(244, 272),
         };
 
+        // Доступное имя кнопки обязательно (дизайн-контракт §6, A1): без него
+        // программа чтения с экрана объявляет кнопку безымянной, хотя подпись
+        // «ОК» нарисована.
+        кнопкаОк.AccessibleName = "Подтвердить карточку отправления";
+
         var кнопкаОтмена = new Button
         {
             Text = "Отмена",
@@ -107,6 +112,8 @@ public sealed class FormMailEdit : Form
             Size = new Size(110, 28),
             Location = new Point(360, 272),
         };
+
+        кнопкаОтмена.AccessibleName = "Закрыть карточку отправления без сохранения";
 
         Controls.AddRange(new Control[]
         {

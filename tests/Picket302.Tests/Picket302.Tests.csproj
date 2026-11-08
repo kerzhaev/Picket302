@@ -21,6 +21,14 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- Сборщик покрытия: измерение линий и ветвей (аудит UX, серия stage3
+         2026-11-08). Подключается только как сборщик данных для прогона
+         `dotnet test` с параметром collect "XPlat Code Coverage"; на обычный
+         прогон тестов не влияет. -->
+    <PackageReference Include="coverlet.collector">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup Label="Инфраструктурный стек для тестов слоя данных (§10.1, §11.2)">

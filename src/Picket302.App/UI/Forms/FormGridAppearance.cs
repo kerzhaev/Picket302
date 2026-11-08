@@ -151,6 +151,8 @@ public sealed class FormGridAppearance : Form
         _сохранить.Text = "Сохранить";
         _сохранить.Size = new Size(90, 24);
         _сохранить.Location = new Point(258, 396);
+        // Доступные имена кнопок обязательны (дизайн-контракт §6, A1).
+        _сохранить.AccessibleName = "Сохранить вид таблиц";
         _сохранить.Click += (_, _) =>
         {
             DialogResult = DialogResult.OK;
@@ -160,12 +162,14 @@ public sealed class FormGridAppearance : Form
         _сброс.Text = "Сбросить";
         _сброс.Size = new Size(90, 24);
         _сброс.Location = new Point(10, 396);
+        _сброс.AccessibleName = "Сбросить оформление к значениям по умолчанию";
         _сброс.Click += (_, _) => ResetToDefaults();
 
         _отмена.Text = "Отмена";
         _отмена.Size = new Size(90, 24);
         _отмена.Location = new Point(354, 396);
         _отмена.DialogResult = DialogResult.Cancel;
+        _отмена.AccessibleName = "Закрыть настройку вида таблиц без сохранения";
 
         Controls.Add(_вкладки);
         Controls.Add(_сохранить);
@@ -337,6 +341,14 @@ public sealed class FormGridAppearance : Form
         кнопка.Dock = DockStyle.Fill;
         кнопка.FlatStyle = FlatStyle.Flat;
         кнопка.Click += (_, _) => ВыбратьЦвет(кнопка);
+
+        // Кнопка-образец цвета не несёт текста (её роль — сам образец), но
+        // без доступного имени она безымянна для программы чтения с экрана:
+        // оператор не может понять, какой цвет открывает (дизайн-контракт §6,
+        // правило A1). Имя берётся из подписи слева.
+        var имяЦвета = текст.TrimEnd(':').Trim();
+        кнопка.AccessibleName = $"Выбрать цвет: {имяЦвета}";
+        кнопка.AccessibleDescription = $"Открывает выбор цвета для параметра «{имяЦвета}».";
 
         таблица.Controls.Add(метка, 0, строка);
         таблица.Controls.Add(образец, 1, строка);
