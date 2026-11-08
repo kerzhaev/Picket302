@@ -1028,6 +1028,178 @@ taskkill висела бы бесконечно внутри `Stop-HarnessTree`.
     COM_VERIFIED / PRINT_VERIFIED = NOT_RUN_BY_SCOPE
     CODE_COVERAGE_MEASURED=false              — без изменений
 
+### 8.7. Статусы ревизии lock-файла, timeout-диагностики и строгого non-COM scope (десятая серия замечаний, 2026-11-08)
+
+**Исправление №1 — lock-файл COM-приёмки (`LOCK_FILE_CLEANUP_VERIFIED`).**
+
+Дефект: `AcceptanceScenarioTests.ЗахватитьБлокировкуПриёмки` создавал
+`%TEMP%\Picket302.ComAcceptance.lock` (`FileMode.OpenOrCreate`,
+`FileShare.None`) и никогда его не удалял — поток освобождал
+блокировку, но нулевой файл оставался в %TEMP% после каждого прогона
+с COM-сценарием.
+
+Исправление — production-test-инфраструктура, а не тестовый костыль:
+механизм вынесен в internal-хелпер
+`tests/Picket302.Tests/Infrastructure/БлокировкаФайлаПриёмки.cs`
+(`Захватить(путь, ожидание)`), поток открывается с
+`FileOptions.DeleteOnClose` (`bufferSize: 1`). Все требуемые контракты
+выполнены конструктивно:
+
+1. сериализация — `FileShare.None` не даёт конкуренту открыть файл,
+   пока дескриптор открыт; DeleteOnClose этого не ослабляет: .NET
+   форсирует только `FILE_SHARE_DELETE`, а запрашиваемый Read/Write
+   доступ по-прежнему запрещён режимом совместного доступа владельца;
+2. удаление — ОС удаляет файл при закрытии последнего дескриптора;
+3. аварийная смерть владельца — ОС закрывает дескриптор, файл
+   исчезает без дополнительных действий;
+4. устаревший файл прежней реализации переживается следующим
+   захватом (`OpenOrCreate` открывает его как обычный файл) и
+   удаляется при закрытии нового владельца.
+
+Regression-тесты `БлокировкаФайлаПриёмкиTests` (namespace
+`Picket302.Tests.Infrastructure` — намеренно НЕ «Acceptance», чтобы
+строгий non-COM фильтр их включал; без COM-активации): файл
+существует при открытом дескрипторе и удаляется после закрытия;
+повторный захват создаёт и снова удаляет; stale-файл поглощается и
+удаляется; конкурент получает fail-closed `IOException` с диагностикой
+«Блокировка COM-приёмки не освобождена за N секунд» за ограниченный
+бюджет и блокировку после освобождения.
+Пути в тестах — уникальный guid в %TEMP%; production-профиль и
+чужие TEMP-артефакты не задеваются. 3/3 в Debug и Release.
+
+**Исправление №2 — непустая диагностика таймаута
+(`TIMEOUT_EXCEPTION_VALUE_VERIFIED`).**
+
+Дефект: `Invoke-BoundedCommand` при таймауте выставлял
+`TimedOut=true` / `Success=false` / `ExitCode=null`, но оставлял
+`Exception=null` — причина была только в поле `Диагностика`, и
+`Invoke-TaskKillSafe` копировал null наружу; H-тест проверял лишь
+`ContainsKey('Exception')` (тавтология).
+
+Исправление: при таймауте `Exception` обязан быть непустым и
+содержать причину: `команда не завершилась за N мс (метка=…,
+pid=…)`. Ошибка Kill добавляется к причине таймаута, не затирая её.
+Классификация не менялась: таймаут — не benign race,
+`NotFound=false`, `TreeOk=false`, `TaskKillTimedOutPids` заполняется.
+H-тест заменён на проверку содержимого: непусто + содержит «timeout /
+таймаут / не завершилась / bounded» + содержит метку операции.
+Измеренный факт (2026-11-08): `timeoutMs=800` → `WaitMs=833`,
+`ElapsedMs=907`, `Exception=команда не завершилась за 800 мс
+(метка=echo-timeout, pid=…)`, `TimedOut=true`, `Success=false`,
+`ExitCode=null`, `NotFound=false`, зависший runner не жив.
+
+**Исправление №3 — строгий non-COM scope
+(`STRICT_NON_COM_TEST_VERIFIED`, `TEST_SCOPE_EVIDENCE_VERIFIED`).**
+
+Дефект: фильтр
+`!~ComAutomation&!~Printing.PrintEngineTests` пропускал
+`Picket302.Tests.Acceptance.AcceptanceScenarioTests` (включая
+COM-тест `Com_PrintEnvelope_OutOfProc_…`) — набор из «1258»
+некорректно назывался «non-COM».
+
+Исправление — строгий фильтр:
+
+    dotnet test .\tests\Picket302.Tests\Picket302.Tests.csproj `
+      -c Debug --no-build --no-restore `
+      --filter 'FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&FullyQualifiedName!~Printing.PrintEngineTests' `
+      --logger 'console;verbosity=minimal'
+
+Область доказана `--list-tests` тем же фильтром в ОБОИХ конфигурациях:
+0 совпадений `AcceptanceScenarioTests` / `Com_PrintEnvelope` /
+`Picket302.ComAutomation` / `Printing.PrintEngineTests`. Единственное
+текстовое совпадение «acceptance» — inline-данные guard-теста
+(`ProfileIsolationGuardTests.Кандидат_SiblingСОбщимПрефиксом_…`,
+пример sibling-пути `"C:\prod\Root\Picket302-acceptance"`), не
+тестовый класс. **Фактическое число: Debug 1259/1259, Release
+1259/1259, 0 fail, 0 skip** (1258 − 2 COM-теста приёмки + 3 новых
+lock-теста). Прежние заявления «1258 = non-COM» считаются
+скорректированными этим разделом; числа больше не записываются
+заранее — только из фактического прогона.
+
+Прогоны (2026-11-08, всё без UI/COM/печати):
+
+    LOCK_FILE_CLEANUP_VERIFIED=true          — DeleteOnClose: файл
+                                               существует при открытом
+                                               дескрипторе, удаляется при
+                                               закрытии, stale-файл
+                                               поглощается, конкурент
+                                               fail-closed; 3/3 Debug+Release
+    TIMEOUT_EXCEPTION_VALUE_VERIFIED=true    — Exception при таймауте
+                                               непустой и содержит причину
+                                               (метка+pid); H-тест
+                                               проверяет содержимое
+    STRICT_NON_COM_TEST_VERIFIED=true        — строгий фильтр
+                                               !~Acceptance&!~ComAutomation&
+                                               !~Printing.PrintEngineTests;
+                                               Debug и Release 1259/1259
+    TEST_SCOPE_EVIDENCE_VERIFIED=true        — --list-tests обоих
+                                               конфигураций: 0
+                                               Acceptance/Com_PrintEnvelope/
+                                               ComAutomation/PrintEngineTests
+    ACCEPTANCE_COM_VERIFIED=NOT_RUN_BY_SCOPE — COM-приёмка (out-of-proc)
+                                               не запускалась
+    TASKKILL_INTERNAL_TIMEOUT_VERIFIED=true  — без изменений (девятая
+                                               серия)
+    TASKKILL_TIMEOUT_FAULT_VERIFIED=true     — synthetic 10/10 PASS
+                                               (73 проверки каждый)
+    TASKKILL_BOUNDED_STATIC_VERIFIED=true    — статический guard 29/29
+    DRIVER_TASKKILL_TIMEOUT_VERIFIED=true    — driver-level 3/3 PASS
+                                               (59 проверок каждый)
+    TREE_CLEANUP_RACE_SAFE_VERIFIED=true     — без изменений
+    TREE_CLEANUP_REPEATABILITY_VERIFIED=true — synthetic 10 прогонов
+                                               подряд: 10/10, 0 FAIL
+    BUILD_DEBUG_VERIFIED / BUILD_RELEASE_VERIFIED / HARNESS_BUILD_VERIFIED
+                                           = true — 0 ошибок, 0 предупреждений
+    TEST_DEBUG_VERIFIED / TEST_RELEASE_VERIFIED = true — strict non-COM
+                                               1259/1259, 0 fail, 0 skip
+    LOCK_RELEASE_VERIFIED=true               — fault-прогоны: released=True
+    PROCESS_TREE_CLEANUP_VERIFIED=true       — tree suite PASS
+    PROCESS_TREE_POSTCHECK_VERIFIED=true     — post-scan всегда
+    FAIL_CLOSED_VERIFIED=true                — kill-fail, cim-fail,
+                                               descendant-remains,
+                                               descendant-not-found-but-
+                                               alive, taskkill timeout —
+                                               все failure
+    PROFILE_SAFETY_VERIFIED=EXTERNAL_WARNING — прогоны этой серии
+                                               трогали профиль только
+                                               чтением (fingerprint) и
+                                               sentinel-ом (создан и
+                                               удалён); НО в окне прогонов
+                                               во внешнем журнале
+                                               com-automation.log
+                                               зафиксирован запуск
+                                               Picket302.ComAutomation.exe
+                                               2026-11-08 10:17:08–10:17:10
+                                               из bin-каталога тестов
+                                               этого репозитория (не
+                                               прогоны этой серии), и
+                                               %AppData%\Picket302\
+                                               picket302.db в переписи
+                                               отсутствует (файл
+                                               .acceptance-*.bak нигде не
+                                               оставлен). Владельцу:
+                                               восстановить пользовательскую
+                                               базу из собственной резервной
+                                               копии; прогоны этой серии
+                                               базу не удаляли (list-tests
+                                               доказывает отсутствие
+                                               Acceptance-тестов)
+    TEMP_CLEANUP_VERIFIED=true               — все префиксы 0, keep=5,
+                                               .bak=0, .lock=0 (включая
+                                               %TEMP%\Picket302.ComAcceptance.lock),
+                                               процессов 0, тестовые
+                                               lock-артефакты *.test-* = 0
+    EVIDENCE_WRITE_VERIFIED=PARTIAL          — fault-evidence записаны и
+                                               проверены; runtime happy-
+                                               запись — при разрешённом
+                                               UI-прогоне
+    UI_RUNTIME_VERIFIED=NOT_RUN_BY_SCOPE     — UI не запускался
+    UI_VISUAL_VERIFIED=NOT_RUN_BY_SCOPE      — без изменений
+    REFERENCE_VISUAL_VERIFIED=PARTIAL         — без изменений; 70% —
+                                               целевой ориентир
+    COM_VERIFIED / PRINT_VERIFIED = NOT_RUN_BY_SCOPE
+    CODE_COVERAGE_MEASURED=false              — без изменений
+
 ## 9. Ограничения и что не проверялось
 
 - COM-активация, реестр, SCM — вне области (не запускались).

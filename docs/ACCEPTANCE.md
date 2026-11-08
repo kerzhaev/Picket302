@@ -604,6 +604,78 @@ TASKKILL_BOUNDED_STATIC_VERIFIED, DRIVER_TASKKILL_TIMEOUT_VERIFIED —
 отдельно от DRIVER_NO_HANG_VERIFIED, DRIVER_BOUNDED_WAIT_VERIFIED и
 TREE_CLEANUP_RACE_SAFE_VERIFIED).
 
+**Ревизия lock-файла, timeout-диагностики и строгого non-COM scope
+2026-11-08 (десятая серия замечаний).**
+
+1. **Lock-файл COM-приёмки.** Дефект:
+   `AcceptanceScenarioTests.ЗахватитьБлокировкуПриёмки` создавал
+   `%TEMP%\Picket302.ComAcceptance.lock` через `FileMode.OpenOrCreate`
+   и никогда не удалял его — поток освобождал блокировку, но нулевой
+   файл оставался в %TEMP% после каждого прогона с COM-сценарием.
+   Исправление: механизм вынесен в internal-хелпер
+   `tests/Picket302.Tests/Infrastructure/БлокировкаФайлаПриёмки.cs`
+   (production-test-инфраструктура, не тестовый костыль) — поток
+   открывается с `FileOptions.DeleteOnClose` (`bufferSize: 1`):
+   сериализация сохранена (`FileShare.None` не выдаёт файл, пока
+   дескриптор открыт; DeleteOnClose форсирует только `FILE_SHARE_DELETE`,
+   запрашиваемый Read/Write доступ по-прежнему запрещён), файл удаляется
+   ОС при закрытии (в том числе при аварийной смерти владельца),
+   устаревший файл прежней реализации поглощается (`OpenOrCreate`) и
+   удаляется новым владельцем. Regression-тесты
+   `БлокировкаФайлаПриёмкиTests` (без COM): файл существует при
+   открытом дескрипторе и удаляется после закрытия; повторный захват
+   работает; stale-файл поглощается и удаляется; конкурент получает
+   fail-closed IOException («не освобождена») за ограниченный бюджет и
+   блокировку после освобождения. Путь в тестах — уникальный guid в
+   %TEMP%, production-профиль и чужие TEMP-артефакты не задеваются.
+   `LOCK_FILE_CLEANUP_VERIFIED=true`.
+
+2. **Null-диагностика таймаута.** Дефект: `Invoke-BoundedCommand`
+   при таймауте выставлял `TimedOut=true`, `Success=false`,
+   `ExitCode=null`, но оставлял `Exception=null` (причина была только в
+   отдельном поле `Диагностика`), и `Invoke-TaskKillSafe` копировал
+   null наружу. Исправление: при таймауте `Exception` ОБЯЗАН быть
+   непустым и содержать причину («команда не завершилась за N мс
+   (метка=…, pid=…)»); ошибка Kill добавляется к причине таймаута, а не
+   затирает её. Классификация не изменилась: таймаут — не benign race,
+   `NotFound=false`, `TreeOk=false`, `TaskKillTimedOutPids` заполняется.
+   Тавтологичная проверка H-кейса (`ContainsKey('Exception')`) заменена
+   на проверку содержимого (непусто + содержит причину таймаута/метку).
+   Измеренный факт: `timeoutMs=800` → `WaitMs=833`, `ElapsedMs=907`,
+   `Exception=команда не завершилась за 800 мс (метка=echo-timeout,
+   pid=…)`, зависший runner не жив.
+   `TIMEOUT_EXCEPTION_VALUE_VERIFIED=true`.
+
+3. **Строгий non-COM scope.** Дефект: фильтр
+   `!~ComAutomation&!~Printing.PrintEngineTests` пропускал
+   `Picket302.Tests.Acceptance.AcceptanceScenarioTests` (включая
+   COM-тест `Com_PrintEnvelope_OutOfProc_…`) — набор из **1258**
+   некорректно назывался «non-COM». Исправление — строгий фильтр:
+   `FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&
+   FullyQualifiedName!~Printing.PrintEngineTests`. Область доказана
+   `--list-tests` в обеих конфигурациях: 0 совпадений
+   `AcceptanceScenarioTests` / `Com_PrintEnvelope` /
+   `Picket302.ComAutomation` / `Printing.PrintEngineTests` (единственное
+   текстовое совпадение «acceptance» — inline-данные guard-теста о
+   sibling-путях, не тестовый класс). Фактическое число: Debug
+   **1259/1259**, Release **1259/1259**, 0 fail, 0 skip (1258 − 2
+   COM-теста приёмки + 3 новых lock-теста). Прежние заявления «1258 =
+   non-COM» считаются скорректированными этим блоком.
+   `STRICT_NON_COM_TEST_VERIFIED=true`,
+   `TEST_SCOPE_EVIDENCE_VERIFIED=true`,
+   `ACCEPTANCE_COM_VERIFIED=NOT_RUN_BY_SCOPE`.
+
+Контроль (2026-11-08): сборки Debug/Release/harness 0/0; статический
+guard 29/29; synthetic suite **10 прогонов подряд — 10/10 PASS**
+(73 проверки каждый, включая новые проверки содержимого Exception);
+driver-level suite **3/3 PASS** (59 проверок каждый, 2 драйвера × 2
+fault-режима); strict non-COM Debug и Release **1259/1259**; lock-тесты
+3/3 в обеих конфигурациях; `%TEMP%\Picket302.ComAcceptance.lock`
+отсутствует после всех прогонов; перепись чистая (процессы 0, префиксы
+0, keep=5, .bak/.lock=0, sentinel отсутствует, production 4 файла);
+`git diff --check` чист; graphify-out/ не тронут. COM/печать/UI не
+запускались. Флаги — `docs/UX-REDESIGN-2026-11-05.md`, раздел 8.7.
+
 ## Приложение: сквозной приёмочный сценарий
 
 `tests/Picket302.Tests/Acceptance/AcceptanceScenarioTests.cs` — `Сквозной_сценарий_приёмки_от_демо_базы_до_восстановления_архива`:
