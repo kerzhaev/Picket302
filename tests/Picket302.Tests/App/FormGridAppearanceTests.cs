@@ -52,4 +52,32 @@ public sealed class FormGridAppearanceTests
         Assert.True(форма.Оформление.HeadersVisible);
         Assert.False(форма.Оформление.ZebraEnabled);
     }
+
+    [Fact]
+    public void ПояснениеЦветов_НеВыходитЗаПределыВкладкиИПереносится()
+    {
+        using var форма = new FormGridAppearance(GridAppearance.Default);
+
+        var пояснение = Обойти(форма)
+            .OfType<Label>()
+            .Single(метка => метка.Text.StartsWith("Три независимых цвета", StringComparison.Ordinal));
+
+        Assert.False(пояснение.AutoSize);
+        Assert.True(пояснение.Height >= пояснение.Font.Height * 2);
+        Assert.NotNull(пояснение.Parent);
+        Assert.InRange(пояснение.Right, 0, пояснение.Parent!.ClientSize.Width);
+    }
+
+    private static IEnumerable<Control> Обойти(Control корень)
+    {
+        foreach (Control дочерний in корень.Controls)
+        {
+            yield return дочерний;
+
+            foreach (var вложенный in Обойти(дочерний))
+            {
+                yield return вложенный;
+            }
+        }
+    }
 }

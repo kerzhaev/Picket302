@@ -831,6 +831,28 @@ function Wait-Button([IntPtr]$dialog, [string]$text, [int]$seconds = 8) {
     return [IntPtr]::Zero
 }
 
+# Ожидает не только заголовок, но и конкретную кнопку. Ожидаемый MessageBox
+# и следующий WinForms-диалог F6 имеют один заголовок «Печать», а Windows
+# может кратко переиспользовать один HWND при их смене. Возвращается актуальная
+# пара Window/Button, поэтому поиск кнопки не привязан к устаревшему HWND.
+function Wait-WindowWithButton([uint32]$procId, [string]$title, [string]$buttonText, [int]$seconds = 8) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ((Get-Date) -lt $deadline) {
+        foreach ($w in [AccWin]::WindowsOf($procId)) {
+            if ([AccWin]::Title($w) -ne $title) { continue }
+
+            $button = [AccWin]::FindButton($w, $buttonText)
+            if ($button -ne [IntPtr]::Zero) {
+                return @{ Window = $w; Button = $button }
+            }
+        }
+
+        Start-Sleep -Milliseconds 250
+    }
+
+    return $null
+}
+
 function Dump-AllWindows([uint32]$procId) {
     $список = @()
     foreach ($w in [AccWin]::WindowsOf($procId)) {

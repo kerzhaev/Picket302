@@ -1283,6 +1283,16 @@ lock-теста). Прежние заявления «1258 = non-COM» счит�
    разбор последней цифры имени колонки; регрессия
    `PrintDataSourceTests.ЗначенияПолей_КаждаяСтрокаАдреса_ВСвоёмПоле`.
 
+7. **Независимая контрольная серия после коммита `b78ebf5`.** В ходе
+   проверки обнаружены и исправлены три дефекта приёмочной обвязки/UI:
+   (а) Windows PowerShell 5.1 материализует первый `StandardInput` с BOM,
+   поэтому harness теперь явно читает UTF-8 и отбрасывает BOM только в
+   начале команды; (б) драйверы F5/F6/preview ждут актуальное окно вместе
+   с требуемой кнопкой, а не устаревший HWND с тем же заголовком «Печать»;
+   (в) пояснение в диалоге «Настройка вида таблиц» переносится и остаётся
+   внутри вкладки при раннем и DPI-зависимом layout. Добавлен регрессионный
+   тест `FormGridAppearanceTests.ПояснениеЦветов_НеВыходитЗаПределыВкладкиИПереносится`.
+
 **Команды и фактические результаты (все прогоны 2026-11-08).**
 
 | Проверка | Команда | Результат |
@@ -1290,12 +1300,12 @@ lock-теста). Прежние заявления «1258 = non-COM» счит�
 | Build Debug | `dotnet build ./Picket302.sln -c Debug --no-restore` | 0 ошибок / 0 предупреждений |
 | Build Release | `dotnet build ./Picket302.sln -c Release --no-restore` | 0 ошибок / 0 предупреждений |
 | Build harness | `dotnet build ./tools/ui-acceptance/UiAcceptance.csproj -c Release --no-restore` | 0 ошибок / 0 предупреждений |
-| Strict non-COM Debug | `dotnet test … -c Debug --no-build --filter 'FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&FullyQualifiedName!~Printing.PrintEngineTests'` | 1275/1275, 0 fail, 0 skip |
-| Strict non-COM Release | то же `-c Release` | 1275/1275, 0 fail, 0 skip |
+| Strict non-COM Debug | `dotnet test … -c Debug --no-build --filter 'FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&FullyQualifiedName!~Printing.PrintEngineTests'` | 1276/1276, 0 fail, 0 skip |
+| Strict non-COM Release | то же `-c Release` | 1276/1276, 0 fail, 0 skip |
 | Целевые (задание) | `… --filter "FullyQualifiedName~ResponsiveUiContractTests"` (Debug) | 15/15 |
-| Целевые серии | FormCounterpartyLayoutTests + MainShellNarrowLayoutTests + ResponsiveUiContractTests | 30/30 |
+| Целевые серии | FormCounterpartyLayoutTests + MainShellNarrowLayoutTests + FormGridAppearanceTests + ResponsiveUiContractTests | 34/34 |
 | Acceptance emptybook | `run-emptybook.ps1` | PS 5.1: PASS, exit 0; PS 7.5.5: PASS, exit 0 |
-| Acceptance printflow | `run-printflow.ps1` | PS 5.1: PASS (FLOW F5+FLOW F6), exit 0; PS 7.5.5: PASS, exit 0 |
+| Acceptance printflow | `run-printflow.ps1` | PS 5.1: PASS (FLOW F5+FLOW F6), exit 0; PS 7.5.5: PASS после исправления гонки HWND, exit 0 |
 | Acceptance previewflow | `run-previewflow.ps1` | PS 5.1: PASS ×3 подряд, exit 0; PS 7.5.5: PASS, exit 0 |
 
 Факты прогона previewflow (финальный код): PREVIEW-SCAN `страниц=1
@@ -1321,7 +1331,7 @@ dark=586` (порог 30; to2≠to1 — косвенное подтвержде�
                                                5.1.26100.7462 и
                                                PowerShell 7.5.5
     UI_LAYOUT_VERIFIED=true                  — FormCounterpartyEdit:
-                                               контракты 30/30 (адресные
+                                               контракты 34/34 (адресные
                                                блоки не пересекаются и в
                                                границах вкладки, вкладка
                                                прокручивается, подписи в
@@ -1371,8 +1381,8 @@ dark=586` (порог 30; to2≠to1 — косвенное подтвержде�
                                                понятным сообщением
                                                наблюдена, сама отрисовка
                                                штампа НЕ проверена
-    TEST_DEBUG_VERIFIED=true                 — strict non-COM 1275/1275
-    TEST_RELEASE_VERIFIED=true               — strict non-COM 1275/1275
+    TEST_DEBUG_VERIFIED=true                 — strict non-COM 1276/1276
+    TEST_RELEASE_VERIFIED=true               — strict non-COM 1276/1276
     CLEANUP_VERIFIED=true                    — процессы 0; temp-
                                                профили 0 (плюс удалены
                                                5 осиротевших каталогов от

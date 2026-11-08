@@ -212,14 +212,20 @@ public sealed class FormGridAppearance : Form
         var пояснение = new Label
         {
             Text = "Три независимых цвета применяются ко всем таблицам программы единообразно.",
-            AutoSize = true,
+            // Текст длиннее доступной ширины вкладки. AutoSize оставлял
+            // естественную ширину метки за пределами клиентской области и
+            // визуально обрезал конец пояснения на реальном диалоге.
+            AutoSize = false,
             Location = new Point(12, 240),
+            Size = new Size(1, 38),
+            Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right,
         };
 
         var контейнер = new Panel { Dock = DockStyle.Fill };
         контейнер.Controls.Add(панель);
         контейнер.Controls.Add(_показыватьЗаголовки);
         контейнер.Controls.Add(пояснение);
+        пояснение.Width = Math.Max(1, контейнер.ClientSize.Width - пояснение.Left - 12);
 
         return контейнер;
     }

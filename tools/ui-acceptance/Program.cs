@@ -29,6 +29,12 @@ using Picket302.Printing.Preview;
 // без BOM в перенаправленные трубы (harness всегда запускается драйвером
 // с RedirectStandardOutput/Error; консольного окна может не быть вовсе,
 // поэтому Console.OutputEncoding через SetConsoleOutputCP не используется).
+// Для обратного канала действует тот же явный контракт: Windows PowerShell
+// 5.1 при первом обращении к Process.StandardInput может отправить UTF-8 BOM,
+// а без фиксированной кодировки перенаправленный stdin декодируется OEM-кодовой
+// страницей и превращает даже ASCII-команду в «Я╗┐COUNTS». Драйверы отправляют
+// UTF-8 без BOM, поэтому harness должен явно читать stdin как UTF-8.
+Console.InputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 Console.SetOut(new StreamWriter(
     Console.OpenStandardOutput(),
     new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
@@ -128,7 +134,13 @@ try
     {
         while (await Console.In.ReadLineAsync().ConfigureAwait(false) is { } команда)
         {
-            var текст = команда.Trim().ToUpperInvariant();
+            // Windows PowerShell 5.1 materializes Process.StandardInput as a
+            // UTF-8 StreamWriter that emits a BOM on its first access. Even
+            // when the caller writes the command bytes through BaseStream,
+            // that marker can arrive before the first command. It is valid
+            // only at the beginning of this protocol, so remove it before
+            // dispatching instead of treating the command as UNKNOWN.
+            var текст = команда.Trim().TrimStart('\uFEFF').ToUpperInvariant();
 
             if (текст == "CLOSE")
             {
@@ -296,8 +308,8 @@ static void Выполнить(MainShell окно, string команда, AppSer
             if (индексПоследней >= 0)
             {
                 таблицаПоследних.Rows[индексПоследней].Selected = true;
-                var имяПоследней = Convert.ToString(
-                    таблицаПоследних.Rows[индексПоследней].Cells["Получатель"].Value);
+                var имяПоследней = таблицаПоследних.Rows[индексПоследней]
+                    .Cells["Получатель"].Value?.ToString() ?? string.Empty;
                 Console.Out.WriteLine($"OK SELECTLAST {имяПоследней}");
             }
             else
