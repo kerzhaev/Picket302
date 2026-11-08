@@ -258,29 +258,216 @@ function Stop-Acceptance($h) {
         return $результат
     }
 
-    return Stop-HarnessTree $h.Proc 20000
+    # В тестовом режиме P302_TASKKILL_FAULT=hang ждать штатного завершения
+    # 20 секунд бессмысленно: контракт внутреннего таймаута taskkill
+    # проверяется быстро и детерминированно.
+    $waitMs = 20000
+    if ($env:P302_TASKKILL_FAULT -eq 'hang') { $waitMs = 1000 }
+
+    return Stop-HarnessTree $h.Proc $waitMs
+}
+
+# Bounded runner для NATIVE-команды: команда запускается ОТДЕЛЬНЫМ
+# процессом и ждётся с явным таймаутом WaitForExit($timeoutMs).
+#
+# Зачем отдельная функция: параметр $timeoutMs в сигнатуре сам по себе
+# НЕ ограничивает время исполнения native-команды. Конструкция
+# `& taskkill ...` выполняется СИНХРОННО в потоке вызывающего и может
+# висеть бесконечно — реальное ограничение даёт только отдельный
+# процесс + WaitForExit($timeoutMs).
+#
+# Защита от pipe-deadlock: stdout/stderr читаются АСИНХРОННО
+# (ReadToEndAsync) с самого старта процесса — буфер трубы никогда не
+# переполняется, поэтому дочерний процесс не блокируется на записи.
+# Синхронный ReadToEnd() ДО WaitForExit() запрещён: он блокирует поток
+# до EOF, а EOF может не наступить (унаследованный дескриптор).
+#
+# Ограничение сбора вывода — тоже bounded: если потомок удерживает конец
+# трубы, чтение отменяется по таймауту, частичный вывод сохраняется.
+#
+# При таймауте дочерний процесс принудительно завершается (Kill), после
+# чего выполняется ТОЛЬКО ограниченное ожидание (бесконечный
+# WaitForExit запрещён). Исключение наружу не выходит.
+function Invoke-BoundedCommand {
+    param(
+        [string]$FilePath,
+        [string]$Arguments = '',
+        [int]$TimeoutMs = 15000,
+        [string]$label = 'bounded',
+        [int]$ReadTimeoutMs = 5000
+    )
+
+    $результат = @{
+        Attempted = $false
+        Started = $false
+        ChildPid = $null
+        ExitCode = $null
+        StdOut = @()
+        StdErr = @()
+        Output = @()
+        TimedOut = $false
+        Killed = $false
+        Exception = $null
+        CleanupError = $null
+        WaitMs = 0
+        ElapsedMs = 0
+        Диагностика = ''
+    }
+
+    if ([string]::IsNullOrWhiteSpace($FilePath)) {
+        $результат.Exception = 'не указан исполняемый файл'
+        return $результат
+    }
+
+    if ($TimeoutMs -lt 1) { $TimeoutMs = 1 }
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $FilePath
+    $psi.Arguments = $Arguments
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    # stdin не наследуется: дочерний процесс не должен удерживать
+    # stdin вызывающего (иначе зависание на чтении ввода).
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $child = $null
+    $outTask = $null
+    $errTask = $null
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+
+    try {
+        $child = [System.Diagnostics.Process]::Start($psi)
+        $результат.Started = $true
+        $результат.Attempted = $true
+        $результат.ChildPid = $child.Id
+
+        try { $child.StandardInput.Close() } catch { }
+
+        # Асинхронное чтение с самого старта — трубы не переполняются,
+        # pipe-deadlock невозможен.
+        $outTask = $child.StandardOutput.ReadToEndAsync()
+        $errTask = $child.StandardError.ReadToEndAsync()
+
+        $waitClock = [System.Diagnostics.Stopwatch]::StartNew()
+        $завершился = $child.WaitForExit($TimeoutMs)
+        $waitClock.Stop()
+        $результат.WaitMs = $waitClock.ElapsedMilliseconds
+
+        if (-not $завершился) {
+            $результат.TimedOut = $true
+            $результат.Диагностика = "команда не завершилась за $TimeoutMs мс (метка=$label, pid=$($child.Id))"
+            Write-Host "  BOUNDED-RUN TIMEOUT: $($результат.Диагностика)"
+
+            try {
+                $child.Kill()
+                $результат.Killed = $true
+            } catch {
+                $результат.Exception = "Kill не выполнен: $($_.Exception.Message)"
+            }
+
+            # После Kill — ТОЛЬКО ограниченное ожидание.
+            try { [void]$child.WaitForExit(2000) } catch { }
+        } else {
+            try {
+                $результат.ExitCode = $child.ExitCode
+            } catch {
+                $результат.Диагностика = "ExitCode недоступен (метка=$label): $($_.Exception.Message)"
+            }
+        }
+
+        # Сбор вывода — bounded (иначе потомок, удерживающий конец трубы,
+        # заблокировал бы сбор навсегда).
+        $budget = if ($результат.TimedOut) { 2000 } else { $ReadTimeoutMs }
+        $outText = ''
+        $errText = ''
+
+        if ($outTask -ne $null) {
+            try {
+                if ($outTask.Wait($budget)) {
+                    $outText = [string]$outTask.Result
+                } else {
+                    $результат.Диагностика = ($результат.Диагностика + '; stdout не собран (таймаут чтения)').TrimStart(';')
+                }
+            } catch {
+                $результат.Диагностика = ($результат.Диагностика + "; stdout: $($_.Exception.Message)").TrimStart(';')
+            }
+        }
+
+        if ($errTask -ne $null) {
+            try {
+                if ($errTask.Wait($budget)) {
+                    $errText = [string]$errTask.Result
+                } else {
+                    $результат.Диагностика = ($результат.Диагностика + '; stderr не собран (таймаут чтения)').TrimStart(';')
+                }
+            } catch {
+                $результат.Диагностика = ($результат.Диагностика + "; stderr: $($_.Exception.Message)").TrimStart(';')
+            }
+        }
+
+        $результат.StdOut = @($outText -split "`r?`n" | Where-Object { $_ -ne '' })
+        $результат.StdErr = @($errText -split "`r?`n" | Where-Object { $_ -ne '' })
+        $результат.Output = @($результат.StdOut) + @($результат.StdErr)
+    } catch {
+        $результат.Exception = $_.Exception.Message
+        $результат.Attempted = $true
+    } finally {
+        $clock.Stop()
+        $результат.ElapsedMs = $clock.ElapsedMilliseconds
+
+        if ($child -ne $null) {
+            try { $child.Dispose() } catch {
+                if ($результат.CleanupError) {
+                    $результат.CleanupError = $результат.CleanupError + "; dispose: $($_.Exception.Message)"
+                } else {
+                    $результат.CleanupError = "dispose: $($_.Exception.Message)"
+                }
+            }
+        }
+    }
+
+    return $результат
+}
+
+# Бюджет ожидания taskkill. В тестовом режиме P302_TASKKILL_FAULT=hang
+# используется МАЛЫЙ бюджет: контракт внутреннего таймаута должен
+# проверяться быстро и детерминированно, а не «подождать 15 секунд».
+function Get-TaskKillTimeoutMs([int]$поУмолчанию = 15000) {
+    if ($env:P302_TASKKILL_FAULT -eq 'hang') { return 800 }
+    if ($поУмолчанию -lt 1) { return 1 }
+    return $поУмолчанию
 }
 
 # Безопасный вызов taskkill /T /F /PID: гонка «процесс исчез между
-# scan и taskkill» НЕ превращается в необработанное исключение.
+# scan и taskkill» НЕ превращается в необработанное исключение, а
+# ВРЕМЯ ИСПОЛНЕНИЯ САМОЙ taskkill ограничено $timeoutMs.
 #
-# Причина дефекта: PowerShell 5.1 при $ErrorActionPreference='Stop'
-# переводит stderr native-команды в terminating error. taskkill пишет в
-# stderr «ERROR: The process "N" not found.» именно в гонке, когда
-# процесс уже завершился — и исключение прерывало Stop-HarnessTree
-# ДО финального post-scan (терялись RemainingPids/UnconfirmedPids и
-# структурированный результат).
+# Причина исходного дефекта: PowerShell 5.1 при
+# $ErrorActionPreference='Stop' переводит stderr native-команды в
+# terminating error. taskkill пишет в stderr «ERROR: The process "N"
+# not found.» именно в гонке, когда процесс уже завершился — и
+# исключение прерывало Stop-HarnessTree ДО финального post-scan
+# (терялись RemainingPids/UnconfirmedPids и структурированный
+# результат).
+#
+# Второй (текущий) дефект: синхронный `& taskkill ...` не имеет
+# собственного таймаута — зависшая taskkill висела бы бесконечно.
+# Поэтому taskkill запускается ОТДЕЛЬНЫМ процессом через
+# Invoke-BoundedCommand с WaitForExit($timeoutMs).
 #
 # Контракт helper-а:
-#   - native-команда выполняется с локальным ErrorActionPreference
-#     Continue (иначе stderr = terminating error) и перехватывается
-#     try/catch — исключение наружу не выходит;
-#   - bounded wait на саму taskkill (без бесконечного ожидания);
-#   - результат структурирован: Attempted/Pid/ExitCode/Output/
-#     Exception/NotFound/AlreadyExited/TimedOut/Success;
+#   - native-команда — отдельный процесс с bounded wait;
+#   - stdout/stderr читаются асинхронно (pipe-deadlock невозможен);
+#   - по таймауту процесс принудительно завершается, ожидание после
+#     Kill — тоже ограниченное;
+#   - результат структурирован: Attempted/Pid/Operation/ExitCode/
+#     Output/Exception/NotFound/AlreadyExited/TimedOut/Success;
 #   - not-found (код 128 или «not found» в выводе) — это признак
 #     benign-race, а не успех: окончательную классификацию даёт
-#     финальный post-scan вызывающего кода.
+#     финальный post-scan вызывающего кода;
+#   - таймаут — это ошибка (Success=false), а не not-found.
 function Invoke-TaskKillSafe([int]$идентификатор, [string]$метка, [int]$timeoutMs = 15000, [bool]$сДеревом = $true) {
     $результат = @{
         Attempted = $false
@@ -288,11 +475,18 @@ function Invoke-TaskKillSafe([int]$идентификатор, [string]$метк
         Operation = $метка
         ExitCode = $null
         Output = @()
+        StdOut = @()
+        StdErr = @()
         Exception = $null
         NotFound = $false
         AlreadyExited = $false
         TimedOut = $false
         Success = $false
+        CleanupError = $null
+        WaitMs = 0
+        ElapsedMs = 0
+        Runner = 'taskkill'
+        ChildPid = $null
     }
 
     if ($идентификатор -le 0) {
@@ -300,45 +494,65 @@ function Invoke-TaskKillSafe([int]$идентификатор, [string]$метк
         return $результат
     }
 
-    # Локальный Continue: stderr native-команды не должен превращаться в
-    # terminating error. Переменная перекрывает внешнюю настройку только
-    # внутри этой функции.
-    $ErrorActionPreference = 'Continue'
+    # --- Определение runner-а ---------------------------------------------
+    # Обычный случай — СИСТЕМНЫЙ taskkill отдельным процессом.
+    # Флаги передаются ОТДЕЛЬНЫМИ аргументами: одной строкой taskkill их
+    # не понимает. Без /T родитель завершается один, а потомок остаётся
+    # живым (нужно для проверки гонки на стадии очистки потомков).
+    $runner = "$env:SystemRoot\System32\taskkill.exe"
+    $аргументы = if ($сДеревом) { "/T /F /PID $идентификатор" } else { "/F /PID $идентификатор" }
+    $результат.Runner = 'taskkill'
 
-    try {
-        # /T (дерево) — по умолчанию; без /T родитель завершается один,
-        # а потомок остаётся живым (нужно для проверки гонки на
-        # стадии очистки потомков). Флаги передаются ОТДЕЛЬНЫМИ
-        # аргументами: одной строкой taskkill их не понимает.
-        if ($сДеревом) {
-            $вывод = & taskkill /T /F /PID $идентификатор 2>&1
-        } else {
-            $вывод = & taskkill /F /PID $идентификатор 2>&1
-        }
-
-        $код = $LASTEXITCODE
-
-        $результат.Attempted = $true
-        $результат.ExitCode = $код
-        $результат.Output = @($вывод | ForEach-Object { [string]$_ })
-
-        # 128 = «процесс не найден» (taskkill); текст «not found» —
-        # тот же случай на другой локали.
-        $текст = ($результат.Output -join ' | ')
-        if ($код -eq 128 -or $текст -match 'not found' -or $текст -match 'не найден') {
-            $результат.NotFound = $true
-            $результат.AlreadyExited = $true
-        }
-
-        # Успех = код 0. Not-found — НЕ успех: это гонка, окончательное
-        # решение принимает post-scan вызывающего кода.
-        $результат.Success = ($код -eq 0)
-    } catch {
-        # Перехватываем любой PowerShell-исключение (включая случай
-        # terminating error от stderr): наружу не выходит.
-        $результат.Exception = $_.Exception.Message
-        $результат.Attempted = $true
+    # Тестовый seam P302_TASKKILL_FAULT=hang: системный taskkill
+    # подвешивать НЕ нужно — подменяется runner на синтетический
+    # процесс, который спит дольше таймаута. Контракт внутреннего
+    # таймаута проверяется детерминированно.
+    if ($env:P302_TASKKILL_FAULT -eq 'hang') {
+        $runner = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+        if (-not (Test-Path -LiteralPath $runner)) { $runner = 'powershell.exe' }
+        $аргументы = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 300"'
+        $результат.Runner = 'fault-hang-sleeper'
     }
+
+    # Реальный bounded runner: отдельный процесс + WaitForExit($timeoutMs).
+    $запуск = Invoke-BoundedCommand -FilePath $runner -Arguments $аргументы -TimeoutMs $timeoutMs -Label $метка
+
+    $результат.Attempted = $запуск.Attempted
+    $результат.ExitCode = $запуск.ExitCode
+    $результат.StdOut = @($запуск.StdOut)
+    $результат.StdErr = @($запуск.StdErr)
+    $результат.Output = @($запуск.Output)
+    $результат.TimedOut = $запуск.TimedOut
+    $результат.WaitMs = $запуск.WaitMs
+    $результат.ElapsedMs = $запуск.ElapsedMs
+    $результат.CleanupError = $запуск.CleanupError
+    $результат.Exception = $запуск.Exception
+    $результат.ChildPid = $запуск.ChildPid
+
+    if ($результат.TimedOut) {
+        # Таймаут — это ошибка, а НЕ успех и НЕ not-found.
+        # ExitCode остаётся null: процесс не завершился штатно.
+        $результат.Success = $false
+        Write-Host "  TASKKILL TIMEOUT: taskkill не завершился за $timeoutMs мс (pid=$идентификатор, метка=$метка, runner=$($результат.Runner))"
+        return $результат
+    }
+
+    if ($результат.Exception) {
+        $результат.Success = $false
+        return $результат
+    }
+
+    # 128 = «процесс не найден» (taskkill); текст «not found» —
+    # тот же случай на другой локали.
+    $текст = ($результат.Output -join ' | ')
+    if ($результат.ExitCode -eq 128 -or $текст -match 'not found' -or $текст -match 'не найден') {
+        $результат.NotFound = $true
+        $результат.AlreadyExited = $true
+    }
+
+    # Успех = код 0. Not-found — НЕ успех: это гонка, окончательное
+    # решение принимает post-scan вызывающего кода.
+    $результат.Success = ($результат.ExitCode -eq 0)
 
     return $результат
 }
@@ -731,6 +945,12 @@ function Get-ProcessDescendants([int]$ancestorPid, [datetime]$ancestorStart, [bo
 
 # Проверяет жив ли процесс по PID.
 function Test-ProcessAlive([int]$идентификатор) {
+    # PID 0 — это «System Idle Process» в Windows: Get-Process -Id 0
+    # УСПЕШНО возвращает процесс. Невалидный PID (0 или отрицательный)
+    # не может считаться живым — иначе null-подстановка давала бы
+    # ложный «жив» и ломала fail-closed классификацию.
+    if ($идентификатор -le 0) { return $false }
+
     try {
         return $null -ne (Get-Process -Id $идентификатор -ErrorAction Stop)
     } catch {
@@ -892,7 +1112,7 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
                     $env:P302_TREE_FAULT -eq 'descendant-disappears-before-taskkill' -or
                     $env:P302_TREE_FAULT -eq 'descendant-not-found-but-alive')
 
-                $killParent = Invoke-TaskKillSafe $пид 'parent' 15000 (-not $родительБезДерева)
+                $killParent = Invoke-TaskKillSafe $пид 'parent' (Get-TaskKillTimeoutMs 15000) (-not $родительБезДерева)
                 $кодTaskkill = $killParent.ExitCode
                 $выводForce = @($killParent.Output)
 
@@ -912,6 +1132,16 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
 
                 if ($killParent.Exception) {
                     $сообщение = "taskkill родителя: $($killParent.Exception) (pid=$пид)"
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
+                    Write-Host "  SAFETY-FAIL: $сообщение"
+                }
+
+                if ($killParent.CleanupError) {
+                    $сообщение = "taskkill родителя: ошибка уборки ресурсов runner-а (pid=$пид): $($killParent.CleanupError)"
                     if ($результат.TreeError) {
                         $результат.TreeError = $результат.TreeError + '; ' + $сообщение
                     } else {
@@ -954,7 +1184,19 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
                         Write-Host "  HARNESS KILL: Kill не выполнен: $($_.Exception.Message)"
                     }
                 }
-                try { $proc.WaitForExit(10000) | Out-Null } catch {}
+                # Ожидание после Kill — ТОЛЬКО ограниченное (бесконечный
+                # WaitForExit запрещён).
+                $ожиданиеKilled = Wait-ProcessExitBounded $proc 10000 'stop-harness-tree-parent'
+                if ($ожиданиеKilled.TimedOut) {
+                    $результат.HarnessNotExited = $true
+                    $сообщение = "процесс не завершился после Kill за 10000 мс (pid=$пид)"
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
+                    Write-Host "  SAFETY-FAIL: $сообщение"
+                }
             }
 
             if (-not $результат.KillOutput) {
@@ -1025,8 +1267,10 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
                 $кодОстатка = 128
                 $результат.DescendantKillResults += @{
                     Attempted = $true; Pid = $остаток.Pid; Operation = 'descendant-fault-not-found'
-                    ExitCode = 128; Output = @($выводОстатка); Exception = $null
+                    ExitCode = 128; Output = @($выводОстатка); StdOut = @(); StdErr = @()
+                    Exception = $null
                     NotFound = $true; AlreadyExited = $true; TimedOut = $false; Success = $false
+                    CleanupError = $null; WaitMs = 0; ElapsedMs = 0; Runner = 'fault-not-found'
                 }
             } else {
                 if ($env:P302_TREE_FAULT -eq 'descendant-disappears-before-taskkill') {
@@ -1034,14 +1278,14 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
                     # исчезает САМ между scan и taskkill (завершаем его
                     # здесь), после чего taskkill честно возвращает
                     # not-found. Гонка воспроизводится без случайного окна.
-                    $преждевременный = Invoke-TaskKillSafe $остаток.Pid 'descendant-race-prerace'
+                    $преждевременный = Invoke-TaskKillSafe $остаток.Pid 'descendant-race-prerace' (Get-TaskKillTimeoutMs 15000)
                     $результат.DescendantKillResults += $преждевременный
                     Write-Host "  TREE RACE (fault): descendant исчез до taskkill (pid=$($остаток.Pid))"
                 }
 
                 # Безопасный helper: «процесс исчез» → not-found без
                 # исключения; bounded wait; структурированный результат.
-                $killDescendant = Invoke-TaskKillSafe $остаток.Pid 'descendant'
+                $killDescendant = Invoke-TaskKillSafe $остаток.Pid 'descendant' (Get-TaskKillTimeoutMs 15000)
                 $выводОстатка = @($killDescendant.Output)
                 $кодОстатка = $killDescendant.ExitCode
                 $результат.DescendantKillResults += $killDescendant
@@ -1067,6 +1311,16 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
                         $результат.TreeError = $сообщение
                     }
                     continue
+                }
+
+                if ($killDescendant.CleanupError) {
+                    $сообщение = "taskkill потомка: ошибка уборки ресурсов runner-а (pid=$($остаток.Pid)): $($killDescendant.CleanupError)"
+                    $результат.DescendantKillErrors += $сообщение
+                    if ($результат.TreeError) {
+                        $результат.TreeError = $результат.TreeError + '; ' + $сообщение
+                    } else {
+                        $результат.TreeError = $сообщение
+                    }
                 }
 
                 if ($killDescendant.NotFound) {

@@ -1,17 +1,28 @@
 ﻿# Driver-level bounded-wait suite (без UI, без печати, без production-
 # изменений кроме sentinel-контроля): для run-emptybook.ps1 и
-# run-printflow.ps1 с fault-инъекцией P302_DRIVER_FAULT=parent-alive-after-stop:
-#   - Stop-HarnessTree возвращает TreeOk=false, synthetic harness остаётся
-#     живым (скрытый PowerShell, sleep 1800, stdin не читает);
-#   - внешний launcher держит watchdog: $proc.WaitForExit($driverTimeoutMs) —
-#     зависание драйвера дольше бюджета = провал;
+# run-printflow.ps1 с ДВУМЯ НЕЗАВИСИМЫМИ fault-режимами:
+#   1) P302_DRIVER_FAULT=parent-alive-after-stop — watchdog уровня
+#      ДРАЙВЕРА: внешний launcher держит $proc.WaitForExit($driverTimeoutMs),
+#      зависание драйвера дольше бюджета = провал; Stop-HarnessTree
+#      возвращает TreeOk=false, synthetic harness остаётся живым (скрытый
+#      PowerShell, sleep 1800, stdin не читает);
+#   2) P302_TASKKILL_FAULT=hang — ВНУТРЕННИЙ bounded timeout САМОЙ
+#      taskkill: seam подменяет runner на синтетический процесс, который
+#      спит дольше таймаута; Invoke-TaskKillSafe обязан вернуться по
+#      своему таймауту (TimedOut=true), TreeOk=false, TreeError содержит
+#      таймаут, драйвер — завершиться с exit 1.
+# Внешний watchdog НЕ заменяет внутренний timeout taskkill и наоборот:
+# оба свойства проверяются отдельно.
+# Общее для обоих режимов:
 #   - драйвер обязан завершиться, exit 1, диагностика HarnessNotExited/
-#     TreeCleanupFailed/RemainingPids в stdout;
+#     TreeCleanupFailed/RemainingPids/TASKKILL TIMEOUT в stdout;
 #   - lock освобождён (строка LOCK RELEASE: released=True disposed=True в
 #     evidence; флаг lock-release-failed отсутствует);
 #   - sentinel удалён; synthetic PID убивается внешней уборкой и
-#     проверяется на отсутствие.
-# Итог: exit 0 только если ВСЕ проверки обоих драйверов выполнены.
+#     проверяется на отсутствие;
+#   - evidence fault-прогона — во временном каталоге (P302_EVIDENCE_ROOT).
+# Итог: exit 0 только если ВСЕ проверки обоих драйверов и обоих режимов
+# выполнены.
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\acceptance-lib.ps1"
 
@@ -30,7 +41,7 @@ function Проверить([bool]$условие, [string]$имя, [string]$д�
     }
 }
 
-function ЗапуститьДрайверСFault([string]$скриптДрайвера, [string]$имя) {
+function ЗапуститьДрайверСFault([string]$скриптДрайвера, [string]$имя, [string]$faultДрайвера = 'parent-alive-after-stop', [string]$taskkillFault = '') {
     # Файловые редиректы через cmd /c: у драйвера НЕТ труб — блокировка на
     # записи в заполненный pipe-буфер (вывод драйвера больше 4 КБ) и
     # pipe-deadlock невозможны в принципе. cmd /c пробрасывает код возврата
@@ -42,7 +53,12 @@ function ЗапуститьДрайверСFault([string]$скриптДрайв
     $psi.Arguments = '/c powershell -NoProfile -ExecutionPolicy Bypass -File "' + $скриптДрайвера + '" > "' + $логOut + '" 2> "' + $логErr + '"'
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
-    $psi.EnvironmentVariables['P302_DRIVER_FAULT'] = 'parent-alive-after-stop'
+    $psi.EnvironmentVariables['P302_DRIVER_FAULT'] = $faultДрайвера
+    # Шов внутреннего bounded timeout САМОЙ taskkill — отдельное свойство,
+    # не то же самое, что watchdog уровня драйвера.
+    if ($taskkillFault) {
+        $psi.EnvironmentVariables['P302_TASKKILL_FAULT'] = $taskkillFault
+    }
     # Evidence fault-прогона — во временный каталог: отслеживаемые
     # файлы документации в репозитории НЕ перезаписываются тестом.
     $psi.EnvironmentVariables['P302_EVIDENCE_ROOT'] = $каталогЛогов
@@ -88,65 +104,99 @@ try {
     $репозиторий = Split-Path -Parent $PSScriptRoot
     $gitДо = @(& git -C $репозиторий status --porcelain 2>$null)
 
+    # Два НЕЗАВИСИМЫХ свойства проверяются раздельно:
+    #   parent-alive-after-stop — watchdog уровня драйвера (драйвер обязан
+    #     завершиться за bounded timeout, exit 1);
+    #   taskkill-hang — ВНУТРЕННИЙ bounded timeout САМОЙ taskkill
+    #     (helper возвращается по своему таймауту, TreeOk=false, exit 1).
+    # Внешний watchdog не заменяет внутренний timeout и наоборот.
+    $режимы = @(
+        @{ Имя = 'parent-alive-after-stop'; TaskkillFault = '' },
+        @{ Имя = 'taskkill-hang'; TaskkillFault = 'hang' }
+    )
+
     foreach ($случай in @(
         @{ Имя = 'emptybook'; Файл = Join-Path $PSScriptRoot 'run-emptybook.ps1' },
         @{ Имя = 'printflow'; Файл = Join-Path $PSScriptRoot 'run-printflow.ps1' }
     )) {
-        $имя = $случай.Имя
-        $результат = ЗапуститьДрайверСFault $случай.Файл $имя
+        foreach ($режим in $режимы) {
+            $имя = "$($случай.Имя)-$($режим.Имя)"
+            $результат = ЗапуститьДрайверСFault $случай.Файл $имя $режим.Имя $режим.TaskkillFault
 
-        if ($результат -eq $null) {
-            continue
-        }
-
-        # Exit code обязан быть 1 (failure остановки не превращается в PASS).
-        Проверить ($результат.ExitCode -eq 1) "${имя}: exit code = 1" "фактический: $($результат.ExitCode)"
-
-        # Диагностика fault-пути в stdout.
-        Проверить ($результат.Stdout -match 'FAULT-INJECT: parent-alive-after-stop') "${имя}: маркер fault-injection"
-        Проверить ($результат.Stdout -match 'SYNTHETIC HARNESS PID: (\d+)') "${имя}: synthetic PID в диагностике"
-        Проверить ($результат.Stdout -match 'SAFETY-FAIL') "${имя}: SAFETY-FAIL диагностика"
-        Проверить (
-            ($результат.Stdout -match 'HarnessNotExited') -or
-            ($результат.Stdout -match 'harness-not-exited') -or
-            ($результат.Stdout -match 'TreeCleanupFailed') -or
-            ($результат.Stdout -match 'tree-cleanup-failed') -or
-            ($результат.Stdout -match 'RemainingPids') -or
-            ($результат.Stdout -match 'remaining-descendants')) "${имя}: причина остановки (HarnessNotExited/TreeCleanupFailed/RemainingPids)"
-
-        # PASS-верdict невозможен в fault-режиме.
-        Проверить (-not ($результат.Stdout -match 'PASS: True')) "${имя}: PASS: True отсутствует"
-
-        # Lock освобождён: evidence содержит LOCK RELEASE released=True disposed=True
-        # и не содержит lock-release-failed.
-        $строкаБлокировки = $результат.Stdout | Select-String -Pattern 'LOCK RELEASE: released=(\w+) disposed=(\w+)' | Select-Object -First 1
-        Проверить ($null -ne $строкаБлокировки) "${имя}: строка LOCK RELEASE присутствует"
-
-        if ($null -ne $строкаБлокировки) {
-            Проверить (
-                $строкаБлокировки.Matches[0].Groups[1].Value -eq 'True' -and
-                $строкаБлокировки.Matches[0].Groups[2].Value -eq 'True') "${имя}: lock released=True disposed=True"
-        }
-
-        Проверить (-not ($результат.Stdout -match 'неудачи очистки: .*lock-release-failed')) "${имя}: lock-release-failed отсутствует"
-
-        # Sentinel удалён драйвером.
-        $sentinel = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData) + '\Picket302') 'picket302-review-sentinel.tmp'
-        Проверить (-not (Test-Path $sentinel)) "${имя}: sentinel удалён"
-
-        # Synthetic PID: извлечь, убить, проверить отсутствие.
-        $совпадение = [regex]::Match($результат.Stdout, 'SYNTHETIC HARNESS PID: (\d+)')
-
-        if ($совпадение.Success) {
-            $syntheticPid = [int]$совпадение.Groups[1].Value
-            $синтетическиеПиды.Add($syntheticPid)
-
-            if (Test-ProcessAlive $syntheticPid) {
-                [void](Invoke-TaskKillSafe $syntheticPid 'synthetic')
-                Start-Sleep -Milliseconds 500
+            if ($результат -eq $null) {
+                continue
             }
 
-            Проверить (-not (Test-ProcessAlive $syntheticPid)) "${имя}: synthetic pid=$syntheticPid не остался"
+            # Exit code обязан быть 1 (failure остановки не превращается в PASS).
+            Проверить ($результат.ExitCode -eq 1) "${имя}: exit code = 1" "фактический: $($результат.ExitCode)"
+
+            # Диагностика fault-пути в stdout.
+            Проверить ($результат.Stdout -match "FAULT-INJECT: $([regex]::Escape($режим.Имя))") "${имя}: маркер fault-injection"
+            Проверить ($результат.Stdout -match 'SYNTHETIC HARNESS PID: (\d+)') "${имя}: synthetic PID в диагностике"
+            Проверить ($результат.Stdout -match 'SAFETY-FAIL') "${имя}: SAFETY-FAIL диагностика"
+            Проверить (
+                ($результат.Stdout -match 'HarnessNotExited') -or
+                ($результат.Stdout -match 'harness-not-exited') -or
+                ($результат.Stdout -match 'TreeCleanupFailed') -or
+                ($результат.Stdout -match 'tree-cleanup-failed') -or
+                ($результат.Stdout -match 'RemainingPids') -or
+                ($результат.Stdout -match 'remaining-descendants')) "${имя}: причина остановки (HarnessNotExited/TreeCleanupFailed/RemainingPids)"
+
+            # PASS-верdict невозможен в fault-режиме.
+            Проверить (-not ($результат.Stdout -match 'PASS: True')) "${имя}: PASS: True отсутствует"
+
+            if ($режим.Имя -eq 'taskkill-hang') {
+                # Внутренний bounded timeout САМОЙ taskkill обязан сработать
+                # и быть отражён в stdout И в evidence-файле прогона.
+                # stdout-лог пишется cmd-ом в OEM-кодировке, поэтому
+                # машинно-читаемый маркер — ASCII; кириллическая часть
+                # диагностики проверяется по evidence (UTF-8).
+                Проверить ($результат.Stdout -match 'TASKKILL TIMEOUT') "${имя}: маркер внутреннего таймаута taskkill"
+                Проверить ($результат.Stdout -match 'TreeOk=False') "${имя}: TreeOk=false в диагностике"
+
+                $файлEvidence = Get-ChildItem -LiteralPath $каталогЛогов -Filter "*fault-taskkill-hang*.md" -ErrorAction SilentlyContinue | Select-Object -First 1
+                Проверить ($null -ne $файлEvidence) "${имя}: fault-evidence записан во временный каталог"
+
+                if ($null -ne $файлEvidence) {
+                    $содержимоеEvidence = Get-Content -LiteralPath $файлEvidence.FullName -Raw
+                    Проверить ($содержимоеEvidence -match 'TASKKILL TIMEOUT') "${имя}: evidence содержит таймаут taskkill"
+                    Проверить ($содержимоеEvidence -match 'за таймаут') "${имя}: evidence содержит причину таймаута"
+                    Проверить ($содержимоеEvidence -match 'TreeOk=False') "${имя}: evidence содержит TreeOk=false"
+                    Проверить ($содержимоеEvidence -match 'FINAL VERDICT: FAIL') "${имя}: evidence содержит FAIL-вердикт"
+                }
+            }
+
+            # Lock освобождён: evidence содержит LOCK RELEASE released=True disposed=True
+            # и не содержит lock-release-failed.
+            $строкаБлокировки = $результат.Stdout | Select-String -Pattern 'LOCK RELEASE: released=(\w+) disposed=(\w+)' | Select-Object -First 1
+            Проверить ($null -ne $строкаБлокировки) "${имя}: строка LOCK RELEASE присутствует"
+
+            if ($null -ne $строкаБлокировки) {
+                Проверить (
+                    $строкаБлокировки.Matches[0].Groups[1].Value -eq 'True' -and
+                    $строкаБлокировки.Matches[0].Groups[2].Value -eq 'True') "${имя}: lock released=True disposed=True"
+            }
+
+            Проверить (-not ($результат.Stdout -match 'неудачи очистки: .*lock-release-failed')) "${имя}: lock-release-failed отсутствует"
+
+            # Sentinel удалён драйвером.
+            $sentinel = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData) + '\Picket302') 'picket302-review-sentinel.tmp'
+            Проверить (-not (Test-Path $sentinel)) "${имя}: sentinel удалён"
+
+            # Synthetic PID: извлечь, убить, проверить отсутствие.
+            $совпадение = [regex]::Match($результат.Stdout, 'SYNTHETIC HARNESS PID: (\d+)')
+
+            if ($совпадение.Success) {
+                $syntheticPid = [int]$совпадение.Groups[1].Value
+                $синтетическиеПиды.Add($syntheticPid)
+
+                if (Test-ProcessAlive $syntheticPid) {
+                    [void](Invoke-TaskKillSafe $syntheticPid 'synthetic')
+                    Start-Sleep -Milliseconds 500
+                }
+
+                Проверить (-not (Test-ProcessAlive $syntheticPid)) "${имя}: synthetic pid=$syntheticPid не остался"
+            }
         }
     }
 

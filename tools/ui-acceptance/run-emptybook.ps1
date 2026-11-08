@@ -64,14 +64,17 @@ try {
     Запись "production profile files before: $($отпечатокДо.Count)"
 
     # --- 2. Synthetic harness (fault) или реальный запуск ------------------
-    $faultРежим = ($env:P302_DRIVER_FAULT -eq 'parent-alive-after-stop')
+    # parent-alive-after-stop — процесс переживает остановку (TreeOk=false);
+    # taskkill-hang — внутренний bounded timeout САМОЙ taskkill срабатывает
+    # (TreeOk=false, TreeError содержит таймаут). Оба режима — без UI.
+    $faultРежим = ($env:P302_DRIVER_FAULT -eq 'parent-alive-after-stop' -or $env:P302_DRIVER_FAULT -eq 'taskkill-hang')
 
     if ($faultРежим) {
         # FAULT-режим: без UI, без печати, без production-профиля —
         # скрытый PowerShell вместо harness; не читает stdin, поэтому
         # graceful CLOSE не завершает его; Stop-HarnessTree (шов) вернёт
         # TreeOk=false, оставив процесс живым.
-        Запись 'FAULT-INJECT: parent-alive-after-stop — synthetic harness (без UI)'
+        Запись "FAULT-INJECT: $env:P302_DRIVER_FAULT — synthetic harness (без UI)"
         $psiСинтетика = New-Object System.Diagnostics.ProcessStartInfo
         $psiСинтетика.FileName = 'powershell.exe'
         $psiСинтетика.Arguments = '-NoProfile -Command "Start-Sleep -Seconds 1800"'
@@ -134,6 +137,12 @@ try {
     if ($остановка.Результат -ne $null -and ($остановка.Результат -is [hashtable])) {
         $убит = -not $остановка.Результат.Graceful
         Запись "остановка: graceful=$($остановка.Результат.Graceful) killed=$убит pid=$($остановка.Результат.Pid) TreeOk=$($остановка.Результат.TreeOk) TreeConfirmed=$($остановка.Результат.TreeConfirmed) остатки=[$($остановка.Результат.RemainingPids -join ';')] неподтверждённые=[$($остановка.Результат.UnconfirmedPids -join ';')] taskkill=$($остановка.Результат.TaskKillExitCode) ошибка: $($остановка.Результат.TreeError)"
+
+        # Внутренний bounded timeout САМОЙ taskkill — отдельная диагностика
+        # (не путать с watchdog уровня драйвера).
+        if ($остановка.Результат.TaskKillTimedOutPids.Count -gt 0) {
+            Запись "SAFETY-FAIL: TASKKILL TIMEOUT: внутренний bounded timeout taskkill сработал (pid=$($остановка.Результат.TaskKillTimedOutPids -join ';'))"
+        }
     }
 
     # ExitCode читается ТОЛЬКО у фактически завершившегося процесса;

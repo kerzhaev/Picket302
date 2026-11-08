@@ -16,6 +16,14 @@
 #      маркеров на файле без маркера → $false.
 #   G. блокировка без UI: happy Released+Disposed=true; fault
 #      P302_LOCK_FAULT=release-fail → Released=$false (Error).
+#   H. bounded timeout САМОЙ taskkill: seam P302_TASKKILL_FAULT=hang
+#      подменяет runner на синтетический процесс, который спит дольше
+#      таймаута; helper обязан вернуться в ограниченном бюджете с
+#      TimedOut=true, Success=false, сохранив PID/Operation/Exception,
+#      и не оставить зависший процесс живым.
+#   I. Stop-HarnessTree при таймауте taskkill: без исключения, post-scan
+#      выполнен, TreeOk=false, TreeError содержит таймаут, списки
+#      RemainingPids/UnconfirmedPids не потеряны.
 # Итог: exit 0 только если ВСЕ ожидания выполнены и synthetic-процессов
 # не осталось; иначе exit 1.
 $ErrorActionPreference = 'Stop'
@@ -354,6 +362,106 @@ try {
         # Fault намеренно оставляет потомка живым: внешняя уборка.
         ЗавершитьПоПид $идРебёнкаГ 'g-manual'
         Start-Sleep -Milliseconds 500
+    }
+
+    # --- H. Внутренний bounded timeout САМОЙ taskkill ---------------------------
+    # Дефект: параметр $timeoutMs в сигнатуре сам по себе не ограничивает
+    # время исполнения native-команды. Контракт: taskkill — отдельный
+    # процесс с WaitForExit($timeoutMs); при зависании helper возвращает
+    # TimedOut=true, Success=false, сохраняет PID/Operation/Exception и
+    # НЕ зависает.
+    Write-Host '=== H: Invoke-TaskKillSafe — bounded timeout нативной команды'
+    $маркерХ = Join-Path $каталогВрем 'h-child.marker'
+    $скриптХ = Join-Path $каталогВрем 'parent-h.ps1'
+    ЗаписатьДочернийСкрипт $скриптХ $маркерХ 1
+    $родительХ = ЗапуститьРодителя $скриптХ
+    $идРебёнкаХ = 0
+    $timeoutMsХ = 800
+    $elapsedХ = -1
+
+    if (ПодождатьФайл "$маркерХ.родитель" 15) {
+        $идРебёнкаХ = [int](Get-Content -LiteralPath "$маркерХ.родитель" -Raw).Trim()
+        $оставленныеПроцессы.Add($идРебёнкаХ)
+    } else {
+        $провалы.Add('H: родитель не сообщил о ребёнке')
+    }
+
+    $env:P302_TASKKILL_FAULT = 'hang'
+    try {
+        # Системный taskkill подвешивать не нужно: seam подменяет runner
+        # на синтетический процесс, который спит дольше таймаута.
+        $часыХ = [System.Diagnostics.Stopwatch]::StartNew()
+        $результатХ = Invoke-TaskKillSafe $родительХ.Id 'helper-timeout' $timeoutMsХ $true
+        $часыХ.Stop()
+        $elapsedХ = $часыХ.ElapsedMilliseconds
+    } catch {
+        $результатХ = $null
+        $провалы.Add('H: helper бросил необработанное исключение')
+        Write-Host "  FAIL: helper бросил исключение: $($_.Exception.Message)"
+    } finally {
+        Remove-Item Env:P302_TASKKILL_FAULT -ErrorAction SilentlyContinue
+    }
+
+    if ($результатХ -ne $null) {
+        Проверить ($результатХ.Attempted -eq $true) 'H: Attempted=true'
+        Проверить ($результатХ.Pid -eq $родительХ.Id) 'H: PID сохранён' ("$($результатХ.Pid)")
+        Проверить ($результатХ.Operation -eq 'helper-timeout') 'H: Operation сохранён' ("$($результатХ.Operation)")
+        Проверить ($результатХ.TimedOut -eq $true) 'H: TimedOut=true'
+        Проверить ($результатХ.Success -eq $false) 'H: Success=false'
+        Проверить ($null -eq $результатХ.ExitCode) 'H: ExitCode=null (процесс не завершился штатно)' ("$($результатХ.ExitCode)")
+        Проверить ($результатХ.ContainsKey('Exception')) 'H: поле Exception присутствует'
+        Проверить ($результатХ.NotFound -eq $false) 'H: таймаут НЕ трактуется как not-found'
+        # Фактическое ожидание ограничено таймаутом; общий elapsed — таймаут
+        # плюс небольшой фиксированный запас на запуск и сбор диагностики.
+        Проверить ($результатХ.WaitMs -le ($timeoutMsХ + 1000)) 'H: фактическое ожидание ограничено таймаутом' ("$($результатХ.WaitMs) мс")
+        Проверить ($elapsedХ -le ($timeoutMsХ + 8000)) 'H: elapsed в пределах бюджета' ("$elapsedХ мс")
+        # Зависший синтетический runner не остаётся жить.
+        Проверить ($null -eq $результатХ.ChildPid -or -not (Test-ProcessAlive $результатХ.ChildPid)) 'H: зависший runner не остался' ("pid=$($результатХ.ChildPid)")
+    } else {
+        $провалы.Add('H: результат helper не получен')
+    }
+
+    # --- I. Stop-HarnessTree: таймаут taskkill → TreeOk=false --------------------
+    Write-Host '=== I: Stop-HarnessTree — таймаут taskkill (fail-closed)'
+    $маркерИ = Join-Path $каталогВрем 'i-child.marker'
+    $скриптИ = Join-Path $каталогВрем 'parent-i.ps1'
+    ЗаписатьДочернийСкрипт $скриптИ $маркерИ 1
+    $родительИ = ЗапуститьРодителя $скриптИ
+    $идРебёнкаИ = 0
+    $elapsedИ = -1
+
+    if (ПодождатьФайл "$маркерИ.родитель" 15) {
+        $идРебёнкаИ = [int](Get-Content -LiteralPath "$маркерИ.родитель" -Raw).Trim()
+        $оставленныеПроцессы.Add($идРебёнкаИ)
+    } else {
+        $провалы.Add('I: родитель не сообщил о ребёнке')
+    }
+
+    $env:P302_TASKKILL_FAULT = 'hang'
+    try {
+        $часыИ = [System.Diagnostics.Stopwatch]::StartNew()
+        $результатИ = Stop-HarnessTree $родительИ 1000
+        $часыИ.Stop()
+        $elapsedИ = $часыИ.ElapsedMilliseconds
+    } catch {
+        $результатИ = $null
+        $провалы.Add('I: Stop-HarnessTree бросил необработанное исключение')
+        Write-Host "  FAIL: Stop-HarnessTree бросил исключение: $($_.Exception.Message)"
+    } finally {
+        Remove-Item Env:P302_TASKKILL_FAULT -ErrorAction SilentlyContinue
+    }
+
+    if ($результатИ -ne $null) {
+        Проверить ($результатИ.TreeOk -eq $false) 'I: таймаут → TreeOk=false' $результатИ.TreeError
+        Проверить ($результатИ.TreeConfirmed -eq $true) 'I: финальный post-scan выполнен'
+        Проверить ($результатИ.TreeError -match 'таймаут') 'I: TreeError содержит таймаут' $результатИ.TreeError
+        Проверить ($результатИ.TaskKillTimedOutPids.Count -ge 1) 'I: PID с таймаутом зафиксирован' ($результатИ.TaskKillTimedOutPids -join ';')
+        Проверить ($null -ne $результатИ.RemainingPids) 'I: RemainingPids не потеряны'
+        Проверить ($null -ne $результатИ.UnconfirmedPids) 'I: UnconfirmedPids не потеряны'
+        Проверить ($результатИ.RemainingPids.Count -ge 1) 'I: живой потомок виден в RemainingPids' ($результатИ.RemainingPids -join ';')
+        Проверить ($elapsedИ -le 60000) 'I: остановка не зависла' ("$elapsedИ мс")
+    } else {
+        $провалы.Add('I: результат Stop-HarnessTree не получен')
     }
 
     # --- Итог: synthetic-процессов не осталось -----------------------------------
