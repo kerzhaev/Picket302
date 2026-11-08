@@ -876,6 +876,158 @@ fail-closed (проверено в synthetic suite).
     COM_VERIFIED / PRINT_VERIFIED = NOT_RUN_BY_SCOPE
     CODE_COVERAGE_MEASURED=false              — без изменений
 
+### 8.6. Статусы ревизии bounded timeout самой taskkill (девятая серия замечаний, 2026-11-08)
+
+**Дефект (несоответствие заявления и реализации).** Восьмая серия
+объявила у `Invoke-TaskKillSafe` параметр `$timeoutMs`, но внутри
+выполняла native-команду СИНХРОННО:
+
+    $вывод = & taskkill /T /F /PID $идентификатор 2>&1
+
+Параметр в сигнатуре **не ограничивал время исполнения самой
+taskkill**: ограничен был только внешний watchdog всего
+acceptance-драйвера — это другое, не связанное свойство. Зависшая
+taskkill висела бы бесконечно внутри `Stop-HarnessTree`.
+
+**Исправление — настоящий bounded runner.**
+
+1. Новый `Invoke-BoundedCommand` (`acceptance-lib.ps1`): native-команда
+   запускается **отдельным процессом** через
+   `System.Diagnostics.ProcessStartInfo` (`UseShellExecute=false`,
+   `CreateNoWindow=true`, `RedirectStandardOutput/Error=true`) и
+   ожидается `WaitForExit($TimeoutMs)`. При таймауте процесс
+   принудительно завершается (`Kill`), после чего выполняется **только
+   ограниченное** ожидание (`WaitForExit(2000)`) — бесконечный
+   `WaitForExit()` в наборе отсутствует.
+2. **Pipe-deadlock исключён конструктивно:** stdout/stderr читаются
+   **асинхронно** (`ReadToEndAsync`) с самого старта процесса, поэтому
+   буфер трубы не переполняется и дочерний процесс не блокируется на
+   записи. Синхронный `ReadToEnd()` до `WaitForExit()` запрещён (и
+   запрещён статической проверкой). Сбор вывода тоже ограничен по
+   времени — потомок, удерживающий конец трубы, не блокирует helper.
+3. `Invoke-TaskKillSafe` переведён на runner: `$timeoutMs` передаётся
+   в `WaitForExit($TimeoutMs)`. На таймауте — `TimedOut=true`,
+   `Success=false`, `ExitCode=null` (процесс не завершился штатно),
+   `Exception` сохраняется, `Pid`/`Operation`/`Output` сохраняются;
+   таймаут **не** трактуется как not-found.
+4. Классификация результатов сохранена без ослабления: код 0 →
+   `Success=true`; код 128 / «not found» / «не найден» →
+   `NotFound=true` + `AlreadyExited=true` (это признак гонки —
+   окончательное решение даёт post-scan); прочие ненулевые коды →
+   `TreeError` + `TreeOk=false`; таймаут → `TaskKillTimedOutPids` +
+   `TreeError` + `TreeOk=false`; исключение PowerShell/native →
+   `Exception` заполняется, наружу не выходит.
+5. `Stop-HarnessTree`: родитель, потомки и повторная аварийная
+   остановка — через тот же bounded helper; финальный post-scan
+   выполняется **всегда** (в том числе после timeout/error/not-found);
+   отсутствие исключения **не** означает PASS; benign race даёт
+   `TreeOk=true` только после подтверждённого post-scan.
+   Существующие поля не удалены: `TaskKillExitCode`, `KillOutput`,
+   `RemainingPids`, `UnconfirmedPids`, `TreeError`, `TreeConfirmed`,
+   `HarnessNotExited`, `DescendantKillResults`, `DescendantKillErrors`,
+   `AlreadyExitedPids`, `TaskKillRacePids`, `TaskKillTimedOutPids`.
+6. Детерминированный шов `P302_TASKKILL_FAULT=hang`: системный
+   taskkill подвешивать не нужно — runner подменяется синтетическим
+   процессом, который спит дольше таймаута; в fault-режиме внутренний
+   бюджет `Get-TaskKillTimeoutMs` = 800 мс.
+7. Новый статический guard
+   `tools/ui-acceptance/test-taskkill-bounded-static.ps1` (AST-разбор
+   `acceptance-lib.ps1`): требует, чтобы `Invoke-TaskKillSafe` вызывал
+   bounded runner **и передавал ему `$timeoutMs`** (ловит состояние
+   «параметр объявлен, но не используется»), чтобы runner использовал
+   `ProcessStartInfo` + `WaitForExit($TimeoutMs)` + `ReadToEndAsync`,
+   чтобы синхронного `& taskkill` не осталось и чтобы во всём
+   `tools/ui-acceptance` не было безлимитного `WaitForExit()`.
+
+**Два независимых свойства (не смешиваются и не подменяют друг
+друга):**
+
+- `DRIVER_NO_HANG_VERIFIED` — внешний watchdog ограничивает **весь**
+  acceptance-драйвер;
+- `TASKKILL_INTERNAL_TIMEOUT_VERIFIED` — внутренний таймаут
+  ограничивает **отдельный native-процесс** taskkill.
+
+**Измеренные факты (2026-11-08, всё без UI/COM/печати).**
+
+- Helper-level (timeoutMs = 800): фактическое ожидание `WaitMs` = 801 мс,
+  полный `ElapsedMs` = 822 мс (внешний замер 828 мс) — уложился в
+  таймаут + запас на запуск/сбор диагностики; `TimedOut=true`,
+  `Success=false`, `ExitCode=null`, `Exception` присутствует, PID и
+  Operation сохранены, зависший синтетический runner после теста **не
+  жив**.
+- Stop-HarnessTree-level: необработанного исключения нет; post-scan
+  выполнен (`TreeConfirmed=true`); `TreeOk=false`; `TreeError` содержит
+  «за таймаут»; `TaskKillTimedOutPids` заполнен; `RemainingPids` /
+  `UnconfirmedPids` не потеряны (живой потомок виден в `RemainingPids`).
+- Driver-level: `P302_TASKKILL_FAULT=hang` + `P302_DRIVER_FAULT=taskkill-hang`
+  — оба драйвера завершаются с exit 1, watchdog не истёк, evidence
+  содержит «TASKKILL TIMEOUT» и «за таймаут», `TreeOk=False`,
+  `FINAL VERDICT: FAIL`, lock released/disposed = True, sentinel удалён.
+
+Прогоны (2026-11-08, всё без UI/COM/печати):
+
+    TASKKILL_INTERNAL_TIMEOUT_VERIFIED=true  — Invoke-TaskKillSafe имеет
+                                               настоящий bounded runner
+                                               (отдельный процесс +
+                                               WaitForExit($timeoutMs));
+                                               таймаут → TimedOut=true,
+                                               Success=false, TreeOk=false;
+                                               post-scan выполняется
+    TASKKILL_TIMEOUT_FAULT_VERIFIED=true      — детерминированный шов
+                                               P302_TASKKILL_FAULT=hang:
+                                               helper-level и
+                                               Stop-HarnessTree-level
+                                               тесты зелёные
+    TASKKILL_BOUNDED_STATIC_VERIFIED=true     — статический guard (AST):
+                                               29 проверок, exit 0;
+                                               ловит «таймаут объявлен,
+                                               но не используется»
+    DRIVER_TASKKILL_TIMEOUT_VERIFIED=true     — driver-level: оба драйвера
+                                               exit 1, evidence содержит
+                                               таймаут, lock освобождён,
+                                               watchdog не истёк
+    TREE_CLEANUP_RACE_SAFE_VERIFIED=true      — без изменений (восьмая
+                                               серия): гонка
+                                               диагностируется
+                                               структурированно
+    TREE_CLEANUP_REPEATABILITY_VERIFIED=true  — synthetic suite 10 прогонов
+                                               подряд: 10/10 PASS, 0 FAIL
+    SYNTHETIC_TREE_SUITE_VERIFIED=true        — synthetic suite PASS (71
+                                               проверка), exit 0
+    EVIDENCE_SIDE_EFFECT_FREE_VERIFIED=true   — driver-level suite не
+                                               изменяет tracked-файлы
+                                               (git status до/после
+                                               совпадает); evidence во
+                                               временном каталоге
+    DRIVER_NO_HANG_VERIFIED=true              — без изменений (седьмая
+                                               серия): watchdog не истёк
+    BUILD_DEBUG_VERIFIED / BUILD_RELEASE_VERIFIED / HARNESS_BUILD_VERIFIED
+                                           = true — 0 ошибок, 0 предупреждений
+    TEST_DEBUG_VERIFIED / TEST_RELEASE_VERIFIED = true — 1258/1258,
+                                               0 fail, 0 skip
+    LOCK_RELEASE_VERIFIED=true               — fault-прогоны: released=True
+    PROCESS_TREE_CLEANUP_VERIFIED=true       — tree suite PASS
+    PROCESS_TREE_POSTCHECK_VERIFIED=true     — post-scan всегда; прямая
+                                               проверка PID потомков
+    FAIL_CLOSED_VERIFIED=true                — kill-fail, cim-fail,
+                                               descendant-remains,
+                                               descendant-not-found-but-
+                                               alive, taskkill timeout —
+                                               все failure
+    PROFILE_SAFETY_VERIFIED=true             — дельта 0/0/0, sentinel
+                                               отсутствует
+    TEMP_CLEANUP_VERIFIED=true               — все префиксы 0, keep=5,
+                                               .bak/.lock=0, процессов 0
+    EVIDENCE_WRITE_VERIFIED=PARTIAL          — fault-evidence записаны и
+                                               проверены; runtime happy-
+                                               запись — при разрешённом
+                                               UI-прогоне
+    UI_RUNTIME_VERIFIED=NOT_RUN_BY_SCOPE     — UI не запускался
+    REFERENCE_VISUAL_VERIFIED=PARTIAL         — без изменений; 70% —
+                                               целевой ориентир
+    COM_VERIFIED / PRINT_VERIFIED = NOT_RUN_BY_SCOPE
+    CODE_COVERAGE_MEASURED=false              — без изменений
+
 ## 9. Ограничения и что не проверялось
 
 - COM-активация, реестр, SCM — вне области (не запускались).

@@ -543,6 +543,67 @@ guard/ownership/postcondition 27/27; полные non-COM Debug и Release
 (TREE_CLEANUP_RACE_SAFE_VERIFIED, TREE_CLEANUP_REPEATABILITY_VERIFIED,
 SYNTHETIC_TREE_SUITE_VERIFIED, EVIDENCE_SIDE_EFFECT_FREE_VERIFIED).
 
+**Ревизия bounded timeout самой taskkill 2026-11-08 (девятая серия
+замечаний).**
+Исправлено несоответствие между заявлением и реализацией: `Invoke-TaskKillSafe`
+объявлял `$timeoutMs`, но выполнял `& taskkill /T /F /PID N` СИНХРОННО —
+параметр не ограничивал время исполнения самой native-команды (ограничен
+был только внешний watchdog всего acceptance-драйвера — другое свойство).
+Введён настоящий bounded runner `Invoke-BoundedCommand`: native-команда
+запускается ОТДЕЛЬНЫМ процессом (`System.Diagnostics.ProcessStartInfo`,
+`UseShellExecute=false`, `CreateNoWindow=true`, перенаправление
+stdout/stderr) и ожидается `WaitForExit($TimeoutMs)`; при таймауте процесс
+принудительно завершается (`Kill`), после чего выполняется ТОЛЬКО
+ограниченное ожидание (`WaitForExit(2000)`). Pipe-deadlock исключён
+конструктивно: вывод читается АСИНХРОННО (`ReadToEndAsync`) с самого
+старта процесса, поэтому буфер трубы не переполняется; синхронный
+`ReadToEnd()` до `WaitForExit()` запрещён. `Invoke-TaskKillSafe` переведён
+на runner: `$timeoutMs` передаётся в `WaitForExit($TimeoutMs)`; на таймауте —
+`TimedOut=true`, `Success=false`, `ExitCode=null`, `Exception` сохраняется,
+`Pid`/`Operation`/`Output` сохраняются; таймаут НЕ трактуется как
+not-found. Классификация не ослаблена: код 0 → Success; код 128 / «not
+found» → `NotFound`+`AlreadyExited` (признак гонки, окончательное решение
+даёт post-scan); прочие ненулевые → `TreeError`+`TreeOk=false`; таймаут →
+`TaskKillTimedOutPids`+`TreeError`+`TreeOk=false`; исключение →
+`Exception` заполняется, наружу не выходит. `Stop-HarnessTree`: родитель,
+потомки и повторная аварийная остановка — через тот же bounded helper;
+финальный post-scan выполняется ВСЕГДА (в том числе после
+timeout/error/not-found); отсутствие исключения НЕ означает PASS; benign
+race даёт `TreeOk=true` только после подтверждённого post-scan; все
+существующие поля сохранены. Детерминированный шов
+`P302_TASKKILL_FAULT=hang` (системный taskkill подвешивать не нужно —
+runner подменяется синтетическим процессом, который спит дольше таймаута;
+внутренний бюджет в fault-режиме 800 мс) + новый статический guard
+`tools/ui-acceptance/test-taskkill-bounded-static.ps1` (AST-разбор: требует
+передачи `$timeoutMs` в runner, `ProcessStartInfo`+`WaitForExit($TimeoutMs)`,
+`ReadToEndAsync`, отсутствие синхронного `& taskkill` и безлимитных
+`WaitForExit()` — ловит состояние «таймаут объявлен, но не используется»).
+Добавлены helper-level и Stop-HarnessTree-level тесты таймаута и
+driver-level режим `P302_DRIVER_FAULT=taskkill-hang`. Внешний watchdog
+драйвера и внутренний таймаут taskkill — РАЗНЫЕ свойства, флаги не
+объединены.
+Контроль: **synthetic suite 10 прогонов подряд — 10/10 PASS** (71 проверка
+каждый), driver-level suite 3/3 PASS (59 проверок каждый; 4 прогона за
+итерацию: 2 драйвера × 2 fault-режима — все exit 1, watchdog не истёк,
+lock released/disposed=True, sentinel удалён, synthetic PID отсутствуют,
+рабочее дерево не изменилось); статический guard 29/29 PASS; parse 7
+файлов — 0 ошибок; `rg -nP "\.WaitForExit\(\s*\)" tools/ui-acceptance` — 0
+совпадений; измеренный таймаут helper: timeoutMs=800, WaitMs=801 мс,
+ElapsedMs=822 мс (внешний замер 828 мс), TimedOut=true, Success=false,
+ExitCode=null, зависший runner не жив; Stop-HarnessTree-level: без
+исключения, TreeOk=false, TreeConfirmed=true, TreeError содержит «за
+таймаут», RemainingPids/UnconfirmedPids не потеряны; сборки
+Debug/Release/harness 0/0; lock-тесты 4/4; guard/ownership/postcondition
+27/27; guard-negative happy 0 и 5 fault-режимов — все exit 1; полные
+non-COM Debug и Release **1258/1258**; перепись чистая (процессы 0,
+префиксы 0, keep=5, .bak/.lock=0, sentinel отсутствует, production 4
+файла). UI/COM/печать не запускались. Флаги —
+`docs/UX-REDESIGN-2026-11-05.md`, раздел 8.6
+(TASKKILL_INTERNAL_TIMEOUT_VERIFIED, TASKKILL_TIMEOUT_FAULT_VERIFIED,
+TASKKILL_BOUNDED_STATIC_VERIFIED, DRIVER_TASKKILL_TIMEOUT_VERIFIED —
+отдельно от DRIVER_NO_HANG_VERIFIED, DRIVER_BOUNDED_WAIT_VERIFIED и
+TREE_CLEANUP_RACE_SAFE_VERIFIED).
+
 ## Приложение: сквозной приёмочный сценарий
 
 `tests/Picket302.Tests/Acceptance/AcceptanceScenarioTests.cs` — `Сквозной_сценарий_приёмки_от_демо_базы_до_восстановления_архива`:
