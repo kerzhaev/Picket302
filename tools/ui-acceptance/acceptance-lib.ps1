@@ -240,6 +240,11 @@ function Start-Acceptance([string]$exe, [string]$mode, [string]$profileRoot, [bo
     return @{
         Proc = $p
         Lines = [System.Collections.ArrayList]::new()
+        # Незавершённая задача чтения stdout: сохраняется между вызовами
+        # Read-HarnessLines, чтобы таймаут ожидания не оставлял поток в
+        # состоянии «используется предыдущей операцией» (регрессия
+        # 2026-11-08, сценарий «получатель без адреса»).
+        PendingTask = $null
     }
 }
 
@@ -266,19 +271,46 @@ function Send-HarnessCommand($h, [string]$command) {
 
 # Читает stdout harness построчно (ReadLineAsync) до строки, совпавшей с
 # $pattern, либо до таймаута/закрытия потока. Все прочитанные строки
-# накапливаются в $h.Lines. Возвращает $true при совпадении.
+# накопливаются в $h.Lines. Возвращает $true при совпадении.
+#
+# НАКОПЛЕНИЕ НЕЗАВЕРШЁННОГО ЧТЕНИЯ (регрессия 2026-11-08). Наивная версия
+# вызывала ReadLineAsync() заново на каждой итерации. При таймауте ожидания
+# (строка так и не пришла) ожидающая задача оставалась «в подвешенном» состоянии,
+# и СЛЕДУЮЩИЙ вызов ReadLineAsync() падал с
+# «Поток в настоящее время используется предыдущей операцией потока»
+# (IOException). Сценарий «получатель без адреса» на этом спотыкался:
+# первое ожидание искомой марки истекло, и все дальнейшие чтения stdout
+# становились невозможны — драйвер терял доказательства.
+#
+# Теперь незавершённая задача чтения СОХРАНЯЕТСЯ в $h.PendingTask и
+# подхватывается следующим вызовом: операция над потоком не прерывается,
+# ни одна строка не теряется, а повторный read на том же потоке не
+# инициируется.
 function Read-HarnessLines($h, [string]$pattern, [int]$seconds = 15) {
     $deadline = (Get-Date).AddSeconds($seconds)
 
     while ((Get-Date) -lt $deadline) {
-        $задача = $h.Proc.StandardOutput.ReadLineAsync()
+        # Продолжаем ранее начатое чтение, если оно ещё не завершено.
+        $задача = $h.PendingTask
+
+        if ($null -eq $задача) {
+            $задача = $h.Proc.StandardOutput.ReadLineAsync()
+            $h.PendingTask = $задача
+        }
 
         while (-not $задача.IsCompleted) {
             if ((Get-Date) -ge $deadline -or $h.Proc.HasExited) { break }
             Start-Sleep -Milliseconds 100
         }
 
-        if (-not $задача.IsCompleted) { return $false }
+        if (-not $задача.IsCompleted) {
+            # Таймаут: задача остаётся в $h.PendingTask, чтобы следующий
+            # вызов продолжил её, а не начал вторую операцию над потоком.
+            return $false
+        }
+
+        # Чтение завершилось — задача больше не подвешена.
+        $h.PendingTask = $null
 
         $строка = $задача.Result
 

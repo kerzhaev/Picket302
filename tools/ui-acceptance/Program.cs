@@ -17,6 +17,14 @@ using Picket302.Printing.Preview;
 // переданном изолированном профиле. Режимы:
 //   emptybook <профиль>      — пустая адресная книга (создатьДемоБазу: false)
 //   printflow <профиль>      — синтетические отправитель+получатель для F5/F6
+//   noaddress <профиль>      — отправитель с адресом + получатель БЕЗ адреса
+//                              (сценарий «получатель без адреса», ТЗ §11.4
+//                              приёмки): печать обязана показать понятное
+//                              сообщение, не создать отправление и не
+//                              сформировать задание на печать.
+//   screens <профиль>        — снимки экранов матрицы визуального сравнения:
+//                              открывает рабочие диалоги по одному, дожидаясь
+//                              команды оператора «СЛЕДУЮЩИЙ» перед закрытием.
 //
 // Гард изоляции: путь профиля проверяется ДО создания каких-либо каталогов
 // и состава. Проверяются и сам корень, и рассчитанный
@@ -52,14 +60,14 @@ Console.SetError(new StreamWriter(
 
 if (args.Length < 2)
 {
-    Console.Error.WriteLine("Использование: UiAcceptance <emptybook|printflow> <кореньПрофиля> [keep]");
+    Console.Error.WriteLine("Использование: UiAcceptance <emptybook|printflow|noaddress> <кореньПрофиля> [keep]");
     return 2;
 }
 
 var режим = args[0];
 var кореньПрофиля = Path.GetFullPath(args[1]);
 
-if (режим is not ("emptybook" or "printflow"))
+if (режим is not ("emptybook" or "printflow" or "noaddress" or "screens"))
 {
     Console.Error.WriteLine($"Неизвестный режим: {режим}");
     return 2;
@@ -108,6 +116,17 @@ Directory.CreateDirectory(пути.SecretsDirectory);
 ApplicationConfiguration.Initialize();
 Application.SetCompatibleTextRenderingDefault(false);
 
+// Fail-closed для acceptance (регрессия 2026-11-08): непредвиденное
+// исключение в потоке UI по умолчанию показывает МОДАЛЬНЫЙ диалог
+// ThreadException — он блокирует поток UI навсегда, драйвер не получает
+// ни stdout-маркеров, ни выхода, и приёмка виснет (зарегистрировано при
+// прогоне снимков экрана: диалог исключения ImageList держал процесс,
+// пока он не был найден и завершён вручную). Режим ThrowException
+// пробрасывает исключение из цикла сообщений: его ловит верхний
+// try/catch этого файла — процесс печатает диагностику в stderr и
+// завершается с кодом 1, гарантированно проходя очистку профиля.
+Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+
 AppServices? состав = null;
 MainShell? окно = null;
 var основнойКод = 0;
@@ -121,6 +140,19 @@ try
     if (режим == "printflow")
     {
         await ЗасеятьОтправителяИПолучателя(состав).ConfigureAwait(false);
+    }
+
+    if (режим == "noaddress")
+    {
+        await ЗасеятьПолучателяБезАдреса(состав).ConfigureAwait(false);
+    }
+
+    if (режим == "screens")
+    {
+        // Снимки экранов матрицы: наполняем адресную книгу демонстрационными
+        // данными (в отличие от emptybook) — иначе половина поверхностей
+        // (карточка, длинные значения) нечего показывать.
+        await ЗасеятьДемонстрационныеДанные(состав).ConfigureAwait(false);
     }
 
     окно = new MainShell(состав)
@@ -142,15 +174,21 @@ try
             // that marker can arrive before the first command. It is valid
             // only at the beginning of this protocol, so remove it before
             // dispatching instead of treating the command as UNKNOWN.
-            var текст = команда.Trim().TrimStart('\uFEFF').ToUpperInvariant();
+            var текст = команда.Trim().TrimStart('\uFEFF');
 
-            if (текст == "CLOSE")
+            // Команда — первый токен в верхнем регистре; аргумент сохраняется
+            // как есть (имя диалога регистрозависимо).
+            var разделитель = текст.IndexOf(' ');
+            var имяКоманды = (разделитель < 0 ? текст : текст[..разделитель]).ToUpperInvariant();
+            var аргумент = разделитель < 0 ? string.Empty : текст[(разделитель + 1)..].Trim();
+
+            if (имяКоманды == "CLOSE")
             {
                 окно!.BeginInvoke(() => окно.Close());
                 break;
             }
 
-            окно!.BeginInvoke(() => Выполнить(окно, текст, состав!));
+            окно!.BeginInvoke(() => Выполнить(окно, имяКоманды, состав!, аргумент));
         }
     });
 
@@ -272,7 +310,7 @@ finally
 
 return Environment.ExitCode;
 
-static void Выполнить(MainShell окно, string команда, AppServices состав)
+static void Выполнить(MainShell окно, string команда, AppServices состав, string аргумент = "")
 {
     switch (команда)
     {
@@ -346,6 +384,77 @@ static void Выполнить(MainShell окно, string команда, AppSer
 
             break;
 
+        case "SELECTNOADDR":
+            // Сценарий «получатель без адреса»: выбирается ИМЕННО та строка,
+            // у контрагента которой нет основного адреса. Выбор по признаку
+            // (а не по порядку строк) делает сценарий детерминированным и не
+            // зависит от порядка вставки или сортировки.
+            //
+            // ВАЖНО: снимается выделение со ВСЕХ остальных строк. Иначе
+            // DataGridView оставляет автоматически выделенной первую строку
+            // (отправителя, у которого адрес ЕСТЬ), и F6 создала бы
+            // отправление для него — сценарий проверял бы не то, что
+            // задумано, а «печать частично прошла».
+            var таблицаБезАдреса = окно.ТаблицаПолучателей;
+            var найденБезАдреса = false;
+
+            таблицаБезАдреса.ClearSelection();
+
+            for (var строка = 0; строка < таблицаБезАдреса.Rows.Count; строка++)
+            {
+                if (таблицаБезАдреса.Rows[строка].IsNewRow)
+                {
+                    continue;
+                }
+
+                if (таблицаБезАдреса.Rows[строка].Tag is not long идентификатор)
+                {
+                    continue;
+                }
+
+                var контрагент = состав.Контрагенты.GetByIdAsync(идентификатор).GetAwaiter().GetResult();
+
+                if (контрагент is null || контрагент.GetAddress(контрагент.AddressMainType) is not null)
+                {
+                    continue;
+                }
+
+                таблицаБезАдреса.Rows[строка].Selected = true;
+                var имя = таблицаБезАдреса.Rows[строка].Cells["Получатель"].Value?.ToString() ?? string.Empty;
+                var выделено = таблицаБезАдреса.SelectedRows.Count;
+                Console.Out.WriteLine($"OK SELECTNOADDR {имя} выделено={выделено}");
+                найденБезАдреса = true;
+                break;
+            }
+
+            if (!найденБезАдреса)
+            {
+                Console.Out.WriteLine("FAIL SELECTNOADDR: получатель без адреса не найден");
+            }
+
+            break;
+
+        case "SHOW":
+            // Открыть рабочий диалог для снимка экрана. Диалог открывается
+            // НЕ модально: окно остаётся живым, пока драйвер не пришлёт
+            // команду закрытия — иначе снимок невозможно снять.
+            ПоказатьДиалог(окно, состав, аргумент);
+            break;
+
+        case "HIDE":
+            // Закрыть последний открытый диалог снимков.
+            СнимкиЭкранов.ПоследнийДиалог?.Close();
+            СнимкиЭкранов.ПоследнийДиалог = null;
+            Console.Out.WriteLine("OK HIDE");
+            Console.Out.Flush();
+            break;
+
+        case "MAILCOUNT":
+            // Сценарий «получатель без адреса»: доказательство, что печать
+            // не создала частичную запись отправления.
+            СчитатьОтправления(состав);
+            break;
+
         case "SEEDFIELDS":
             // Сценарий предпросмотра: в шаблон приёмки добавляются реальные
             // поля бланка ([edt_str_to1], [edt_str_to2], [edtIndeks_to]) —
@@ -367,6 +476,204 @@ static void Выполнить(MainShell окно, string команда, AppSer
             break;
     }
 
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Сценарий «получатель без адреса»: отправитель заводится с полным адресом
+/// (иначе печать остановится раньше, на проверке отправителя), а получатель
+/// — БЕЗ основного адреса. Именно этот получатель выбирается в адресной
+/// книге, поэтому и F5, и F6 обязаны показать понятное сообщение и НЕ
+/// создать отправление.
+///
+/// Требование сценария (ТЗ §11.4): печать без адреса не должна приводить к
+/// зависанию, к частично созданной записи и к заданию на печать.
+/// </summary>
+static async Task ЗасеятьПолучателяБезАдреса(AppServices состав)
+{
+    var отправитель = await состав.Контрагенты.AddAsync(new Counterparty
+    {
+        Type = CounterpartyType.LegalEntity,
+        Name = "ООО «Отправитель Приёмки»",
+        Inn = "7707083893",
+        IsActive = true,
+        IsSender = true,
+        CreatedAt = DateTime.UtcNow,
+        PostalAddress = Address.Create(
+            "101000",
+            ["ООО «Отправитель Приёмки»", "Управление делами", "ул. Тверская, 12", "корп. 2", "г. Москва", string.Empty]).Value,
+    }).ConfigureAwait(false);
+
+    // Получатель БЕЗ адреса: PostalAddress не задаётся вовсе, поэтому
+    // контрагент.GetAddress(AddressMainType) возвращает null — ровно то
+    // состояние, которое обязано обрабатываться сообщением, а не печатью.
+    await состав.Контрагенты.AddAsync(new Counterparty
+    {
+        Type = CounterpartyType.LegalEntity,
+        Name = "ООО «Получатель Без Адреса»",
+        Inn = "7707083893",
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow,
+    }).ConfigureAwait(false);
+
+    состав.ТекущийОтправитель.SetGlobalSender(отправитель);
+    состав.ТекущийОтправитель.Load();
+
+    // Шаблон нужен, чтобы сценарий дошёл до печатного конвейера в тех случаях,
+    // когда адрес у получателя всё же окажется задан (проверка «печать не
+    // началась» должна отличаться от «шаблона нет»).
+    await состав.ШаблоныПечати.AddAsync(new PrintTemplate
+    {
+        Name = "Конверт C6 (приёмка)",
+        Kind = PrintTemplateKind.Envelope,
+        Format = "C6",
+        WidthMm = 324m,
+        HeightMm = 229m,
+    }).ConfigureAwait(false);
+
+    Console.Out.WriteLine("SEEDED-NOADDRESS");
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Наполняет изолированный профиль демонстрационными данными для снимков
+/// экранов матрицы визуального сравнения: отправитель, получатели с разными
+/// адресами, один — с очень длинными значениями, группы и шаблон печати.
+/// Данные живут ТОЛЬКО в изолированном профиле драйвера.
+/// </summary>
+static async Task ЗасеятьДемонстрационныеДанные(AppServices состав)
+{
+    var отправитель = await состав.Контрагенты.AddAsync(new Counterparty
+    {
+        Type = CounterpartyType.LegalEntity,
+        Name = "ООО «Отправитель Приёмки»",
+        ShortName = "Отправитель",
+        Inn = "7707083893",
+        IsActive = true,
+        IsSender = true,
+        CreatedAt = DateTime.UtcNow,
+        PostalAddress = Address.Create(
+            "101000",
+            ["ООО «Отправитель Приёмки»", "Управление делами", "ул. Тверская, 12", "корп. 2", "г. Москва", string.Empty]).Value,
+    }).ConfigureAwait(false);
+
+    await состав.Контрагенты.AddAsync(new Counterparty
+    {
+        Type = CounterpartyType.LegalEntity,
+        Name = "ООО «Получатель Приёмки»",
+        ShortName = "Получатель",
+        Inn = "7707083893",
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow,
+        PostalAddress = Address.Create(
+            "125009",
+            ["ООО «Получатель Приёмки»", "Отдел писем", "ул. Тверская, 7", string.Empty, "г. Москва", string.Empty]).Value,
+    }).ConfigureAwait(false);
+
+    // Очень длинные значения: длинное наименование, длинная строка адреса и
+    // длинный индекс — проверка читаемости без обрезания.
+    await состав.Контрагенты.AddAsync(new Counterparty
+    {
+        Type = CounterpartyType.LegalEntity,
+        Name = "Общество с ограниченной ответственностью «Промышленно-внедренческая компания «Восток-Запад-Инвест»",
+        ShortName = "Восток-Запад-Инвест",
+        Inn = "7707083893",
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow,
+        PostalAddress = Address.Create(
+            "125009",
+            [
+                "Общество с ограниченной ответственностью «Промышленно-внедренческая компания «Восток-Запад-Инвест»",
+                "Производственно-сбытовое управление международных поставок",
+                "ул. Тверская, дом 7, строение 3, этаж 4, офис 412",
+                "Деловой центр «Мельниковская площадь»",
+                "г. Москва",
+                string.Empty,
+            ]).Value,
+    }).ConfigureAwait(false);
+
+    состав.ТекущийОтправитель.SetGlobalSender(отправитель);
+    состав.ТекущийОтправитель.Load();
+
+    await состав.ШаблоныПечати.AddAsync(new PrintTemplate
+    {
+        Name = "Конверт C6 (приёмка)",
+        Kind = PrintTemplateKind.Envelope,
+        Format = "C6",
+        WidthMm = 324m,
+        HeightMm = 229m,
+    }).ConfigureAwait(false);
+
+    Console.Out.WriteLine("SEEDED-SCREENS");
+    Console.Out.Flush();
+}
+
+
+/// <summary>
+/// Открывает рабочий диалог для снимка экрана. Диалог открывается НЕ
+/// модально и остаётся живым до команды HIDE.
+/// </summary>
+static void ПоказатьДиалог(MainShell окно, AppServices состав, string имя)
+{
+    try
+    {
+        СнимкиЭкранов.ПоследнийДиалог?.Close();
+        СнимкиЭкранов.ПоследнийДиалог = null;
+
+        Form? диалог = имя.ToLowerInvariant() switch
+        {
+            // Карточка открывается для РЕАЛЬНОГО контрагента: иначе снимок
+            // показывает пустую форму, а не рабочее состояние.
+            "counterparty" => new Picket302.App.UI.Forms.FormCounterpartyEdit(
+                состав.Контрагенты.GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 10))
+                    .GetAwaiter().GetResult().Items.FirstOrDefault()),
+            "mailedit" => new Picket302.App.UI.Forms.FormMailEdit(),
+            "gridappearance" => new Picket302.App.UI.Forms.FormGridAppearance(
+                Picket302.Domain.Contracts.GridAppearance.Default),
+            "blankeditor" => new Picket302.App.UI.Forms.FormBlankEditor(),
+            "clipartpicker" => new Picket302.App.UI.Forms.FormClipartPicker(
+                new Picket302.Infrastructure.Templates.ClipartLibrary()),
+            "distribution" => new Picket302.App.UI.Forms.FormDistributionEditor(состав),
+            _ => null,
+        };
+
+        if (диалог is null)
+        {
+            Console.Out.WriteLine($"FAIL SHOW: неизвестный диалог '{имя}'");
+            Console.Out.Flush();
+            return;
+        }
+
+        диалог.StartPosition = FormStartPosition.Manual;
+        диалог.Location = new Point(60, 60);
+        диалог.Show();
+        диалог.BringToFront();
+        диалог.Activate();
+
+        СнимкиЭкранов.ПоследнийДиалог = диалог;
+
+        Console.Out.WriteLine($"OK SHOW {имя} {диалог.Handle}");
+    }
+    catch (Exception ошибка)
+    {
+        Console.Out.WriteLine($"FAIL SHOW {имя}: {ошибка.Message}");
+    }
+
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Считает созданные отправления: сценарий «получатель без адреса» обязан
+/// доказать, что запись НЕ была частично создана.
+/// </summary>
+static void СчитатьОтправления(AppServices состав)
+{
+    var страница = состав.Письма
+        .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 500))
+        .GetAwaiter()
+        .GetResult();
+
+    Console.Out.WriteLine($"MAILCOUNT всего={страница.TotalCount}");
     Console.Out.Flush();
 }
 
@@ -815,4 +1122,14 @@ static void СканПредпросмотра()
     }
 
     Console.Out.Flush();
+}
+
+/// <summary>
+/// Хранилище снимков экрана: последний открытый диалог держится живым до
+/// команды HIDE (иначе снимок невозможно снять).
+/// </summary>
+static class СнимкиЭкранов
+{
+    /// <summary>Последний открытый диалог снимков.</summary>
+    public static Form? ПоследнийДиалог { get; set; }
 }

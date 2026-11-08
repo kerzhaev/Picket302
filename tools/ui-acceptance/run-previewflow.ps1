@@ -13,7 +13,14 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\acceptance-lib.ps1"
 
 $exe = "$PSScriptRoot\bin\x64\Release\net8.0-windows\UiAcceptance.exe"
-$out = if ($env:P302_EVIDENCE_ROOT) { $env:P302_EVIDENCE_ROOT } else { 'Z:\Picket302\docs\ux-audit-2026-11-03\после-этапа-редизайна' }
+# Каталог evidence. Задаётся переменной P302_EVIDENCE_ROOT, иначе — подкаталог
+# с УНИКАЛЬНЫМ именем внутри docs текущей серии (регрессия 2026-11-08): прежний
+# жёстко заданный путь перезаписывал скриншоты ПРЕДЫДУЩЕЙ серии.
+$out = if ($env:P302_EVIDENCE_ROOT) {
+    $env:P302_EVIDENCE_ROOT
+} else {
+    Join-Path 'Z:\Picket302\docs' ('ux-audit-' + (Get-Date -Format 'yyyy-MM-dd') + '\evidence')
+}
 $applicationData = Get-ApplicationDataFolder
 $реальныйПрофиль = Join-Path $applicationData 'Picket302'
 $sentinel = Join-Path $реальныйПрофиль 'picket302-review-sentinel.tmp'
