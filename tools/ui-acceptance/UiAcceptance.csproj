@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Acceptance-harness Picket302: управляемый показ реального MainShell
        на явном изолированном профиле. Не входит в Picket302.sln: собирается
@@ -13,6 +13,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>UiAcceptance</AssemblyName>
     <RootNamespace>Picket302.UiAcceptance</RootNamespace>
+    <!-- PMv2 обязателен (stage3.1, DPI-симуляция): в SystemAware-процессе
+         WmDpiChanged применяет только suggested-прямоугольник БЕЗ рескала
+         контролов (DeviceDpi остаётся 96). Приложение собирается с тем же
+         PerMonitorV2 (Picket302.App.csproj). -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AppDllDir Condition="'$(AppDllDir)' == ''">$(MSBuildThisFileDirectory)..\..\src\Picket302.App\bin\x64\Release\net8.0-windows</AppDllDir>
   </PropertyGroup>
 

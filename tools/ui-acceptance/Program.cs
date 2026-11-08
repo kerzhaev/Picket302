@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using Picket302.App;
 using Picket302.Domain.Entities;
 using Picket302.Domain.ValueObjects;
@@ -67,7 +67,7 @@ if (args.Length < 2)
 var режим = args[0];
 var кореньПрофиля = Path.GetFullPath(args[1]);
 
-if (режим is not ("emptybook" or "printflow" or "noaddress" or "screens"))
+if (режим is not ("emptybook" or "printflow" or "noaddress" or "screens" or "screens2" or "noprinter"))
 {
     Console.Error.WriteLine($"Неизвестный режим: {режим}");
     return 2;
@@ -107,6 +107,14 @@ if (причинаКорня is not null || причинаРасчёта is not 
 Console.Out.WriteLine($"PROFILE {пути.DataDirectory}");
 Console.Out.Flush();
 
+// Журнал profile-sensitive операции (stage3.1, §6.3): PID и границы гарда
+// в stdout каждого прогона — расследование внешних изменений профиля
+// получает явную связь «прогон ↔ процесс ↔ корень».
+Console.Out.WriteLine(
+    $"GUARD PASS pid={Environment.ProcessId} root={пути.DataDirectory} "
+    + $"process={Environment.ProcessPath ?? "UiAcceptance"}");
+Console.Out.Flush();
+
 var сохранятьПрофиль = args.Length > 2 && args[2] == "keep";
 
 Directory.CreateDirectory(пути.DataDirectory);
@@ -135,9 +143,25 @@ var cleanupКод = 0;
 try
 {
     // Пункт B/A: демо-засев никогда не выполняется в acceptance-профиле.
-    состав = await AppServices.СоздатьAsync(пути, создатьДемоБазу: false).ConfigureAwait(false);
+    // Изоляция реестра (stage3.1, контейнирование ENV3-02-соседнего обхода):
+    // составное хранилище отправителя по умолчанию пишет SenderId и в
+    // HKCU\Software\PEPro\CurrentSender — реальную машину. Все режимы
+    // acceptance работают с NullCurrentSenderStore: реестровая ветка остаётся
+    // за производственной установкой. Режим noprinter подменяет принтерный
+    // менеджер производным классом (null вместо принтера по умолчанию) —
+    // сценарий «нет принтера» без изменения системных настроек стенда.
+    var принтерныйМенеджер = режим == "noprinter"
+        ? new ПустойМенеджерПринтеров()
+        : null;
+    состав = await AppServices
+        .СоздатьAsync(
+            пути,
+            создатьДемоБазу: false,
+            службаПринтеров: принтерныйМенеджер,
+            реестрОтправителяИзолирован: true)
+        .ConfigureAwait(false);
 
-    if (режим == "printflow")
+    if (режим == "printflow" || режим == "noprinter")
     {
         await ЗасеятьОтправителяИПолучателя(состав).ConfigureAwait(false);
     }
@@ -147,11 +171,13 @@ try
         await ЗасеятьПолучателяБезАдреса(состав).ConfigureAwait(false);
     }
 
-    if (режим == "screens")
+    if (режим == "screens" || режим == "screens2")
     {
         // Снимки экранов матрицы: наполняем адресную книгу демонстрационными
         // данными (в отличие от emptybook) — иначе половина поверхностей
-        // (карточка, длинные значения) нечего показывать.
+        // (карточка, длинные значения) нечего показывать. Шаблон печати
+        // сеется командой SEEDTEMPLATE по требованию: сценарий «нет шаблона»
+        // выполняется на профиле БЕЗ шаблонов.
         await ЗасеятьДемонстрационныеДанные(состав).ConfigureAwait(false);
     }
 
@@ -471,6 +497,132 @@ static void Выполнить(MainShell окно, string команда, AppSer
             СканПредпросмотра();
             break;
 
+        case "SETTAB":
+            // Смена вкладки главного окна («Отправленные» — 3). Драйвер
+            // доказывает состояние вкладки командой SENTINFO после
+            // асинхронной загрузки.
+            if (!int.TryParse(аргумент, out var номерВкладки)
+                || номерВкладки < 0
+                || номерВкладки >= окно.Вкладки.TabPages.Count)
+            {
+                Console.Out.WriteLine($"FAIL SETTAB: неверный индекс '{аргумент}'");
+                break;
+            }
+
+            окно.Вкладки.SelectedIndex = номерВкладки;
+            Console.Out.WriteLine(
+                $"OK SETTAB {номерВкладки} «{окно.Вкладки.TabPages[номерВкладки].Text}»");
+            break;
+
+        case "SENTINFO":
+            // Вкладка «Отправленные»: число строк таблицы, признак подсказки
+            // пустого дерева и выделение — доказательства состояний 7.1/7.2.
+            {
+                var таблицаПисем = (DataGridView?)typeof(MainShell)
+                    .GetField("_таблицаОтправленных", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                    ?.GetValue(окно);
+
+                if (таблицаПисем is null)
+                {
+                    Console.Out.WriteLine("FAIL SENTINFO: таблица не найдена");
+                    break;
+                }
+
+                var строк = 0;
+                string? первое = null;
+
+                foreach (DataGridViewRow строка in таблицаПисем.Rows)
+                {
+                    if (строка.IsNewRow)
+                    {
+                        continue;
+                    }
+
+                    строк++;
+
+                    if (первое is null)
+                    {
+                        первое = строка.Cells["Получатель"].Value?.ToString();
+                    }
+                }
+
+                Console.Out.WriteLine(
+                    $"SENTINFO строк={строк} подсказка={окно.ПоказанаПодсказкаПустыхПапок} "
+                    + $"выделено={таблицаПисем.SelectedRows.Count} первая={первое ?? "-"}");
+            }
+
+            break;
+
+        case "SEEDTEMPLATE":
+            // Сеет конвертный шаблон приёмки по требованию (idempotent):
+            // сценарий «нет шаблона» выполняется ДО сеева, сценарий
+            // «блокировка размера бумаги» — ПОСЛЕ него.
+            ЗасеятьШаблонПриёмки(состав);
+            break;
+
+        case "CLIPSELECT":
+            // Смоук-регрессия UX3-01: выбор значка и подтверждение в открытом
+            // диалоге клипарта. Падение на ленивом чтении ImageList здесь
+            // означает FAIL.
+            ВыбратьКлипарт();
+            break;
+
+        case "GRIDRESET":
+            // «Сбросить» в настройке вида таблиц: значение оформления до и
+            // после нажатия кнопки — доказательство 7.8.
+            СброситьОформление();
+            break;
+
+        case "SETDPI":
+            // Программная симуляция DPI (DPI_SIMULATION, НЕ OS-DPI): реальный
+            // конвейер PerMonitorV2 — форме отправляется WM_DPICHANGED, и
+            // WinForms сам перемасштабирует шрифты и контролы. OS-DPI стенд на
+            // host-машине недоступен, поэтому флаг остаётся
+            // DPI_SIMULATION_*_VERIFIED, а не DPI_RUNTIME_*.
+            if (!int.TryParse(аргумент, out var процентDpi)
+                || процентDpi < 100
+                || процентDpi > 300)
+            {
+                Console.Out.WriteLine($"FAIL SETDPI: неверный процент '{аргумент}'");
+                break;
+            }
+
+            // 100 % — тоже РЕАЛЬНЫЙ переход (обратный WM_DPICHANGED на 96),
+            // а не отключение симуляции: без него возврат не доказан.
+            СнимкиЭкранов.ЦелевойDpi = (int)Math.Round(96m * процентDpi / 100m);
+
+            foreach (var форма in Application.OpenForms.OfType<Form>().ToList())
+            {
+                ПрименитьЦельDpi(форма);
+            }
+
+            Console.Out.WriteLine($"OK SETDPI {процентDpi} target={СнимкиЭкранов.ЦелевойDpi}");
+            break;
+
+        case "LAYOUTCHECK":
+            // Критерии DPI-PASS §8.3: отрицательные/нулевые размеры видимых
+            // контролов и контролы, вышедшие за границы родителя.
+            ПроверитьКомпоновку();
+            break;
+
+        case "F7":
+            // Прямая печать без предпросмотра (ТЗ §8.6): единственный
+            // acceptance-путь, при котором задание доходит до конвейера
+            // валидации — BLOCKED_SIZE диалог «Проверка размера бумаги».
+            var пунктF7 = НайтиПунктМеню(окно, "Выделенные без предпросмотра (F7)");
+
+            if (пунктF7 is not null)
+            {
+                пунктF7.PerformClick();
+                Console.Out.WriteLine("OK F7");
+            }
+            else
+            {
+                Console.Out.WriteLine("FAIL F7: пункт меню не найден");
+            }
+
+            break;
+
         default:
             Console.Out.WriteLine($"FAIL UNKNOWN {команда}");
             break;
@@ -595,15 +747,9 @@ static async Task ЗасеятьДемонстрационныеДанные(App
     состав.ТекущийОтправитель.SetGlobalSender(отправитель);
     состав.ТекущийОтправитель.Load();
 
-    await состав.ШаблоныПечати.AddAsync(new PrintTemplate
-    {
-        Name = "Конверт C6 (приёмка)",
-        Kind = PrintTemplateKind.Envelope,
-        Format = "C6",
-        WidthMm = 324m,
-        HeightMm = 229m,
-    }).ConfigureAwait(false);
-
+    // Шаблон печати НЕ сеется: сценарий «нет шаблона» (S4) обязан видеть
+    // пустой список; шаблон для «блокировки размера» (S5) сеется командой
+    // SEEDTEMPLATE по требованию драйвера.
     Console.Out.WriteLine("SEEDED-SCREENS");
     Console.Out.Flush();
 }
@@ -629,7 +775,19 @@ static void ПоказатьДиалог(MainShell окно, AppServices сос�
                     .GetAwaiter().GetResult().Items.FirstOrDefault()),
             "mailedit" => new Picket302.App.UI.Forms.FormMailEdit(),
             "gridappearance" => new Picket302.App.UI.Forms.FormGridAppearance(
-                Picket302.Domain.Contracts.GridAppearance.Default),
+                // НЕОБЫЧНОЕ оформление (stage3.1, сценарий 7.8): сброс обязан
+                // вернуть значения по умолчанию — доказуемо только при
+                // отличном от дефолтного входном состоянии.
+                new Picket302.Domain.Contracts.GridAppearance
+                {
+                    FocusColor = 255,
+                    SelectedColor = 65280,
+                    HintColor = 8421376,
+                    ZebraEnabled = true,
+                    HeadersVisible = true,
+                    FontSize = 10f,
+                    RowHeight = 22,
+                }),
             "blankeditor" => new Picket302.App.UI.Forms.FormBlankEditor(),
             "clipartpicker" => new Picket302.App.UI.Forms.FormClipartPicker(
                 new Picket302.Infrastructure.Templates.ClipartLibrary()),
@@ -649,6 +807,10 @@ static void ПоказатьДиалог(MainShell окно, AppServices сос�
         диалог.Show();
         диалог.BringToFront();
         диалог.Activate();
+
+        // Симуляция DPI (stage3.1): диалог, открытый при активной цели DPI,
+        // перемасштабируется тем же реальным конвейером WM_DPICHANGED.
+        ПрименитьЦельDpi(диалог);
 
         СнимкиЭкранов.ПоследнийДиалог = диалог;
 
@@ -1124,6 +1286,368 @@ static void СканПредпросмотра()
     Console.Out.Flush();
 }
 
+
+/// <summary>
+/// Отправляет форме WM_DPICHANGED с целевым DPI: WinForms PerMonitorV2 сам
+/// перемасштабирует шрифты, контролы и позицию (реальный конвейер
+/// DPI-изменения, а не ручная правка числа ScreenDpi). Формы с текущим DPI,
+/// равным цели, не трогаются; повторная утилизация прямоугольника
+/// освобождается немедленно.
+/// </summary>
+static void ПрименитьЦельDpi(Form форма)
+{
+    var цель = СнимкиЭкранов.ЦелевойDpi;
+
+    if (цель <= 0 || !форма.IsHandleCreated)
+    {
+        return;
+    }
+
+    var текущий = форма.DeviceDpi;
+
+    if (текущий == цель)
+    {
+        return;
+    }
+
+    var множитель = (double)цель / текущий;
+    var ширина = (int)Math.Round(форма.Width * множитель);
+    var высота = (int)Math.Round(форма.Height * множитель);
+    var лево = форма.Left - (ширина - форма.Width) / 2;
+    var верх = форма.Top - (высота - форма.Height) / 2;
+
+    var прямоугольник = new ПлатформенныеДанные.Прямоугольник
+    {
+        Лево = лево,
+        Верх = верх,
+        Право = лево + ширина,
+        Низ = верх + высота,
+    };
+
+    var буфер = System.Runtime.InteropServices.Marshal.AllocHGlobal(
+        System.Runtime.InteropServices.Marshal.SizeOf(прямоугольник));
+
+    try
+    {
+        System.Runtime.InteropServices.Marshal.StructureToPtr(прямоугольник, буфер, fDeleteOld: false);
+        var параметрW = (IntPtr)(цель & 0xFFFF | (цель & 0xFFFF) << 16);
+        _ = Платформенно.SendMessageW(форма.Handle, Платформенно.СообщениеИзмененияDpi, параметрW, буфер);
+    }
+    finally
+    {
+        System.Runtime.InteropServices.Marshal.FreeHGlobal(буфер);
+    }
+}
+
+/// <summary>
+/// Критерии DPI-PASS §8.3 по каждой видимой форме: отрицательные/нулевые
+/// размеры видимых кнопок и контролы, целиком вышедшие за границы
+/// родительской клиентской области.
+/// </summary>
+static void ПроверитьКомпоновку()
+{
+    var формы = Application.OpenForms.OfType<Form>().Where(форма => форма.Visible).ToList();
+
+    if (формы.Count == 0)
+    {
+        Console.Out.WriteLine("LAYOUTCHECK FAIL форм-нет");
+        return;
+    }
+
+    foreach (var форма in формы)
+    {
+        var нулевых = 0;
+        var вне = 0;
+        var примеры = new List<string>();
+        var стек = new Stack<Control>();
+        стек.Push(форма);
+
+        while (стек.Count > 0)
+        {
+            var текущий = стек.Pop();
+
+            foreach (Control дочерний in текущий.Controls)
+            {
+                стек.Push(дочерний);
+
+                if (!дочерний.Visible)
+                {
+                    continue;
+                }
+
+                if (дочерний is Button && (дочерний.Width <= 0 || дочерний.Height <= 0))
+                {
+                    нулевых++;
+
+                    if (примеры.Count < 5)
+                    {
+                        примеры.Add(
+                            $"нулевая-кнопка:{дочерний.GetType().Name}:{дочерний.Bounds}");
+                    }
+                }
+
+                // Layout с ещё не рассчитанной раскладкой (например, сразу после
+                // рескала) даёт ложные «вне-родителя»; в пример добавляются тип
+                // и границы для последующей диагностики.
+                var клиент = текущий.ClientRectangle;
+
+                if (дочерний.Right <= клиент.Left
+                    || дочерний.Left >= клиент.Right
+                    || дочерний.Bottom <= клиент.Top
+                    || дочерний.Top >= клиент.Bottom)
+                {
+                    вне++;
+
+                    if (примеры.Count < 5)
+                    {
+                        // Полная цепочка родителей: точное место дефекта в
+                        // дереве контролов без повторных прогонов.
+                        var цепочка = дочерний.GetType().Name;
+                        var предок = текущий;
+
+                        for (var уровень = 0; уровень < 6 && предок is not null; уровень++)
+                        {
+                            цепочка = $"{предок.GetType().Name}<{цепочка}";
+                            предок = предок.Parent;
+                        }
+
+                        примеры.Add(
+                            $"вне-родителя:{цепочка} ребёнок={дочерний.Bounds}"
+                            + $" родитель-клиент={клиент}");
+                    }
+                }
+            }
+        }
+
+        Console.Out.WriteLine(
+            $"LAYOUTCHECK форма={форма.Name} size={форма.Width}x{форма.Height} dpi={форма.DeviceDpi} "
+            + $"нулевыхКнопок={нулевых} вне={вне} "
+            + $"вЭкране={ВГраницахЭкрана(форма)} "
+            + $"примеры=[{string.Join(",", примеры)}]");
+    }
+
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Критерий DPI-PASS §8.3 «модальные окна помещаются на экран»: границы
+/// формы (в экранных координатах) целиком внутри виртуального экрана.
+/// </summary>
+static bool ВГраницахЭкрана(Form форма)
+{
+    var экран = System.Windows.Forms.Screen.FromControl(форма).Bounds;
+    var границы = форма.DesktopBounds;
+
+    return границы.Left >= экран.Left
+        && границы.Top >= экран.Top
+        && границы.Right <= экран.Right
+        && границы.Bottom <= экран.Bottom;
+}
+
+/// <summary>
+/// Ищет пункт меню по точному тексту во всех выпадающих меню полосы меню
+/// главного окна (для сценариев, не имеющих кнопки на рабочей области).
+/// </summary>
+static System.Windows.Forms.ToolStripMenuItem? НайтиПунктМеню(Form окно, string текст)
+{
+    if (окно.MainMenuStrip is null)
+    {
+        return null;
+    }
+
+    foreach (System.Windows.Forms.ToolStripItem верхний in окно.MainMenuStrip.Items)
+    {
+        if (верхний is not System.Windows.Forms.ToolStripMenuItem выпадающее)
+        {
+            continue;
+        }
+
+        foreach (System.Windows.Forms.ToolStripItem пункт in выпадающее.DropDownItems)
+        {
+            if (пункт is System.Windows.Forms.ToolStripMenuItem командный && командный.Text == текст)
+            {
+                return командный;
+            }
+        }
+    }
+
+    return null;
+}
+
+/// <summary>
+/// Смоук-регрессия UX3-01 (stage3.1, §7.10): в открытом диалоге клипарта
+/// выделяется первый значок, проверяется активация подтверждения,
+/// подтверждение нажимается (ShowDialog-путь приложения), диалог закрывается
+/// и открывается повторно. Падение ленивого чтения ImageList проявляется
+/// исключением и попадает в верхний catch harness.
+/// </summary>
+static void ВыбратьКлипарт()
+{
+    var диалог = СнимкиЭкранов.ПоследнийДиалог;
+
+    if (диалог is null || диалог.IsDisposed)
+    {
+        Console.Out.WriteLine("FAIL CLIPSELECT: диалог не открыт");
+        return;
+    }
+
+    var список = НайтиПотомка<System.Windows.Forms.ListView>(диалог);
+
+    if (список is null)
+    {
+        Console.Out.WriteLine("FAIL CLIPSELECT: список значков не найден");
+        return;
+    }
+
+    var элементов = список.Items.Count;
+    var элементовСоЗначками = 0;
+
+    // Пункты создаются с ImageKey (не ImageIndex): привязка значка доказывается
+    // наличием ключа в ImageList, а не индексом.
+    foreach (System.Windows.Forms.ListViewItem элемент in список.Items)
+    {
+        if (список.LargeImageList is not null
+            && !string.IsNullOrEmpty(элемент.ImageKey)
+            && список.LargeImageList.Images.ContainsKey(элемент.ImageKey))
+        {
+            элементовСоЗначками++;
+        }
+    }
+
+    var выбрано = 0;
+
+    if (список.Items.Count > 0)
+    {
+        список.Items[0].Selected = true;
+        выбрано = список.SelectedIndices.Count;
+    }
+
+    var нажато = false;
+    var активнаДоНажатия = false;
+
+    foreach (var кнопка in НайтиПотомков<Button>(диалог))
+    {
+        if (кнопка.Text == "Выбрать")
+        {
+            активнаДоНажатия = кнопка.Enabled;
+            кнопка.PerformClick();
+            нажато = true;
+            break;
+        }
+    }
+
+    // Немодальная форма не закрывается по DialogResult (контракт ShowDialog):
+    // диалог закрывается явно — Dispose прежнего экземпляра не должен ломать
+    // ImageList повторного открытия.
+    диалог.Close();
+    var закрыт = диалог.IsDisposed;
+
+    Console.Out.WriteLine(
+        $"OK CLIPSELECT items={элементов} значки={элементовСоЗначками} "
+        + $"выбрано={выбрано} активна={активнаДоНажатия} нажато={нажато} закрыт={закрыт}");
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Сценарий 7.8: оформление диалога вида таблиц до нажатия «Сбросить» и
+/// после него. Сброс обязан вернуть цвета/кегль/высоту строки к значениям
+/// по умолчанию контракта <see cref="Picket302.Domain.Contracts.GridAppearance"/>.
+/// </summary>
+static void СброситьОформление()
+{
+    var диалог = СнимкиЭкранов.ПоследнийДиалог;
+
+    if (диалог is not Picket302.App.UI.Forms.FormGridAppearance форма)
+    {
+        Console.Out.WriteLine("FAIL GRIDRESET: диалог вида таблиц не открыт");
+        return;
+    }
+
+    string Описать(Picket302.Domain.Contracts.GridAppearance вид) =>
+        $"focus={вид.FocusColor} selected={вид.SelectedColor} hint={вид.HintColor} "
+        + $"zebra={вид.ZebraEnabled} font={вид.FontSize:0.#} row={вид.RowHeight}";
+
+    var до = форма.Оформление;
+
+    var нажато = false;
+
+    foreach (var кнопка in НайтиПотомков<Button>(форма))
+    {
+        if (кнопка.Text == "Сбросить")
+        {
+            кнопка.PerformClick();
+            нажато = true;
+            break;
+        }
+    }
+
+    var после = форма.Оформление;
+
+    Console.Out.WriteLine(
+        $"OK GRIDRESET нажато={нажато} до=[{Описать(до)}] после=[{Описать(после)}]");
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Сеет конвертный шаблон приёмки (idempotent): сценарий «блокировка размера
+/// бумаги» требует шаблон, бланк которого больше печатной области принтера
+/// по запрошенному формату — PaperSizeValidator возвращает BLOCKED_SIZE до
+/// передачи задания в спулер.
+/// </summary>
+static void ЗасеятьШаблонПриёмки(AppServices состав)
+{
+    var шаблоны = состав.ШаблоныПечати.GetAllAsync().GetAwaiter().GetResult();
+
+    if (шаблоны.Any(элемент => элемент.Name == "Конверт C6 (приёмка)"))
+    {
+        Console.Out.WriteLine("OK SEEDTEMPLATE (уже задан)");
+        return;
+    }
+
+    var идентификаторШаблона = состав.ШаблоныПечати.AddAsync(new PrintTemplate
+    {
+        Name = "Конверт C6 (приёмка)",
+        Kind = PrintTemplateKind.Envelope,
+        Format = "C6",
+        WidthMm = 324m,
+        HeightMm = 229m,
+    }).GetAwaiter().GetResult();
+
+    Console.Out.WriteLine($"OK SEEDTEMPLATE шаблон={идентификаторШаблона}");
+    Console.Out.Flush();
+}
+
+/// <summary>Обход дерева контролов с накоплением потомков типа T.</summary>
+static List<T> НайтиПотомков<T>(Control корень)
+    where T : Control
+{
+    var результат = new List<T>();
+    var стек = new Stack<Control>();
+    стек.Push(корень);
+
+    while (стек.Count > 0)
+    {
+        var текущий = стек.Pop();
+
+        if (текущий is T совпадение && !ReferenceEquals(совпадение, корень))
+        {
+            результат.Add(совпадение);
+        }
+
+        foreach (Control дочерний in текущий.Controls)
+        {
+            стек.Push(дочерний);
+        }
+    }
+
+    return результат;
+}
+
+/// <summary>Первый потомок типа T.</summary>
+static T? НайтиПотомка<T>(Control корень)
+    where T : Control
+    => НайтиПотомков<T>(корень).FirstOrDefault();
+
 /// <summary>
 /// Хранилище снимков экрана: последний открытый диалог держится живым до
 /// команды HIDE (иначе снимок невозможно снять).
@@ -1132,4 +1656,53 @@ static class СнимкиЭкранов
 {
     /// <summary>Последний открытый диалог снимков.</summary>
     public static Form? ПоследнийДиалог { get; set; }
+
+    /// <summary>
+    /// Целевой DPI симуляции (0 — выключено; 120 — 125 %; 144 — 150 %).
+    /// Применяется реальной отправкой WM_DPICHANGED формам процесса.
+    /// </summary>
+    public static int ЦелевойDpi { get; set; }
+}
+
+/// <summary>
+/// Принтерный менеджер acceptance-сценария «нет принтера» (stage3.1, §7.4):
+/// возвращает null вместо принтера по умолчанию. Реальный системный принтер
+/// стенда не изменяется; печать обязана блокироваться сообщением
+/// <see cref="Picket302.Printing.Devices.PrinterManager.NoDefaultPrinterMessage"/>
+/// в реальном коде <see cref="MainShell"/>.
+/// </summary>
+sealed class ПустойМенеджерПринтеров : Picket302.Printing.Devices.PrinterManager
+{
+    public override Picket302.Printing.Devices.PrinterDescriptor? GetDefaultPrinter() => null;
+}
+
+/// <summary>
+/// Платформенные вызовы симуляции DPI: SendMessageW для WM_DPICHANGED.
+/// </summary>
+internal static class Платформенно
+{
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    internal static extern IntPtr SendMessageW(
+        IntPtr окно,
+        uint сообщение,
+        IntPtr параметрW,
+        IntPtr параметрL);
+
+    /// <summary>WM_DPICHANGED: WinForms PerMonitorV2 перемасштабирует форму.</summary>
+    internal const uint СообщениеИзмененияDpi = 0x02E0;
+}
+
+
+
+/// <summary>Платформенные структуры симуляции DPI.</summary>
+internal static class ПлатформенныеДанные
+{
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    internal struct Прямоугольник
+    {
+        public int Лево;
+        public int Верх;
+        public int Право;
+        public int Низ;
+    }
 }
