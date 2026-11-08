@@ -45,7 +45,12 @@ public sealed class AppServices : IAsyncDisposable
 
     private readonly SqliteUnitOfWork _сессия;
 
-    private AppServices(SqliteUnitOfWork сессия, string путьБазы, Picket302ProfilePaths? пути = null)
+    private AppServices(
+        SqliteUnitOfWork сессия,
+        string путьБазы,
+        Picket302ProfilePaths? пути = null,
+        PrinterManager? службаПринтеров = null,
+        bool реестрОтправителяИзолирован = false)
     {
         // Пути профиля: производственный код использует каталог по умолчанию
         // (%AppData%\Picket302), изолированные проверки — временный корень.
@@ -89,7 +94,13 @@ public sealed class AppServices : IAsyncDisposable
         МенеджерЛицензии = new LicenseManager(ХранилищеЛицензии, АвтоматЛицензии);
         АктивацияЛицензии = new ActivationService(ХранилищеЛицензии, АвтоматЛицензии);
 
-        var реестрОтправителя = new WindowsCurrentSenderRegistryStore();
+        // Реестровое хранилище текущего отправителя подменяется в изолированном
+        // режиме (stage3.1, контейнирование): составное хранилище пишет
+        // SenderId и в HKCU\Software\PEPro\CurrentSender — приёмочные прогоны
+        // не должны писать в реальную машину за пределами профиля.
+        var реестрОтправителя = реестрОтправителяИзолирован
+            ? new Picket302.Infrastructure.Registry.NullCurrentSenderStore()
+            : (Picket302.Domain.Services.ICurrentSenderStore)new WindowsCurrentSenderRegistryStore();
         var параметрыОтправителя = new ParameterCurrentSenderStore(сессия);
         ТекущийОтправитель = new CurrentSenderContext(
             new CompositeCurrentSenderStore(реестрОтправителя, параметрыОтправителя));
@@ -121,7 +132,10 @@ public sealed class AppServices : IAsyncDisposable
         ПараметрыПечати = new PrintOptions(Параметры);
         ПодсказкаПодачи = new FeedOrientationHint(Параметры);
         РежимРазлиновки = new PreprintedMode(Параметры);
-        СлужбаПринтеров = new PrinterManager();
+        // Принтерный менеджер подменяем (stage3.1): acceptance-сценарий «нет
+        // принтера» передаёт производный класс, возвращающий null, — реальный
+        // системный принтер стенда при этом не изменяется.
+        СлужбаПринтеров = службаПринтеров ?? new PrinterManager();
 
         var каталогАудита = Path.GetDirectoryName(профиль.PrintAuditPath)
             ?? Path.GetDirectoryName(Path.GetFullPath(путьБазы))
@@ -376,8 +390,10 @@ public sealed class AppServices : IAsyncDisposable
     public static Task<AppServices> СоздатьAsync(
         string путьБазы,
         bool создатьДемоБазу = false,
-        CancellationToken cancellationToken = default)
-        => СоздатьЯдроAsync(null, путьБазы, создатьДемоБазу, cancellationToken);
+        CancellationToken cancellationToken = default,
+        PrinterManager? службаПринтеров = null,
+        bool реестрОтправителяИзолирован = false)
+        => СоздатьЯдроAsync(null, путьБазы, создатьДемоБазу, cancellationToken, службаПринтеров, реестрОтправителяИзолирован);
 
     /// <summary>
     /// Создаёт состав приложения в указанном профиле путей и применяет
@@ -392,11 +408,19 @@ public sealed class AppServices : IAsyncDisposable
     public static Task<AppServices> СоздатьAsync(
         Picket302ProfilePaths пути,
         bool создатьДемоБазу = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        PrinterManager? службаПринтеров = null,
+        bool реестрОтправителяИзолирован = false)
     {
         ArgumentNullException.ThrowIfNull(пути);
 
-        return СоздатьЯдроAsync(пути, пути.DatabasePath, создатьДемоБазу, cancellationToken);
+        return СоздатьЯдроAsync(
+            пути,
+            пути.DatabasePath,
+            создатьДемоБазу,
+            cancellationToken,
+            службаПринтеров,
+            реестрОтправителяИзолирован);
     }
 
     /// <summary>
@@ -407,7 +431,9 @@ public sealed class AppServices : IAsyncDisposable
         Picket302ProfilePaths? пути,
         string путьБазы,
         bool создатьДемоБазу,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        PrinterManager? службаПринтеров = null,
+        bool реестрОтправителяИзолирован = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(путьБазы);
 
@@ -432,7 +458,12 @@ public sealed class AppServices : IAsyncDisposable
             await new MigrationRunner().ApplyAsync(сессия.Connection, cancellationToken)
                 .ConfigureAwait(false);
 
-            var состав = new AppServices(сессия, Path.GetFullPath(путьБазы), пути);
+            var состав = new AppServices(
+                сессия,
+                Path.GetFullPath(путьБазы),
+                пути,
+                службаПринтеров,
+                реестрОтправителяИзолирован);
 
             if (создатьДемоБазу)
             {

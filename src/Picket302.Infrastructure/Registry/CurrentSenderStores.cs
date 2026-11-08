@@ -119,3 +119,28 @@ public sealed class CompositeCurrentSenderStore : ICurrentSenderStore
         _параметры.Write(senderId);
     }
 }
+
+/// <summary>
+/// Пустое хранилище текущего отправителя: чтение всегда null, запись — без
+/// эффекта (stage3.1, контейнирование ENV3-02-соседнего обхода).
+/// </summary>
+/// <remarks>
+/// Приёмочные прогоны обязаны не писать в реальную машину за пределами
+/// изолированного профиля. Составное хранилище по умолчанию пишет и в
+/// <c>HKCU\Software\PEPro\CurrentSender</c> — идентификатор отправителя из
+/// одноразовой тестовой базы утекал в реальный реестр пользователя. Harness
+/// передаёт признак изоляции реестра, и состав получает это хранилище вместо
+/// <see cref="WindowsCurrentSenderRegistryStore"/>; производственное
+/// поведение не меняется (флаг по умолчанию сохраняет реестр).
+/// </remarks>
+public sealed class NullCurrentSenderStore : ICurrentSenderStore
+{
+    /// <inheritdoc />
+    public long? Read() => null;
+
+    /// <inheritdoc />
+    public void Write(long? senderId)
+    {
+        // Осознанная пустая операция: изолированный режим не касается реестра.
+    }
+}

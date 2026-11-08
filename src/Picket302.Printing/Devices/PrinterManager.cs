@@ -142,7 +142,12 @@ public class PrinterManager
     /// принтера имя по умолчанию запрашивается штатным
     /// <c>GetDefaultPrinterW</c> и сопоставляется с перечислением.
     /// </remarks>
-    public PrinterDescriptor? GetDefaultPrinter()
+    /// <remarks>
+    /// Виртуален с 2026-11-08 (stage3.1, ENV-принятие сценария «нет принтера»):
+    /// acceptance-сцена подменяет менеджер производным классом, возвращающим
+    /// <see langword="null"/>, не трогая системный принтер стенда.
+    /// </remarks>
+    public virtual PrinterDescriptor? GetDefaultPrinter()
     {
         var принтеры = EnumeratePrinters();
 
