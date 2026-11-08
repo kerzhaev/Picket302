@@ -76,6 +76,13 @@ public sealed class FormCounterpartyEdit : Form
     private readonly AddressEditor _фактическийАдрес = new("ФАКТИЧЕСКИЙ АДРЕС:");
     private readonly AddressEditor _почтовыйАдрес = new("ПОЧТОВЫЙ АДРЕС:");
 
+    /// <summary>
+    /// Адаптивная сетка трёх адресных блоков вкладки «Реквизиты»: две колонки
+    /// на широком клиенте, одна — при недостаточной ширине (редизайн
+    /// 2026-11-08: конфликт DockStyle.Top и ручного Location устранён).
+    /// </summary>
+    private readonly TableLayoutPanel _адреснаяСетка = new();
+
     private readonly DataGridView _пользовательскиеПоля = new();
     private readonly Button _сохранить = new();
     private readonly Button _отмена = new();
@@ -162,6 +169,21 @@ public sealed class FormCounterpartyEdit : Form
     /// <summary>Кнопка «Сохранить».</summary>
     public Button КнопкаСохранить => _сохранить;
 
+    /// <summary>Редактор юридического адреса.</summary>
+    public AddressEditor РедакторЮридическогоАдреса => _юридическийАдрес;
+
+    /// <summary>Редактор фактического адреса.</summary>
+    public AddressEditor РедакторФактическогоАдреса => _фактическийАдрес;
+
+    /// <summary>Редактор почтового адреса.</summary>
+    public AddressEditor РедакторПочтовогоАдреса => _почтовыйАдрес;
+
+    /// <summary>Таблица пользовательских полей («Поле», «Значение», «Тег»).</summary>
+    public DataGridView ТаблицаПользовательскихПолей => _пользовательскиеПоля;
+
+    /// <summary>Вкладка «Реквизиты» карточки.</summary>
+    public TabPage СтраницаРеквизитов => _страницаРеквизитов;
+
     /// <summary>
     /// Признак того, что реквизиты карточки корректны и карточка может быть
     /// сохранена (ТЗ §8.1, функция 1: некорректная контрольная сумма ИНН/БИК
@@ -173,12 +195,26 @@ public sealed class FormCounterpartyEdit : Form
     /// Строит вкладку «Реквизиты»: тип контрагента, реквизиты, три адреса и
     /// пользовательские поля.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Компоновка (редизайн 2026-11-08): единая вертикальная сетка
+    /// <see cref="TableLayoutPanel"/> внутри прокручиваемого хоста. Прежняя
+    /// схема «DockStyle.Top редакторов адреса + ручные Location» конфликтовала:
+    /// закрепление побеждало координаты, три блока складывались в столбец
+    /// высотой 570 px и выталкивали панель пользовательских полей за
+    /// клиентскую область (runtime-приёмка: адреса уходили до y≈927).
+    /// </para>
+    /// <para>
+    /// Кнопки «Сохранить»/«Отмена» закреплены на самой форме
+    /// (<see cref="ПостроитьКнопки"/>) и от прокрутки вкладки не зависят.
+    /// </para>
+    /// </remarks>
     private void ПостроитьРеквизиты()
     {
         var панельТипа = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top,
-            Height = 24,
+            Dock = DockStyle.Fill,
+            AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
         };
 
@@ -191,18 +227,29 @@ public sealed class FormCounterpartyEdit : Form
 
         var реквизиты = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
-
-            // Высота с запасом на строку многострочного примечания (F-E13).
-            Height = 230,
+            Dock = DockStyle.Fill,
+            AutoSize = true,
             ColumnCount = 4,
-            AutoSize = false,
+            RowCount = 12,
         };
 
-        реквизиты.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        // Ширина колонки подписей с запасом (регрессия 2026-11-08):
+        // «Наименование:» не переносится, «Сокращённое:» не обрезается,
+        // «Эл. почта:» видно целиком и на увеличенном системном масштабе.
+        реквизиты.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         реквизиты.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        реквизиты.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        реквизиты.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         реквизиты.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+        for (var строка = 0; строка < 11; строка++)
+        {
+            реквизиты.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+
+        // Строка многострочного примечания — фиксированной высоты: AutoSize
+        // измеряет многострочный TextBox по однострочному, и поле вытекало
+        // за нижнюю границу таблицы на 4 px (редизайн 2026-11-08).
+        реквизиты.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
 
         ДобавитьПоле(реквизиты, 0, 0, "Наименование:", _наименование);
         ДобавитьПоле(реквизиты, 0, 1, "Сокращённое:", _сокращённое);
@@ -220,18 +267,24 @@ public sealed class FormCounterpartyEdit : Form
         // но в сетку реквизитов не попадало, и ввод не отображался.
         ДобавитьПоле(реквизиты, 0, 11, "Примечание:", _примечание);
 
-        var панельАдресов = new Panel { Dock = DockStyle.Top, Height = 470 };
-
-        _юридическийАдрес.Location = new Point(0, 0);
-        _юридическийАдрес.Width = 360;
-        _фактическийАдрес.Location = new Point(370, 0);
-        _фактическийАдрес.Width = 360;
-        _почтовыйАдрес.Location = new Point(0, 155);
-        _почтовыйАдрес.Width = 360;
-
-        панельАдресов.Controls.Add(_юридическийАдрес);
-        панельАдресов.Controls.Add(_фактическийАдрес);
-        панельАдресов.Controls.Add(_почтовыйАдрес);
+        _адреснаяСетка.Dock = DockStyle.Fill;
+        _адреснаяСетка.AutoSize = true;
+        _адреснаяСетка.ColumnCount = 2;
+        _адреснаяСетка.RowCount = 2;
+        _адреснаяСетка.Padding = new Padding(0, 4, 0, 0);
+        _адреснаяСетка.ColumnStyles.Clear();
+        _адреснаяСетка.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        _адреснаяСетка.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        _адреснаяСетка.RowStyles.Clear();
+        _адреснаяСетка.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _адреснаяСетка.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        // Адресные редакторы добавляются один раз и остаются в дереве
+        // контролов до и после показа формы. Перестроение через
+        // Controls.Clear() из Resize приводило к состоянию, в котором
+        // тестовый обход видел ноль AddressEditor.
+        _адреснаяСетка.Controls.Add(_юридическийАдрес, 0, 0);
+        _адреснаяСетка.Controls.Add(_фактическийАдрес, 1, 0);
+        _адреснаяСетка.Controls.Add(_почтовыйАдрес, 0, 1);
 
         _пользовательскиеПоля.Dock = DockStyle.Fill;
         _пользовательскиеПоля.Font = new Font("Segoe UI", 8f);
@@ -256,7 +309,16 @@ public sealed class FormCounterpartyEdit : Form
                 CustomFieldTag.TryFormat(имя, out var тег) ? тег : string.Empty;
         };
 
-        var панельПользовательских = new Panel { Dock = DockStyle.Bottom, Height = 170 };
+        var панельПользовательских = new Panel
+        {
+            // Панель закреплена к НИЗУ ВКЛАДКИ (вне прокручиваемого хоста):
+            // сетка пользовательских полей всегда видна внизу карточки,
+            // независимо от прокрутки контента выше (редизайн 2026-11-08).
+            // Внутри AutoScroll-хоста Dock=Bottom прокручивался бы вместе с
+            // контентом и уходил за пределы видимой области.
+            Dock = DockStyle.Bottom,
+            Height = 170,
+        };
         var заголовокПолей = new Label
         {
             Text = "Пользовательские поля (в макетах доступны по тегу вида [Custom_ИмяПоля]):",
@@ -268,11 +330,47 @@ public sealed class FormCounterpartyEdit : Form
         панельПользовательских.Controls.Add(_пользовательскиеПоля);
         панельПользовательских.Controls.Add(заголовокПолей);
 
-        _страницаРеквизитов.Controls.Add(_пользовательскиеПоля);
+        // Прокручиваемый хост занимает вкладку над панелью пользовательских
+        // полей: при высоте содержимого больше клиентской включается
+        // прокрутка, и ни один блок не обрезается (редизайн 2026-11-08).
+        var хостПрокрутки = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(2, 4, 2, 4),
+        };
+
+        var вертикаль = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 3,
+        };
+
+        for (var строка = 0; строка < 3; строка++)
+        {
+            вертикаль.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+
+        вертикаль.Controls.Add(панельТипа, 0, 0);
+        вертикаль.Controls.Add(реквизиты, 0, 1);
+        вертикаль.Controls.Add(_адреснаяСетка, 0, 2);
+
+        хостПрокрутки.Controls.Add(вертикаль);
+
+        // Порядок добавления = обратный порядок закрепления (WinForms
+        // укладывает Dock с конца коллекции): панель пользовательских полей
+        // закрепляется к низу вкладки первой, прокручиваемый хост занимает
+        // остаток после.
+        _страницаРеквизитов.Controls.Add(хостПрокрутки);
         _страницаРеквизитов.Controls.Add(панельПользовательских);
-        _страницаРеквизитов.Controls.Add(панельАдресов);
-        _страницаРеквизитов.Controls.Add(реквизиты);
-        _страницаРеквизитов.Controls.Add(панельТипа);
+
+        // Вкладка содержит верхнюю часть реквизитов, два адресных блока в
+        // первой строке и третий блок во второй. Задаём минимальную высоту
+        // прокрутки после построения, чтобы пользовательские поля и адреса
+        // оставались достижимыми даже до первого Layout-события.
+        хостПрокрутки.AutoScrollMinSize = new Size(0, 760);
     }
 
     /// <summary>
@@ -287,7 +385,7 @@ public sealed class FormCounterpartyEdit : Form
             ColumnCount = 2,
         };
 
-        панель.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        панель.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         панель.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         ДобавитьПоле(панель, 0, 0, "БИК:", _бик);
@@ -310,7 +408,9 @@ public sealed class FormCounterpartyEdit : Form
             ColumnCount = 2,
         };
 
-        панель.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        // «Место рождения:» и «Директор (ФИО):» — самые длинные подписи
+        // вкладки: колонка с запасом, чтобы подписи не обрезались.
+        панель.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
         панель.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         ДобавитьПоле(панель, 0, 0, "Серия:", _серияПаспорта);

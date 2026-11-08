@@ -3,6 +3,7 @@ using Picket302.App;
 using Picket302.Domain.Entities;
 using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure;
+using Picket302.Printing.Preview;
 
 // Широкий перехват — осознанный контракт CLI: harness не падает без
 // диагностики, а печатает ошибку и возвращает код 1, чтобы драйвер
@@ -21,6 +22,25 @@ using Picket302.Infrastructure;
 // и состава. Проверяются и сам корень, и рассчитанный
 // Picket302ProfilePaths.ДляКорня(корень).DataDirectory: корень может
 // совпадать с родителем производственного каталога и превращаться в него.
+
+// Контракт кодировки вывода задаётся ДО первого вывода и не зависит от
+// платформенной OEM-кодировки консоли: StreamWriter над
+// OpenStandardOutput/OpenStandardError с UTF8Encoding(false) пишет UTF-8
+// без BOM в перенаправленные трубы (harness всегда запускается драйвером
+// с RedirectStandardOutput/Error; консольного окна может не быть вовсе,
+// поэтому Console.OutputEncoding через SetConsoleOutputCP не используется).
+Console.SetOut(new StreamWriter(
+    Console.OpenStandardOutput(),
+    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+{
+    AutoFlush = true,
+});
+Console.SetError(new StreamWriter(
+    Console.OpenStandardError(),
+    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+{
+    AutoFlush = true,
+});
 
 if (args.Length < 2)
 {
@@ -116,7 +136,7 @@ try
                 break;
             }
 
-            окно!.BeginInvoke(() => Выполнить(окно, текст));
+            окно!.BeginInvoke(() => Выполнить(окно, текст, состав!));
         }
     });
 
@@ -238,7 +258,7 @@ finally
 
 return Environment.ExitCode;
 
-static void Выполнить(MainShell окно, string команда)
+static void Выполнить(MainShell окно, string команда, AppServices состав)
 {
     switch (команда)
     {
@@ -253,6 +273,36 @@ static void Выполнить(MainShell окно, string команда)
             else
             {
                 Console.Out.WriteLine("FAIL SELECT: таблица пуста");
+            }
+
+            break;
+
+        case "SELECTLAST":
+            // Сценарий предпросмотра: печатается ПОСЛЕДНЯЯ добавленная
+            // запись (получатель сеется после отправителя). Выбор строки 0
+            // при порядке вставки брал отправителя, и в поля «Кому»
+            // попадали данные отправителя.
+            var таблицаПоследних = окно.ТаблицаПолучателей;
+            var индексПоследней = -1;
+
+            for (var строка = 0; строка < таблицаПоследних.Rows.Count; строка++)
+            {
+                if (!таблицаПоследних.Rows[строка].IsNewRow)
+                {
+                    индексПоследней = строка;
+                }
+            }
+
+            if (индексПоследней >= 0)
+            {
+                таблицаПоследних.Rows[индексПоследней].Selected = true;
+                var имяПоследней = Convert.ToString(
+                    таблицаПоследних.Rows[индексПоследней].Cells["Получатель"].Value);
+                Console.Out.WriteLine($"OK SELECTLAST {имяПоследней}");
+            }
+            else
+            {
+                Console.Out.WriteLine("FAIL SELECTLAST: таблица пуста");
             }
 
             break;
@@ -280,6 +330,22 @@ static void Выполнить(MainShell окно, string команда)
                 Console.Out.WriteLine("OK F6");
             }
 
+            break;
+
+        case "SEEDFIELDS":
+            // Сценарий предпросмотра: в шаблон приёмки добавляются реальные
+            // поля бланка ([edt_str_to1], [edt_str_to2], [edtIndeks_to]) —
+            // без них renderer выводит пустой бланк, и «белый preview» не
+            // доказывает работу рендеринга.
+            ЗасеятьПоляБланка(состав);
+            break;
+
+        case "PREVIEWSCAN":
+            // Сценарий предпросмотра: пиксельный скан страницы предпросмотра
+            // (тот же метафайл, что рисует холст окна, но без декоративных
+            // рамок) — доказательство, что renderer реально вывел текст
+            // адресата и индекс.
+            СканПредпросмотра();
             break;
 
         default:
@@ -393,5 +459,346 @@ static async Task ЗасеятьОтправителяИПолучателя(App
     }).ConfigureAwait(false);
 
     Console.Out.WriteLine("SEEDED");
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Добавляет в шаблон приёмки реальные поля бланка сценария предпросмотра:
+/// две строки адресата ([edt_str_to1], [edt_str_to2]) и индекс получателя
+/// ([edtIndeks_to]). Значения полей привязываются к данным отправлений по
+/// тегам шаблона (словарь полей ТЗ §3.2); координаты лежат внутри бланка
+/// C6-раскладки приёмки 324×229 мм и вдали от краёв печатной области.
+/// Повторный вызов идемпотентен: существующие поля не дублируются.
+/// </summary>
+static void ЗасеятьПоляБланка(AppServices состав)
+{
+    var шаблоны = состав.ШаблоныПечати.GetAllAsync().GetAwaiter().GetResult();
+    var шаблон = шаблоны.FirstOrDefault(элемент => элемент.Name == "Конверт C6 (приёмка)");
+
+    if (шаблон is null)
+    {
+        Console.Out.WriteLine("FAIL SEEDFIELDS: шаблон приёмки не найден");
+        return;
+    }
+
+    var существующие = состав.ПоляШаблонов.GetByTemplateAsync(шаблон.Id).GetAwaiter().GetResult();
+
+    if (существующие.Count > 0)
+    {
+        Console.Out.WriteLine($"OK SEEDFIELDS шаблон={шаблон.Id} полей={существующие.Count} (уже заданы)");
+        return;
+    }
+
+    // Печатная область принтера по умолчанию (для формата C6): координаты
+    // полей сеются ВНУТРИ неё, чтобы проверка «текст не выходит за печатную
+    // область» была проверкой рендеринга, а не столкновением с координатами
+    // посева. Fallback — размер бланка (как в PrintPreviewBuilder).
+    var ширинаPrintableМм = шаблон.WidthMm;
+    var высотаPrintableМм = шаблон.HeightMm;
+    var принтерПоУмолчанию = состав.СлужбаПринтеров.GetDefaultPrinter();
+
+    if (принтерПоУмолчанию is not null)
+    {
+        try
+        {
+            var сведения = состав.СлужбаПринтеров.GetDeviceInfo(
+                принтерПоУмолчанию.Name,
+                Picket302.Printing.Metrics.PrinterDeviceInfo.PaperSizeCodeByFormat(шаблон.Format));
+
+            if (сведения.PrintableWidthMm > 0)
+            {
+                ширинаPrintableМм = сведения.PrintableWidthMm;
+                высотаPrintableМм = сведения.PrintableHeightMm;
+            }
+        }
+        catch
+        {
+            // Драйвер недоступен — fallback на размер бланка.
+        }
+    }
+
+    // Блок адресата: 80×8 мм, правый нижний сектор зоны «печатная область
+    // ∩ бланк» (драйвер может вернуть печатную область крупнее бланка —
+    // например, A4-портрет для кода C6: пересечение защищает от выхода за
+    // страницу); индекс: 40×12 мм, левый верхний сектор бланка.
+    var ширина = Math.Min(ширинаPrintableМм, шаблон.WidthMm);
+    var высота = Math.Min(высотаPrintableМм, шаблон.HeightMm);
+    var правоБлока = ширина - 10m;
+    var лево = правоБлока > 90m ? правоБлока - 80m : 10m;
+    var низБлока = высота - 10m;
+    var верх1 = низБлока > 22m ? низБлока - 22m : 10m;
+    var верх2 = низБлока > 10m ? низБлока - 10m : 10m;
+
+    var поля = new[]
+    {
+        new BlankField
+        {
+            TemplateId = шаблон.Id,
+            Name = "[edt_str_to1]",
+            Kind = BlankFieldKind.Text,
+            Page = 1,
+            XMm = лево,
+            YMm = верх1,
+            LengthMm = 80m,
+            HeightMm = 8m,
+            ZoneRole = "BottomRecipient",
+        },
+        new BlankField
+        {
+            TemplateId = шаблон.Id,
+            Name = "[edt_str_to2]",
+            Kind = BlankFieldKind.Text,
+            Page = 1,
+            XMm = лево,
+            YMm = верх2,
+            LengthMm = 80m,
+            HeightMm = 8m,
+            ZoneRole = "BottomRecipient",
+        },
+        // Индекс — ТЕКСТОВОЕ поле с тегом [edtIndeks_to]: машиночитаемый
+        // кодовый штамп (Kind=post_index) требует системного шрифта ZIPcode
+        // (ТЗ §6.3; подмена/фолбэк запрещены), которого на host-машине
+        // приёмки нет — PostIndexRenderer корректно блокирует печать
+        // исключением PostIndexBlockedException и понятным сообщением.
+        // Читаемые цифры индекса тем же тегом доказывают отрисовку поля
+        // без подмены шрифта.
+        new BlankField
+        {
+            TemplateId = шаблон.Id,
+            Name = "[edtIndeks_to]",
+            Kind = BlankFieldKind.Text,
+            Page = 1,
+            XMm = 20m,
+            YMm = 30m,
+            LengthMm = 40m,
+            HeightMm = 12m,
+            ZoneRole = "PostIndexZone",
+        },
+    };
+
+    foreach (var поле in поля)
+    {
+        состав.ПоляШаблонов.AddAsync(поле).GetAwaiter().GetResult();
+    }
+
+    Console.Out.WriteLine(
+        $"OK SEEDFIELDS шаблон={шаблон.Id} полей={поля.Length} printable={ширинаPrintableМм}x{высотаPrintableМм}мм " +
+        $"to1={лево},{верх1} to2={лево},{верх2}");
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Пиксельный скан страницы открытого окна предпросмотра. Страница
+/// рендерится в растр 4 px/мм напрямую из метафайла предпросмотра (без
+/// декоративных рамок холста: чёрной рамки страницы, красной пунктирной
+/// печатной области и синих контуров полей), после чего подсчитываются
+/// тёмные пиксели (яркость &lt; 128): всего, вне печатной области и внутри
+/// каждого поля бланка. Пустой белый холст даёт dark≈0 — это FAIL, а не
+/// PASS (доказательство рендеринга 2026-11-08).
+/// </summary>
+static void СканПредпросмотра()
+{
+    var форма = Application.OpenForms
+        .OfType<Form>()
+        .FirstOrDefault(открытое => открытое.GetType().Name == "FormPrintPreview");
+
+    if (форма is null)
+    {
+        Console.Out.WriteLine("PREVIEW-SCAN FAIL окно-предпросмотра-не-найдено");
+        return;
+    }
+
+    var документ = форма.GetType()
+        .GetField("_документ", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+        ?.GetValue(форма) as PreviewDocument;
+
+    if (документ is null)
+    {
+        Console.Out.WriteLine("PREVIEW-SCAN FAIL документ-недоступен");
+        return;
+    }
+
+    var пикселейНаМм = 4f;
+    var ширина = Math.Max((int)Math.Ceiling(документ.PageSizeMm.Width * пикселейНаМм), 1);
+    var высота = Math.Max((int)Math.Ceiling(документ.PageSizeMm.Height * пикселейНаМм), 1);
+
+    using var страница = new Bitmap(ширина, высота);
+
+    using (var графика = Graphics.FromImage(страница))
+    {
+        графика.Clear(Color.White);
+
+        if (документ.Pages.Count > 0)
+        {
+            // Исходный прямоугольник в ПИКСЕЛЯХ метафайла: метафайл создаётся
+            // с рамкой в пикселях, согласованной с опорным растровым
+            // изображением (PrintPreviewEngine.СоздатьМетафайл); источник в
+            // миллиметрах искажал воспроизведение ×1.1754 (регрессия
+            // доказательства рендеринга 2026-11-08).
+            графика.DrawImage(
+                документ.Pages[0],
+                new Rectangle(0, 0, ширина, высота),
+                new RectangleF(0f, 0f, документ.Pages[0].Width, документ.Pages[0].Height),
+                GraphicsUnit.Pixel);
+        }
+    }
+
+    // Контракт размера холста: скан обязан совпадать с расчётом по размеру
+    // страницы — иначе холст обрезан или исказён.
+    var размерыТочны = страница.Width == ширина && страница.Height == высота;
+
+    var печатная = документ.PrintableAreaMm.Width > 0 && документ.PrintableAreaMm.Height > 0
+        ? new Rectangle(
+            (int)(документ.PrintableAreaMm.X * пикселейНаМм),
+            (int)(документ.PrintableAreaMm.Y * пикселейНаМм),
+            (int)(документ.PrintableAreaMm.Width * пикселейНаМм),
+            (int)(документ.PrintableAreaMm.Height * пикселейНаМм))
+        : new Rectangle(0, 0, ширина, высота);
+
+    var зоны = документ.Fields
+        .Select(поле => (
+            поле.Name,
+            поле.Kind,
+            Прямоугольник: new Rectangle(
+                (int)(поле.Bounds.X * пикселейНаМм),
+                (int)(поле.Bounds.Y * пикселейНаМм),
+                Math.Max((int)(поле.Bounds.Width * пикселейНаМм), 1),
+                Math.Max((int)(поле.Bounds.Height * пикселейНаМм), 1))))
+        .ToList();
+
+    var тёмноеВПоле = new int[зоны.Count];
+    var тёмныхВсего = 0;
+    var тёмныхВнеПечатной = 0;
+
+    var данные = страница.LockBits(
+        new Rectangle(0, 0, ширина, высота),
+        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+        System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+    try
+    {
+        var буфер = new byte[данные.Stride * высота];
+        System.Runtime.InteropServices.Marshal.Copy(данные.Scan0, буфер, 0, буфер.Length);
+
+        for (var y = 0; y < высота; y++)
+        {
+            var смещениеСтроки = y * данные.Stride;
+
+            for (var x = 0; x < ширина; x++)
+            {
+                var синий = буфер[смещениеСтроки + (x * 4)];
+                var зелёный = буфер[смещениеСтроки + (x * 4) + 1];
+                var красный = буфер[смещениеСтроки + (x * 4) + 2];
+
+                var яркость = (красный * 299 + зелёный * 587 + синий * 114) / 1000;
+
+                if (яркость >= 128)
+                {
+                    continue;
+                }
+
+                тёмныхВсего++;
+
+                if (!печатная.Contains(x, y))
+                {
+                    тёмныхВнеПечатной++;
+                }
+
+                for (var номерЗоны = 0; номерЗоны < зоны.Count; номерЗоны++)
+                {
+                    if (зоны[номерЗоны].Прямоугольник.Contains(x, y))
+                    {
+                        тёмноеВПоле[номерЗоны]++;
+                    }
+                }
+            }
+        }
+    }
+    finally
+    {
+        страница.UnlockBits(данные);
+    }
+
+    // Диагностика распределения тёмных пикселей: bbox и плотность по
+    // горизонтальным полосам (8 полос сверху вниз).
+    var минX = ширина;
+    var минY = высота;
+    var максX = -1;
+    var максY = -1;
+    var полосы = new int[8];
+
+    var диагностикаБит = страница.LockBits(
+        new Rectangle(0, 0, ширина, высота),
+        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+        System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+    try
+    {
+        var буферДиагностики = new byte[диагностикаБит.Stride * высота];
+        System.Runtime.InteropServices.Marshal.Copy(диагностикаБит.Scan0, буферДиагностики, 0, буферДиагностики.Length);
+
+        for (var y = 0; y < высота; y++)
+        {
+            var смещение = y * диагностикаБит.Stride;
+
+            for (var x = 0; x < ширина; x++)
+            {
+                var b = буферДиагностики[смещение + (x * 4)];
+                var g = буферДиагностики[смещение + (x * 4) + 1];
+                var r = буферДиагностики[смещение + (x * 4) + 2];
+
+                if ((r * 299 + g * 587 + b * 114) / 1000 >= 128)
+                {
+                    continue;
+                }
+
+                if (x < минX) { минX = x; }
+                if (x > максX) { максX = x; }
+                if (y < минY) { минY = y; }
+                if (y > максY) { максY = y; }
+                полосы[Math.Min(y * 8 / высота, 7)]++;
+            }
+        }
+    }
+    finally
+    {
+        страница.UnlockBits(диагностикаБит);
+    }
+
+    var ббокс = максX < 0 ? "пусто" : $"x={минX}..{максX} y={минY}..{максY}";
+
+    Console.Out.WriteLine(
+        $"PREVIEW-SCAN страниц={документ.Pages.Count} canvasW={ширина} canvasH={высота} "
+        + $"dimsOk={(размерыТочны ? "true" : "false")} dark={тёмныхВсего} "
+        + $"outsidePrintable={тёмныхВнеПечатной} bbox={ббокс} полосы=[{string.Join(",", полосы)}]");
+
+    // Диагностический снимок растра скана (переписывается каждым прогоном):
+    // зелёные рамки — границы полей предпросмотра в мм-координатах.
+    try
+    {
+        using var разметка = Graphics.FromImage(страница);
+        var пероПолей = new Pen(Color.FromArgb(160, 0, 160, 0), 2f);
+
+        foreach (var поле in зоны)
+        {
+            разметка.DrawRectangle(пероПолей, поле.Прямоугольник);
+        }
+
+        пероПолей.Dispose();
+        страница.Save(
+            Path.Combine(Path.GetTempPath(), "Picket302PreviewScan.png"),
+            System.Drawing.Imaging.ImageFormat.Png);
+    }
+    catch
+    {
+        // Диагностика не влияет на исход скана.
+    }
+
+    for (var номерЗоны = 0; номерЗоны < зоны.Count; номерЗоны++)
+    {
+        Console.Out.WriteLine(
+            $"PREVIEW-FIELD name={зоны[номерЗоны].Name} kind={зоны[номерЗоны].Kind} dark={тёмноеВПоле[номерЗоны]}");
+    }
+
     Console.Out.Flush();
 }

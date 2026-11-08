@@ -993,7 +993,11 @@ public sealed class MainShell : Form
         {
             Text = "Вид логотипа",
             Dock = DockStyle.Top,
-            Height = 150,
+
+            // Высота следует за содержимым: при переносе переключателей на
+            // узкой колонке (окно 1000 px) рамка растёт, подписи не обрезаются
+            // (аудит 2026-11-08).
+            AutoSize = true,
         };
         EnvelopeUiTheme.ОформитьГруппу(группаЛоготипа, EnvelopeUiTheme.DisplayAccent);
 
@@ -1030,7 +1034,10 @@ public sealed class MainShell : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+
+            // Перенос вместо обрезания: подписи «С логотипом»/«Без логотипа»
+            // остаются доступны на любой ширине колонки (аудит 2026-11-08).
+            WrapContents = true,
             Margin = new Padding(2, 0, 2, 4),
         };
 
@@ -1050,7 +1057,7 @@ public sealed class MainShell : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
             Margin = new Padding(2, 0, 2, 4),
         };
 
@@ -1091,7 +1098,7 @@ public sealed class MainShell : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
             Margin = new Padding(2, 2, 2, 0),
         };
 
@@ -1113,7 +1120,11 @@ public sealed class MainShell : Form
         var контейнерПревью = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 128,
+
+            // Заголовок «Превью конверта C5» при 8 px отступе требует
+            // ~115 px текста: 148 px не обрезает его на любом масштабе
+            // шрифта (аудит 2026-11-08).
+            Width = 148,
             Padding = new Padding(4, 4, 4, 4),
         };
 
@@ -1306,6 +1317,19 @@ public sealed class MainShell : Form
             BackColor = EnvelopeUiTheme.PanelBackground,
         };
 
+        // Дополнительные действия — отдельная полоса НИЖЕ первичной: перенос
+        // предсказуем (две фиксированные полосы), одна кнопка не уходит
+        // «сама по себе» на третью строку (аудит 2026-11-08).
+        var дополнительные = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Padding = new Padding(1, 1, 1, 2),
+            BackColor = EnvelopeUiTheme.PanelBackground,
+        };
+
         var добавить = Кнопка("Добавить", "Добавить получателя");
         добавить.Click += (_, _) => ДобавитьПолучателя();
 
@@ -1348,9 +1372,10 @@ public sealed class MainShell : Form
         кнопки.Controls.Add(удалить);
         кнопки.Controls.Add(печать);
         кнопки.Controls.Add(превью);
-        кнопки.Controls.Add(вExcel);
-        кнопки.Controls.Add(сохранитьВид);
-        кнопки.Controls.Add(видТаблиц);
+
+        дополнительные.Controls.Add(вExcel);
+        дополнительные.Controls.Add(сохранитьВид);
+        дополнительные.Controls.Add(видТаблиц);
 
         _таблицаПолучателей.Columns.Add("VIP", "VIP");
         _таблицаПолучателей.Columns.Add("Индекс", "Индекс");
@@ -1401,6 +1426,11 @@ public sealed class MainShell : Form
             "В адресной книге нет записей. Нажмите «Добавить», чтобы создать первого получателя.");
         подсказкаПолучателей.Dock = DockStyle.Fill;
         панель.Controls.Add(подсказкаПолучателей);
+
+        // Порядок добавления = порядок закрепления снизу вверх (WinForms
+        // укладывает Dock=Top в обратном порядке коллекции): первичная
+        // полоса сверху, дополнительные действия под ней.
+        панель.Controls.Add(дополнительные);
         панель.Controls.Add(кнопки);
 
         return панель;
@@ -4265,6 +4295,13 @@ public sealed class MainShell : Form
         var создано = 0;
         var идентификаторы = new List<long>();
 
+        // Политика адреса получателя (вариант A, зафиксирована 2026-11-08):
+        // адрес не обязателен для СОХРАНЕНИЯ получателя, но получатель без
+        // основного адреса пропускается при печати с явным перечислением
+        // в сообщении — не молча, не исключением и без зависания; печатное
+        // задание для пропущенных не формируется.
+        var пропущенныеБезАдреса = new List<string>();
+
         // Карточка отправления запрашивается один раз для всей партии:
         // категория и вид уведомления применяются ко всем отправлениям
         // (ТЗ §8.1, функции 23 и 32).
@@ -4288,6 +4325,7 @@ public sealed class MainShell : Form
 
             if (адрес is null)
             {
+                пропущенныеБезАдреса.Add(контрагент.Name);
                 continue;
             }
 
@@ -4315,7 +4353,7 @@ public sealed class MainShell : Form
 
         MessageBox.Show(
             this,
-            $"Отправлений сформировано: {создано}.",
+            ТекстФормированияОтправлений(создано, пропущенныеБезАдреса),
             "Печать",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
@@ -4327,6 +4365,37 @@ public sealed class MainShell : Form
 
         await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
         ОбновитьСтрокуСостояния(_состав);
+    }
+
+    /// <summary>
+    /// Текст сообщения о формировании отправлений.
+    /// </summary>
+    /// <param name="создано">Число сформированных отправлений.</param>
+    /// <param name="пропущенныеБезАдреса">
+    /// Имена получателей, пропущенных из-за отсутствия основного адреса.
+    /// </param>
+    /// <returns>
+    /// Готовый текст для окна «Печать»: всегда называет число отправлений;
+    /// при пропусках перечисляет причины поимённо (политика адреса получателя,
+    /// вариант A: адрес не обязателен для сохранения, но получатели без
+    /// основного адреса пропускаются при печати явно, а не молча).
+    /// </returns>
+    public static string ТекстФормированияОтправлений(
+        int создано,
+        IReadOnlyCollection<string> пропущенныеБезАдреса)
+    {
+        ArgumentNullException.ThrowIfNull(пропущенныеБезАдреса);
+
+        var текст = $"Отправлений сформировано: {создано}.";
+
+        if (пропущенныеБезАдреса.Count > 0)
+        {
+            текст += $"\n\nПропущены без основного адреса ({пропущенныеБезАдреса.Count}): "
+                + string.Join(", ", пропущенныеБезАдреса)
+                + ".\nЗаполните адрес в карточке контрагента и повторите печать.";
+        }
+
+        return текст;
     }
 
     /// <summary>

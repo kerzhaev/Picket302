@@ -107,7 +107,7 @@ public sealed class PrintDataSource : IPrintDataSource
             case FieldDictionary.ColumnToStr4:
             case FieldDictionary.ColumnToStr5:
             case FieldDictionary.ColumnToStr6:
-                return СтрокаАдреса(письмо.RecipientAddress, колонка, FieldDictionary.ColumnToStr1);
+                return СтрокаАдреса(письмо.RecipientAddress, колонка);
 
             case FieldDictionary.ColumnFromZip:
                 return адресОтправителя?.Zip;
@@ -118,7 +118,7 @@ public sealed class PrintDataSource : IPrintDataSource
             case FieldDictionary.ColumnFromStr4:
             case FieldDictionary.ColumnFromStr5:
             case FieldDictionary.ColumnFromStr6:
-                return СтрокаАдреса(адресОтправителя, колонка, FieldDictionary.ColumnFromStr1);
+                return СтрокаАдреса(адресОтправителя, колонка);
 
             case FieldDictionary.ColumnCopyCount:
                 return письмо.CopyCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -151,14 +151,27 @@ public sealed class PrintDataSource : IPrintDataSource
         }
     }
 
-    private static string? СтрокаАдреса(Address? адрес, string колонка, string перваяКолонка)
+    private static string? СтрокаАдреса(Address? адрес, string колонка)
     {
         if (адрес is null)
         {
             return null;
         }
 
-        var индекс = колонка.Length - перваяКолонка.Length;
+        // Номер строки — последняя цифра имени колонки («to_str2» → 2).
+        // Прежняя арифметика длин (длина колонки минус длина «to_str1»)
+        // всегда давала 0: у всех «to_strN»/«from_strN» одинаковая длина, и
+        // поля str2..str6 печатали первую строку адреса (найдено
+        // runtime-доказательством рендеринга 2026-11-08: [edt_str_to2]
+        // выводил строку 1 вместо строки 2).
+        if (!int.TryParse(колонка[^1].ToString(), out var номер)
+            || номер < 1
+            || номер > Address.LineCount)
+        {
+            return null;
+        }
+
+        var индекс = номер - 1;
 
         if (индекс < 0 || индекс >= Address.LineCount)
         {

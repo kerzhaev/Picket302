@@ -82,6 +82,9 @@ try {
         $psi.RedirectStandardOutput = $true
         $psi.RedirectStandardError = $true
         $psi.CreateNoWindow = $true
+        # Контракт кодировки: harness пишет UTF-8 без BOM — декодируем как UTF-8.
+        $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
         $p = [System.Diagnostics.Process]::Start($psi)
         $stdout = $p.StandardOutput.ReadToEnd()
         $stderr = $p.StandardError.ReadToEnd()

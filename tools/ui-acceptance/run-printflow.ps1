@@ -136,6 +136,11 @@ try {
         # внешнего launcher-а — см. run-emptybook.ps1).
         $psiСинтетика.RedirectStandardOutput = $true
         $psiСинтетика.RedirectStandardError = $true
+        # Явный контракт декодирования труб синтетического потомка (как в
+        # run-emptybook.ps1): платформенная OEM-кодировка — не неявное
+        # допущение.
+        $psiСинтетика.StandardOutputEncoding = [Console]::OutputEncoding
+        $psiСинтетика.StandardErrorEncoding = [Console]::OutputEncoding
         $синтетика = [System.Diagnostics.Process]::Start($psiСинтетика)
         $h = @{ Proc = $синтетика; Lines = [System.Collections.ArrayList]::new() }
         Запись "SYNTHETIC HARNESS PID: $($синтетика.Id)"
@@ -169,7 +174,7 @@ try {
         }
 
         # --- SELECT --------------------------------------------------------
-        $h.Proc.StandardInput.WriteLine('SELECT')
+        Send-HarnessCommand $h 'SELECT'
 
         if (-not (Read-HarnessLines $h '^OK SELECT' 10)) {
             & $всёОк $false 'SELECT не подтверждён stdout (OK SELECT)'
@@ -183,7 +188,7 @@ try {
             # PerformClick может блокироваться до ShowDialog (SQLite-async
             # завершается синхронно), поэтому OK F5 приходит только после
             # закрытия модальной цепочки — проверяется по финальному stdout.
-            $h.Proc.StandardInput.WriteLine('F5')
+            Send-HarnessCommand $h 'F5'
 
             $карточка = Wait-ОжидаемоеОкно $pid_ 'Карточка отправления' 'f5-card'
             if ($карточка -ne [IntPtr]::Zero) {
@@ -243,7 +248,7 @@ try {
         if ($успех) {
             Запись '## F6 «Предпросмотр и печать»'
             # Аналогично F5: OK F6 печатается после закрытия цепочки модалок.
-            $h.Proc.StandardInput.WriteLine('F6')
+            Send-HarnessCommand $h 'F6'
         }
 
         if ($успех) {

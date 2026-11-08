@@ -86,6 +86,11 @@ try {
         # получает EOF до смерти synthetic (pipe-deadlock тестера).
         $psiСинтетика.RedirectStandardOutput = $true
         $psiСинтетика.RedirectStandardError = $true
+        # Явный контракт декодирования труб синтетического потомка: вывод
+        # не читается, но платформенная OEM-кодировка не остаётся неявным
+        # допущением (child — powershell.exe, пишет в OEM-кодировке).
+        $psiСинтетика.StandardOutputEncoding = [Console]::OutputEncoding
+        $psiСинтетика.StandardErrorEncoding = [Console]::OutputEncoding
         $синтетика = [System.Diagnostics.Process]::Start($psiСинтетика)
         $h = @{ Proc = $синтетика; Lines = [System.Collections.ArrayList]::new() }
         Запись "SYNTHETIC HARNESS PID: $($синтетика.Id)"
@@ -109,7 +114,7 @@ try {
         [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 30, 30, 1280, 720, 0x0040) | Out-Null
         Start-Sleep -Seconds 2
 
-        $h.Proc.StandardInput.WriteLine('COUNTS')
+        Send-HarnessCommand $h 'COUNTS'
 
         if (-not (Read-HarnessLines $h '^COUNTS ' 10)) {
             Запись 'FAIL: COUNTS не получен'
@@ -172,6 +177,20 @@ try {
         $отправителей = if ($строкаСчётчиков -and $строкаСчётчиков -match 'отправителей=(\d+)') { $Matches[1] } else { '?' }
         $получателей = if ($строкаСчётчиков -and $строкаСчётчиков -match 'получателей=(\d+)') { $Matches[1] } else { '?' }
         Запись "пустое состояние (stdout): всего=$всего отправителей=$отправителей получателей=$получателей"
+
+        # Контракт кодировки (регрессия 2026-11-08): строка счётчиков обязана
+        # совпасть ПОЛНОСТЬЮ (после корректного декодирования UTF-8), а ни
+        # одна строка stdout не содержит символ замены U+FFFD, которым
+        # декодер подменяет байты, не представимые в текущей кодировке.
+        $ожидаемаяСтрокаСчётчиков = 'COUNTS всего=0 отправителей=0 получателей=0'
+        $строкаТочная = ($строкаСчётчиков -eq $ожидаемаяСтрокаСчётчиков)
+        Запись "точный текст COUNTS: '$строкаСчётчиков' — совпадение: $строкаТочная"
+        $заменыFFFD = @($stdout | Where-Object { $_.Contains([string][char]0xFFFD) })
+        Запись "строк с U+FFFD (повреждённая кодировка): $($заменыFFFD.Count)"
+        foreach ($повреждённая in $заменыFFFD) {
+            Запись "  DAMAGED LINE: $повреждённая"
+        }
+
         $отказовStdout = @($stdout | Where-Object { $_ -match '^FAIL ' }).Count
         Запись "FAIL-строк в stdout: $отказовStdout"
 
@@ -200,6 +219,8 @@ try {
         $условия = [ordered]@{
             'READY получен' = ($null -ne ($stdout | Where-Object { $_ -match '^READY ' }))
             'COUNTS получен' = ($null -ne $строкаСчётчиков)
+            'точный текст COUNTS' = $строкаТочная
+            'нет U+FFFD в stdout' = ($заменыFFFD.Count -eq 0)
             'Всего: 0' = ($всего -eq '0')
             'таблица отправителей пуста' = ($отправителей -eq '0')
             'таблица получателей пуста' = ($получателей -eq '0')

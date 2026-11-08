@@ -11,7 +11,17 @@
 $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName System.Drawing
-Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
+
+# Ссылки для компиляции сниппета: PowerShell 5.1 достаточно одной сборки
+# System.Drawing; PowerShell 7 (System.Drawing.Common 9.x) требует полный
+# путь к самой сборке плюс её сателлит System.Private.Windows.Core.dll
+# (тип IImage), иначе Bitmap/Graphics не компилируются.
+$ссылкаДравинг = [System.Drawing.Bitmap].Assembly.Location
+$ссылкиСниппета = @($ссылкаДравинг)
+$ядроWindows = Join-Path ([System.IO.Path]::GetDirectoryName($ссылкаДравинг)) 'System.Private.Windows.Core.dll'
+if (Test-Path $ядроWindows) { $ссылкиСниппета += $ядроWindows }
+
+Add-Type -ReferencedAssemblies $ссылкиСниппета -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -63,16 +73,26 @@ public static class AccWin
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
 
-    public static List<IntPtr> WindowsOf(uint pid)
+    // Возврат — МАССИВ IntPtr[]: Add-Type PowerShell 7 компилирует
+    // сниппет без ссылки на System.Private.CoreLib (List<T> недоступен
+    // даже при явных -ReferencedAssemblies — проверено 2026-11-08);
+    // массивы не требуют разрешения универсального типа. Все вызовы
+    // перебирают результат foreach, массив совместим.
+    public static IntPtr[] WindowsOf(uint pid)
     {
-        var list = new List<IntPtr>();
+        var list = new IntPtr[256];
+        int count = 0;
         EnumWindows((h, lp) =>
         {
             uint p;
             GetWindowThreadProcessId(h, out p);
-            if (p == pid && IsWindowVisible(h)) list.Add(h);
+            if (p == pid && IsWindowVisible(h))
+            {
+                if (count < list.Length) list[count++] = h;
+            }
             return true;
         }, IntPtr.Zero);
+        System.Array.Resize(ref list, count);
         return list;
     }
 
@@ -197,12 +217,51 @@ function Start-Acceptance([string]$exe, [string]$mode, [string]$profileRoot, [bo
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
 
+    # Явный контракт декодирования вывода harness (регрессия 2026-11-08):
+    # harness пишет UTF-8 без BOM (Program.cs), поэтому обе трубы
+    # декодируются как UTF-8. Без этих свойств PS 5.1 декодировал бы байты
+    # OEM-кодировкой консоли (CP866 на русской Windows) — русские ключи
+    # строки «COUNTS всего=0 …» повреждались бы, и драйвер фиксировал
+    # ложный FAIL. Свойства задаются ДО Process.Start.
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+
+    # .NET 5+ позволяет задать StandardInputEncoding напрямую, но
+    # Windows PowerShell 5.1 запускается на старом runtime, где этого
+    # свойства может не быть. Поэтому ниже команды всё равно отправляются
+    # через BaseStream без BOM; свойство задаём только если оно доступно.
+    $inputEncoding = $psi.GetType().GetProperty('StandardInputEncoding')
+    if ($null -ne $inputEncoding -and $inputEncoding.CanWrite) {
+        $inputEncoding.SetValue($psi, [System.Text.UTF8Encoding]::new($false), $null)
+    }
+
     $p = [System.Diagnostics.Process]::Start($psi)
 
     return @{
         Proc = $p
         Lines = [System.Collections.ArrayList]::new()
     }
+}
+
+# Отправляет одну строку в stdin harness в UTF-8 без BOM.
+# Нельзя использовать StandardInput.WriteLine: StreamWriter Windows
+# PowerShell 5.1 при первой записи добавляет UTF-8 BOM, и harness получает
+# «Я╗┐SEEDFIELDS» вместо команды. Драйверские команды ASCII, но UTF-8
+# используется намеренно как единый контракт протокола.
+function Send-HarnessCommand($h, [string]$command) {
+    if ($null -eq $h -or $null -eq $h.Proc -or $h.Proc.HasExited) {
+        throw 'Нельзя отправить команду: harness уже завершён.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($command)) {
+        throw 'Нельзя отправить пустую команду harness.'
+    }
+
+    $line = $command.Trim() + "`r`n"
+    $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($line)
+    $stream = $h.Proc.StandardInput.BaseStream
+    $stream.Write($bytes, 0, $bytes.Length)
+    $stream.Flush()
 }
 
 # Читает stdout harness построчно (ReadLineAsync) до строки, совпавшей с
@@ -335,6 +394,15 @@ function Invoke-BoundedCommand {
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
+
+    # Явный контракт декодирования для NATIVE-команд (taskkill и системные
+    # утилиты): они пишут в OEM-кодировке консоли, а не в UTF-8, поэтому
+    # декодирование фиксируется явно тем же OEM-значением
+    # ([Console]::OutputEncoding). Платформенная OEM-кодировка перестаёт
+    # быть неявным допущением: классификация «не найден» ('not found' /
+    # 'не найден') и диагностика остаются корректными на любой локали.
+    $psi.StandardOutputEncoding = [Console]::OutputEncoding
+    $psi.StandardErrorEncoding = [Console]::OutputEncoding
 
     $child = $null
     $outTask = $null
@@ -1092,7 +1160,7 @@ function Stop-HarnessTree($proc, [int]$waitMs = 20000) {
     if (-not $proc.HasExited) {
         if ($proc.StandardInput -ne $null) {
             try {
-                $proc.StandardInput.WriteLine('CLOSE')
+                Send-HarnessCommand @{ Proc = $proc } 'CLOSE'
             } catch {
                 Write-Host "  CLOSE не доставлен (процесс завершается): $($_.Exception.Message)"
             }

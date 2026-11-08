@@ -224,15 +224,21 @@ public sealed class FormPrintPreview : Form
             событие.Graphics.DrawRectangle(рамка, прямоугольник.X, прямоугольник.Y, прямоугольник.Width, прямоугольник.Height);
         }
 
-        // Воспроизведение метафайла напрямую: прежний записывающий контекст
-        // Graphics.FromImage(страница) вместе с DrawImage вызывал
-        // OutOfMemoryException у GDI+ при первой отрисовке (найдено runtime-
-        // приёмкой 2026-11-06; записывающий контекст здесь не нужен).
+        // Воспроизведение метафайла напрямую. Исходный прямоугольник — в
+        // ПИКСЕЛЯХ метафайла (страница.Width×Height): метафайл создаётся с
+        // рамкой в пикселях, согласованной с опорным растровым изображением
+        // (PrintPreviewEngine.СоздатьМетафайл); исходный прямоугольник в
+        // миллиметрах искажал воспроизведение ×1.1754 от начала координат —
+        // текст уходил из своих полей (runtime-доказательство 2026-11-08).
+        // Прежний записывающий контекст Graphics.FromImage(страница) вместе
+        // с DrawImage вызывал OutOfMemoryException у GDI+ при первой
+        // отрисовке (найдено runtime-приёмкой 2026-11-06; записывающий
+        // контекст здесь не нужен).
         событие.Graphics.DrawImage(
             страница,
             прямоугольник,
-            new RectangleF(0, 0, _документ.PageSizeMm.Width, _документ.PageSizeMm.Height),
-            GraphicsUnit.Millimeter);
+            new RectangleF(0, 0, страница.Width, страница.Height),
+            GraphicsUnit.Pixel);
 
         if (_документ.PrintableAreaMm.Width > 0 && _документ.PrintableAreaMm.Height > 0)
         {

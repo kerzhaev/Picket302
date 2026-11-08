@@ -29,6 +29,11 @@
     <Reference Include="Picket302.Infrastructure">
       <HintPath>$(AppDllDir)\Picket302.Infrastructure.dll</HintPath>
     </Reference>
+    <!-- Сценарий предпросмотра (2026-11-08): пиксельный скан страницы
+         предпросмотра читает PreviewDocument из Printing.Preview. -->
+    <Reference Include="Picket302.Printing">
+      <HintPath>$(AppDllDir)\Picket302.Printing.dll</HintPath>
+    </Reference>
     <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
 

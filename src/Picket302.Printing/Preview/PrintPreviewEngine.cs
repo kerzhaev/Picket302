@@ -205,7 +205,23 @@ public sealed class PrintPreviewEngine
 
     private static Metafile СоздатьМетафайл(float ширинаМм, float высотаМм)
     {
-        using var опорный = new Bitmap(1, 1);
+        // Рамка метафайла задаётся в ПИКСЕЛЯХ и совпадает с опорным
+        // растровым изображением (страница при 96 dpi). Причина: содержимое
+        // записывается в пикселях опорного контекста (PageUnit=Millimeter
+        // пересчитывается в device-пиксели по 96 dpi), а DrawImage при
+        // воспроизведении отображает ПИКСЕЛЬНОЕ пространство метафайла на
+        // целевой прямоугольник. Рамка в миллиметрах давала пиксельное
+        // пространство 3.216 px/мм при записи 3.78 px/мм — содержимое
+        // воспроизводилось с искажением ×1.1754 от начала координат: текст
+        // полей уходил правее/ниже своих координат и в предпросмотре, и в
+        // печати (runtime-доказательство 2026-11-08, изолированное
+        // воспроизведение: 324 мм → 1042 px = 3.216 px/мм против записи
+        // 3.78 px/мм).
+        var пикселейНаМм = 96f / 25.4f;
+        var ширинаПикс = Math.Max((int)Math.Ceiling(ширинаМм * пикселейНаМм), 1);
+        var высотаПикс = Math.Max((int)Math.Ceiling(высотаМм * пикселейНаМм), 1);
+
+        using var опорный = new Bitmap(ширинаПикс, высотаПикс);
         using var опорнаяГрафика = Graphics.FromImage(опорный);
 
         var hdc = опорнаяГрафика.GetHdc();
@@ -214,8 +230,8 @@ public sealed class PrintPreviewEngine
         {
             return new Metafile(
                 hdc,
-                new RectangleF(0f, 0f, ширинаМм, высотаМм),
-                MetafileFrameUnit.Millimeter,
+                new Rectangle(0, 0, ширинаПикс, высотаПикс),
+                MetafileFrameUnit.Pixel,
                 EmfType.EmfOnly);
         }
         finally
