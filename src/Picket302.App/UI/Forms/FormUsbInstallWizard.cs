@@ -42,6 +42,8 @@ public sealed class FormUsbInstallWizard : Form
         _установщик = установщик;
 
         Text = "Установка на USB-флешку";
+        AccessibleName = "Установка Picket302 на USB-флешку";
+        AccessibleDescription = "Мастер выбора режима и запуска установки программы или базы на USB-флешку.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -220,10 +222,14 @@ public sealed class FormUsbInstallWizard : Form
         _всёЦеликом.Text = "Всё целиком (программа, переносная СУБД и база данных)";
         _всёЦеликом.AutoSize = true;
         _всёЦеликом.Location = new Point(24, 34);
+        _всёЦеликом.AccessibleName = "Установить всё целиком";
+        _всёЦеликом.AccessibleDescription = "Скопировать программу, переносную СУБД и базу данных.";
 
         _толькоБаза.Text = "Только база данных (рекомендуется: программа остаётся на рабочих станциях)";
         _толькоБаза.AutoSize = true;
         _толькоБаза.Location = new Point(24, 56);
+        _толькоБаза.AccessibleName = "Установить только базу данных";
+        _толькоБаза.AccessibleDescription = "Скопировать только базу данных, оставив программу на рабочих станциях.";
 
         _всёЦеликом.CheckedChanged += (_, _) => ПересчитатьПлан();
         _толькоБаза.CheckedChanged += (_, _) => ПересчитатьПлан();
@@ -247,12 +253,16 @@ public sealed class FormUsbInstallWizard : Form
 
         _папкаUsb.Location = new Point(130, 83);
         _папкаUsb.Width = 350;
+        _папкаUsb.AccessibleName = "Папка USB-флешки";
+        _папкаUsb.AccessibleDescription = "Путь к папке на USB-флешке, в которую будет выполнена установка.";
 
         var обзор = new Button
         {
             Text = "Обзор…",
             Size = new Size(90, 24),
             Location = new Point(490, 81),
+            AccessibleName = "Выбрать папку USB-флешки",
+            AccessibleDescription = "Открыть выбор папки назначения на USB-флешке.",
         };
 
         обзор.Click += (_, _) => ВыбратьПапкуДиалогом();
@@ -279,9 +289,13 @@ public sealed class FormUsbInstallWizard : Form
 
         _требуется.AutoSize = true;
         _требуется.Location = new Point(24, 140);
+        _требуется.AccessibleName = "Требуемый объём USB-флешки";
+        _требуется.AccessibleDescription = "Объём, необходимый для выбранного режима установки.";
 
         _доступно.AutoSize = true;
         _доступно.Location = new Point(24, 160);
+        _доступно.AccessibleName = "Доступный объём USB-флешки";
+        _доступно.AccessibleDescription = "Свободный объём в выбранной папке USB-флешки.";
 
         Controls.Add(заголовок);
         Controls.Add(_требуется);
@@ -305,6 +319,8 @@ public sealed class FormUsbInstallWizard : Form
         _вывод.Multiline = true;
         _вывод.ReadOnly = true;
         _вывод.ScrollBars = ScrollBars.Vertical;
+        _вывод.AccessibleName = "Результат установки на USB-флешку";
+        _вывод.AccessibleDescription = "Сообщение о результате или причине отказа в установке.";
 
         Controls.Add(метка);
         Controls.Add(_вывод);
@@ -320,6 +336,8 @@ public sealed class FormUsbInstallWizard : Form
             Text = "Установить",
             Size = new Size(120, 24),
             Location = new Point(10, 320),
+            AccessibleName = "Установить на USB-флешку",
+            AccessibleDescription = "Запустить установку в выбранную папку USB-флешки.",
         };
 
         установить.Click += (_, _) => ВыполнитьУстановку();
@@ -330,6 +348,8 @@ public sealed class FormUsbInstallWizard : Form
             Size = new Size(100, 24),
             Location = new Point(510, 320),
             DialogResult = DialogResult.OK,
+            AccessibleName = "Закрыть мастер USB-установки",
+            AccessibleDescription = "Закрыть мастер без запуска установки.",
         };
 
         Controls.Add(установить);

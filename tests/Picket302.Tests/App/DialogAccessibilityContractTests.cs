@@ -4,6 +4,8 @@ using Picket302.Application.Import;
 using Picket302.App.UI.Forms;
 using Picket302.Domain.Backup;
 using Picket302.Infrastructure.Backup;
+using Picket302.Infrastructure.Deployment;
+using Picket302.Infrastructure.Localization;
 using Picket302.Infrastructure.Persistence;
 using Picket302.Tests.Infrastructure;
 using Xunit;
@@ -122,6 +124,23 @@ public sealed class DialogAccessibilityContractTests
         yield return new object[] { "Имя фильтра", new FormFilterName("Название фильтра") };
         yield return new object[] { "Калькулятор", new FormCalculator() };
         yield return new object[] { "Настройка разбора CSV", СоздатьДиалогCsv() };
+        yield return new object[]
+        {
+            "Выбор языка",
+            new FormLanguageSelection(new LanguageManager(Path.Combine(Path.GetTempPath(), "Picket302Accessibility", "language"))),
+        };
+        yield return new object[]
+        {
+            "Установка на USB-флешку",
+            new FormUsbInstallWizard(new UsbInstaller(
+                Path.Combine(Path.GetTempPath(), "Picket302Accessibility", "usb", "picket302.db"),
+                Path.GetTempPath())),
+        };
+        yield return new object[]
+        {
+            "Отчёт об ошибке",
+            new FormExceptionReport(new InvalidOperationException("Тестовое исключение")),
+        };
     }
 
     private static FormCsvImportConfig СоздатьДиалогCsv()

@@ -27,6 +27,8 @@ public sealed class FormExceptionReport : Form
         WordWrap = false,
         Dock = DockStyle.Fill,
         Font = new Font("Consolas", 8f),
+        AccessibleName = "Подробности ошибки",
+        AccessibleDescription = "Полный текст ошибки, сведения о программе и стек вызовов.",
     };
 
     private readonly Button _копировать = new();
@@ -45,6 +47,8 @@ public sealed class FormExceptionReport : Form
         _исключение = исключение;
 
         Text = "Ошибка программы";
+        AccessibleName = "Отчёт об ошибке программы";
+        AccessibleDescription = "Подробности исключения и готовый текст для службы поддержки.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -116,28 +120,63 @@ public sealed class FormExceptionReport : Form
             Dock = DockStyle.Top,
             Height = 36,
             Padding = new Padding(8, 8, 8, 0),
+            AccessibleName = "Инструкция службы поддержки",
+            AccessibleDescription = "Скопируйте подробности ошибки и отправьте их в службу поддержки.",
         };
 
         _копировать.Text = "Скопировать для службы поддержки";
         _копировать.Size = new Size(210, 26);
+        _копировать.AccessibleName = "Скопировать отчёт для службы поддержки";
+        _копировать.AccessibleDescription = "Поместить подробности ошибки в буфер обмена.";
         _копировать.Click += (_, _) => CopyForSupport();
 
         _поддержка.Text = "Служба поддержки";
         _поддержка.Size = new Size(140, 26);
+        _поддержка.AccessibleName = "Открыть службу поддержки";
+        _поддержка.AccessibleDescription = "Открыть страницу службы поддержки в браузере.";
         _поддержка.Click += (_, _) => ОткрытьСлужбуПоддержки();
 
         _закрыть.Text = "Закрыть";
         _закрыть.Size = new Size(90, 26);
         _закрыть.DialogResult = DialogResult.Cancel;
+        _закрыть.AccessibleName = "Закрыть отчёт об ошибке";
+        _закрыть.AccessibleDescription = "Закрыть окно отчёта об ошибке.";
 
-        var нижняяПанель = new Panel { Dock = DockStyle.Bottom, Height = 36 };
-        нижняяПанель.Controls.Add(_копировать);
-        нижняяПанель.Controls.Add(_поддержка);
-        нижняяПанель.Controls.Add(_закрыть);
+        var левыеКнопки = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            WrapContents = false,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        левыеКнопки.Controls.Add(_копировать);
+        левыеКнопки.Controls.Add(_поддержка);
 
-        _копировать.Location = new Point(10, 5);
-        _поддержка.Location = new Point(230, 5);
-        _закрыть.Location = new Point(650, 5);
+        var праваяКнопка = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            AutoSize = true,
+            Margin = new Padding(0),
+            Padding = new Padding(0),
+        };
+        праваяКнопка.Controls.Add(_закрыть);
+
+        var нижняяПанель = new TableLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 36,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(8, 5, 8, 5),
+            AccessibleName = "Действия отчёта об ошибке",
+            AccessibleDescription = "Копирование отчёта, открытие службы поддержки и закрытие окна.",
+        };
+        нижняяПанель.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        нижняяПанель.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        нижняяПанель.Controls.Add(левыеКнопки, 0, 0);
+        нижняяПанель.Controls.Add(праваяКнопка, 1, 0);
 
         Controls.Add(_подробности);
         Controls.Add(нижняяПанель);

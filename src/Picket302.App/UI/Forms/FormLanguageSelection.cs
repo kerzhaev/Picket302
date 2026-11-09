@@ -35,6 +35,8 @@ public sealed class FormLanguageSelection : Form
         _менеджер = менеджер;
 
         Text = "Язык интерфейса";
+        AccessibleName = "Выбор языка интерфейса";
+        AccessibleDescription = "Диалог выбора языка интерфейса без перезапуска программы.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -74,19 +76,26 @@ public sealed class FormLanguageSelection : Form
             Text = "Язык интерфейса:",
             Location = new Point(14, 26),
             AutoSize = true,
+            AccessibleName = "Подпись выбора языка",
         };
 
         _языки.Location = new Point(14, 48);
+        _языки.AccessibleName = "Язык интерфейса";
+        _языки.AccessibleDescription = "Выберите язык, на котором будут показаны подписи программы.";
 
         _пояснение.Location = new Point(14, 82);
         _пояснение.Size = new Size(370, 44);
         _пояснение.Text =
             "Переключение языка применяется без перезапуска программы: подписи открытых окон "
             + "обновляются сразу. Новый язык добавляется копированием шаблона словаря.";
+        _пояснение.AccessibleName = "Сведения о переключении языка";
+        _пояснение.AccessibleDescription = "Язык применяется сразу, без перезапуска программы.";
 
         _применить.Text = "Применить";
         _применить.Size = new Size(100, 26);
         _применить.Location = new Point(180, 146);
+        _применить.AccessibleName = "Применить язык";
+        _применить.AccessibleDescription = "Применить выбранный язык и закрыть диалог.";
         _применить.Click += (_, _) =>
         {
             ApplyLanguage();
@@ -99,6 +108,8 @@ public sealed class FormLanguageSelection : Form
         _отмена.Size = new Size(90, 26);
         _отмена.Location = new Point(286, 146);
         _отмена.DialogResult = DialogResult.Cancel;
+        _отмена.AccessibleName = "Отменить выбор языка";
+        _отмена.AccessibleDescription = "Закрыть диалог без смены языка.";
 
         Controls.Add(_отмена);
         Controls.Add(_применить);

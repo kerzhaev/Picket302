@@ -4,6 +4,9 @@ using Picket302.Application.Import;
 using Picket302.App;
 using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
+using Picket302.Infrastructure.Deployment;
+using Picket302.Infrastructure.Localization;
+using Picket302.Infrastructure.Logging;
 using Picket302.Tests.Infrastructure;
 using Xunit;
 
@@ -254,8 +257,14 @@ public sealed class AdaptiveLayoutTests
         using var фильтр = new FormFilterName("Название фильтра");
         using var калькулятор = new FormCalculator();
         using var csv = new FormCsvImportConfig(хранилище);
+        using var язык = new FormLanguageSelection(new LanguageManager(
+            Path.Combine(Path.GetTempPath(), "Picket302UiAccessibility", "language")));
+        using var usb = new FormUsbInstallWizard(new UsbInstaller(
+            Path.Combine(Path.GetTempPath(), "Picket302UiAccessibility", "usb", "picket302.db"),
+            Path.GetTempPath()));
+        using var исключение = new FormExceptionReport(new InvalidOperationException("Тестовое исключение"));
 
-        foreach (var форма in new Form[] { поиск, выбор, фильтр, калькулятор, csv })
+        foreach (var форма in new Form[] { поиск, выбор, фильтр, калькулятор, csv, язык, usb, исключение })
         {
             var интерактивные = Обойти(форма)
                 .Where(контрол => контрол is TextBox
@@ -309,6 +318,96 @@ public sealed class AdaptiveLayoutTests
                 Assert.True(
                     панель.ClientRectangle.Contains(кнопка.Bounds),
                     $"Кнопка «{кнопка.Text}» обрезана внутри нижней панели: {кнопка.Bounds} против {панель.ClientRectangle}."));
+        }
+        finally
+        {
+            форма.Close();
+        }
+    }
+
+    [Fact]
+    public void ЖурналОшибок_НижняяПанельИКнопкиОстаютсяВКлиентскойОбласти()
+    {
+        var папка = Path.Combine(
+            Path.GetTempPath(),
+            "Picket302UiAccessibility",
+            "logs-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            using (var журнал = new LogHub(папка))
+            using (var форма = new FormErrorLog(журнал))
+            {
+                форма.StartPosition = FormStartPosition.Manual;
+                форма.Show();
+                форма.PerformLayout();
+                System.Windows.Forms.Application.DoEvents();
+
+                var панель = Обойти(форма)
+                    .OfType<FlowLayoutPanel>()
+                    .Single(элемент => элемент.AccessibleName == "Действия журнала ошибок");
+
+                Assert.Equal(DockStyle.Bottom, панель.Dock);
+                Assert.True(форма.ClientRectangle.Contains(панель.Bounds));
+                Assert.All(панель.Controls.OfType<Button>(), кнопка =>
+                    Assert.True(
+                        панель.ClientRectangle.Contains(кнопка.Bounds),
+                        $"Кнопка «{кнопка.Text}» выходит за панель журнала: {кнопка.Bounds} против {панель.ClientRectangle}."));
+
+                форма.ClientSize = new Size(620, 320);
+                форма.PerformLayout();
+
+                Assert.All(панель.Controls.OfType<Button>(), кнопка =>
+                    Assert.True(
+                        панель.ClientRectangle.Contains(кнопка.Bounds),
+                        $"Кнопка «{кнопка.Text}» обрезается после изменения размера: {кнопка.Bounds} против {панель.ClientRectangle}."));
+
+                форма.Close();
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(папка))
+            {
+                Directory.Delete(папка, recursive: true);
+            }
+
+            var родитель = Directory.GetParent(папка)?.FullName;
+
+            if (родитель is not null
+                && Directory.Exists(родитель)
+                && !Directory.EnumerateFileSystemEntries(родитель).Any())
+            {
+                Directory.Delete(родитель, recursive: false);
+            }
+        }
+    }
+
+    [Fact]
+    public void ОтчётОбОшибке_НижняяПанельНеЗависитОтФиксированнойШирины()
+    {
+        using var форма = new FormExceptionReport(new InvalidOperationException("Тестовое исключение"));
+        форма.StartPosition = FormStartPosition.Manual;
+        форма.Show();
+        форма.PerformLayout();
+        System.Windows.Forms.Application.DoEvents();
+
+        try
+        {
+            var панель = Обойти(форма)
+                .OfType<TableLayoutPanel>()
+                .Single(элемент => элемент.AccessibleName == "Действия отчёта об ошибке");
+
+            Assert.True(форма.ClientRectangle.Contains(панель.Bounds));
+
+            форма.ClientSize = new Size(600, 320);
+            форма.PerformLayout();
+
+            Assert.True(форма.ClientRectangle.Contains(панель.Bounds));
+            Assert.All(Обойти(панель).OfType<Button>(), кнопка =>
+                Assert.True(
+                    кнопка.Parent is not null && кнопка.Parent.ClientRectangle.Contains(кнопка.Bounds),
+                    $"Кнопка «{кнопка.Text}» выходит за вложенную панель после изменения размера."));
         }
         finally
         {

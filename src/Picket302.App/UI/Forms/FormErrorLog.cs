@@ -30,6 +30,8 @@ public sealed class FormErrorLog : Form
         _канал = канал;
 
         Text = "Журнал ошибок";
+        AccessibleName = "Журнал ошибок приложения";
+        AccessibleDescription = "Просмотр и фильтрация записей журнала приложения.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -120,13 +122,24 @@ public sealed class FormErrorLog : Form
             Dock = DockStyle.Top,
             Height = 34,
             FlowDirection = FlowDirection.LeftToRight,
+            AccessibleName = "Фильтр журнала ошибок",
+            AccessibleDescription = "Фильтрация журнала по уровню, датам и тексту.",
         };
 
         _уровень.Items.AddRange(["Все", "Error", "Warning", "Information", "Debug"]);
         _уровень.SelectedIndex = 0;
         _уровень.Width = 110;
+        _уровень.AccessibleName = "Уровень журнала";
+        _уровень.AccessibleDescription = "Выберите уровень записей для отображения.";
 
         _фильтр.Width = 200;
+        _фильтр.AccessibleName = "Текстовый фильтр журнала";
+        _фильтр.AccessibleDescription = "Показывать только записи, содержащие указанный текст.";
+
+        _сДаты.AccessibleName = "Начальная дата журнала";
+        _сДаты.AccessibleDescription = "Показывать записи начиная с этой даты.";
+        _поДату.AccessibleName = "Конечная дата журнала";
+        _поДату.AccessibleDescription = "Показывать записи до этой даты включительно.";
 
         var меткаУровня = new Label { Text = "Уровень:", AutoSize = true, Margin = new Padding(3, 6, 0, 0) };
         var меткаСДаты = new Label { Text = "С:", AutoSize = true, Margin = new Padding(6, 6, 0, 0) };
@@ -137,6 +150,8 @@ public sealed class FormErrorLog : Form
         _поДату.Value = DateTime.Today;
 
         var применить = new Button { Text = "Применить", Width = 90 };
+        применить.AccessibleName = "Применить фильтр журнала";
+        применить.AccessibleDescription = "Обновить список записей по выбранным условиям.";
         применить.Click += (_, _) => ApplyFilter();
 
         панельФильтра.Controls.AddRange(
@@ -155,12 +170,15 @@ public sealed class FormErrorLog : Form
         _записи.Dock = DockStyle.Fill;
         _записи.Font = new Font("Consolas", 8f);
         _записи.HorizontalScrollbar = true;
+        _записи.AccessibleName = "Записи журнала ошибок";
+        _записи.AccessibleDescription = "Список записей журнала, отфильтрованных по заданным условиям.";
 
         var копировать = new Button
         {
             Text = "Скопировать для службы поддержки",
             Size = new Size(220, 26),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            AccessibleName = "Скопировать журнал для службы поддержки",
+            AccessibleDescription = "Поместить отфильтрованный журнал в буфер обмена.",
         };
 
         копировать.Click += (_, _) => CopyForSupport();
@@ -169,15 +187,23 @@ public sealed class FormErrorLog : Form
         {
             Text = "Закрыть",
             Size = new Size(90, 26),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
             DialogResult = DialogResult.Cancel,
+            AccessibleName = "Закрыть журнал ошибок",
+            AccessibleDescription = "Закрыть окно журнала ошибок.",
         };
 
-        var нижняяПанель = new Panel { Dock = DockStyle.Bottom, Height = 34 };
-        нижняяПанель.Controls.Add(копировать);
+        var нижняяПанель = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 34,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(8, 4, 8, 4),
+            AccessibleName = "Действия журнала ошибок",
+            AccessibleDescription = "Копирование журнала и закрытие окна.",
+        };
         нижняяПанель.Controls.Add(закрыть);
-        копировать.Location = new Point(нижняяПанель.Width - 320, 4);
-        закрыть.Location = new Point(нижняяПанель.Width - 100, 4);
+        нижняяПанель.Controls.Add(копировать);
 
         Controls.Add(_записи);
         Controls.Add(нижняяПанель);
