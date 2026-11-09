@@ -3,7 +3,7 @@
 Дата проверки: 2026-11-09<br>
 Статус: `READY_WITH_LIMITATIONS`<br>
 Рабочая ветка: `main`<br>
-Кодовый коммит серии: `d37b74b`.<br>
+Кодовые коммиты серии: `d37b74b`, `bde98c3`.<br>
 После отдельного docs-коммита публикация выполнена: `origin/main == HEAD`.
 
 ## 1. Цель серии
@@ -47,17 +47,27 @@
 - Смысл, обработчики, порядок экранов и пользовательский production-flow не
   изменялись.
 
+### 2.3. Печатные предупреждения
+
+- В `FormPaperSizeBlocked`, `FormOversizeWarning` и
+  `FormFeedOrientationHint` добавлены доступные имена и описания всех кнопок
+  и флажка подавления предупреждения.
+- В `FormFeedOrientationHint` исправлена реальная обрезка длинной справки:
+  высота текста увеличена с 32 до 52 px, а флажок и кнопки перенесены ниже
+  без пересечения с инструкцией.
+- Эти три формы добавлены в общий runtime-проверяемый accessibility-контракт.
+
 ## 3. Проверенная матрица
 
 | Проверка | Результат |
 |---|---:|
 | Полная сборка Debug (`--no-restore --no-incremental`) | 0 ошибок / 0 предупреждений |
 | Полная сборка Release (`--no-restore --no-incremental`) | 0 ошибок / 0 предупреждений |
-| `DialogAccessibilityContractTests` Debug | 32/32, 0 fail, 0 skip |
-| Строгий non-COM Debug | 1318/1318, 0 fail, 0 skip |
-| Строгий non-COM Release | 1318/1318, 0 fail, 0 skip |
-| Coverlet strict non-COM Release | 1318/1318; line 64.84%; branch 53.56% |
-| Targeted Release: profile seam + accessibility | 33/33, 0 fail, 0 skip |
+| `DialogAccessibilityContractTests` Debug | 44/44, 0 fail, 0 skip |
+| Строгий non-COM Debug | 1330/1330, 0 fail, 0 skip |
+| Строгий non-COM Release | 1330/1330, 0 fail, 0 skip |
+| Coverlet strict non-COM Release | 1330/1330; line 64.96%; branch 53.56% |
+| Targeted Release: profile seam + accessibility | 45/45, 0 fail, 0 skip |
 | Production-профиль вокруг targeted Release | 4 файла до/после; added=0, removed=0, changed=0 |
 | Временные каталоги наших тестовых префиксов | 0 |
 | Процессы Picket302/UiAcceptance/testhost после прогонов | 0 |
@@ -95,8 +105,9 @@ TEST_DEBUG_VERIFIED=true
 TEST_RELEASE_VERIFIED=true
 PROFILE_TARGETED_DELTA_VERIFIED=true
 DIALOG_ACCESSIBILITY_CONTRACT_VERIFIED=true
+PRINT_WARNING_LAYOUT_VERIFIED=true
 CODE_COVERAGE_MEASURED=true
-COVERAGE_LINE=64.84%
+COVERAGE_LINE=64.96%
 COVERAGE_BRANCH=53.56%
 REFERENCE_VISUAL_VERIFIED=PARTIAL
 COM_VERIFIED=DEFERRED_BY_OWNER
@@ -104,17 +115,18 @@ PRINT_VERIFIED=NOT_RUN_BY_SCOPE
 OS_DPI_125_150_VERIFIED=NOT_RUN_ON_HOST
 ```
 
-Coverlet Release-прогон выполнен тем же строгим non-COM-фильтром в отдельный
-каталог `%TEMP%`, после чтения `coverage.cobertura.xml` каталог удалён.
-Измерено 26 327 покрытых строк из 40 599 и 7 550 покрытых ветвей из 14 096.
+Coverlet Release-прогон выполнен тем же строгим non-COM-фильтром на актуальном
+коде после исправления печатных предупреждений, в отдельный каталог `%TEMP%`;
+после чтения `coverage.cobertura.xml` каталог удалён.
+Измерено 26 383 покрытых строки из 40 613 и 7 550 покрытых ветвей из 14 096.
 Разбивка по сборкам:
 
 ```text
-Picket302.App            line=46.89% branch=30.53%
+Picket302.App            line=47.34% branch=30.53%
 Picket302.Application    line=77.20% branch=61.35%
 Picket302.ComAutomation  line= 5.43% branch= 3.79% (не входит в strict non-COM)
 Picket302.Domain         line=75.79% branch=66.56%
-Picket302.Infrastructure line=76.03% branch=61.96%
+Picket302.Infrastructure line=75.99% branch=61.96%
 Picket302.Printing       line=77.83% branch=65.35%
 ```
 
