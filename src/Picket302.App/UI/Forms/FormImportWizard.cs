@@ -419,7 +419,14 @@ public sealed class FormImportWizard : Form
         _путьФайла.Location = new Point(120, 23);
         _путьФайла.Width = 420;
 
-        var обзор = new Button { Text = "Выбрать файл…", Location = new Point(548, 22), Size = new Size(112, 23) };
+        var обзор = new Button
+        {
+            Text = "Выбрать файл…",
+            AccessibleName = "Выбрать файл импорта",
+            AccessibleDescription = "Открыть выбор файла для импорта адресной книги.",
+            Location = new Point(548, 22),
+            Size = new Size(112, 23),
+        };
         обзор.Click += (_, _) => ВыбратьФайлДиалогом();
 
         var меткаЛиста = new Label { Text = "Лист книги:", AutoSize = true, Location = new Point(12, 60) };
@@ -454,6 +461,8 @@ public sealed class FormImportWizard : Form
         var сохранениеПрофиля = new Button
         {
             Text = "Сохранить профиль…",
+            AccessibleName = "Сохранить профиль импорта",
+            AccessibleDescription = "Сохранить параметры текущего шага импорта в файл.",
             Location = new Point(12, 128),
             Size = new Size(140, 25),
         };
@@ -462,6 +471,8 @@ public sealed class FormImportWizard : Form
         var загрузкаПрофиля = new Button
         {
             Text = "Загрузить профиль…",
+            AccessibleName = "Загрузить профиль импорта",
+            AccessibleDescription = "Загрузить параметры шага импорта из файла.",
             Location = new Point(160, 128),
             Size = new Size(140, 25),
         };
@@ -470,6 +481,8 @@ public sealed class FormImportWizard : Form
         var параметрыCsv = new Button
         {
             Text = "Параметры CSV…",
+            AccessibleName = "Параметры CSV",
+            AccessibleDescription = "Открыть настройки разбора CSV-файла.",
             Location = new Point(308, 128),
             Size = new Size(140, 25),
         };
@@ -680,30 +693,72 @@ public sealed class FormImportWizard : Form
         поля.Controls.Add(адреса, 1, ряд);
         поля.SetColumnSpan(адреса, 3);
 
-        var назадЗапись = new Button { Text = "<< Назад", Location = new Point(12, 320), Size = new Size(100, 26) };
+        var назадЗапись = new Button
+        {
+            Text = "<< Назад",
+            AccessibleName = "Назад к предыдущей записи",
+            AccessibleDescription = "Перейти к предыдущей записи предпросмотра.",
+            Location = new Point(12, 320),
+            Size = new Size(100, 26),
+        };
         назадЗапись.Click += (_, _) =>
         {
             _контроллер.MovePreviousRecord();
             ПоказатьШаг();
         };
 
-        var пропустить = new Button { Text = "Пропустить", Location = new Point(120, 320), Size = new Size(100, 26) };
+        var пропустить = new Button
+        {
+            Text = "Пропустить",
+            AccessibleName = "Пропустить запись",
+            AccessibleDescription = "Пропустить текущую запись импорта.",
+            Location = new Point(120, 320),
+            Size = new Size(100, 26),
+        };
         пропустить.Click += (_, _) => ПропуститьЗапись();
 
-        var проверить = new Button { Text = "Отметить проверенным", Location = new Point(228, 320), Size = new Size(160, 26) };
+        var проверить = new Button
+        {
+            Text = "Отметить проверенным",
+            AccessibleName = "Отметить запись проверенной",
+            AccessibleDescription = "Пометить текущую запись как проверенную.",
+            Location = new Point(228, 320),
+            Size = new Size(160, 26),
+        };
         проверить.Click += (_, _) => ОтметитьПроверенной();
 
-        var снять = new Button { Text = "Снять отметку", Location = new Point(396, 320), Size = new Size(120, 26) };
+        var снять = new Button
+        {
+            Text = "Снять отметку",
+            AccessibleName = "Снять отметку проверки",
+            AccessibleDescription = "Снять отметку проверки с текущей записи.",
+            Location = new Point(396, 320),
+            Size = new Size(120, 26),
+        };
         снять.Click += (_, _) =>
         {
             _контроллер.MarkCurrentUnverified();
             ПоказатьШаг();
         };
 
-        var сохранить = new Button { Text = "Сохранить правку", Location = new Point(524, 320), Size = new Size(140, 26) };
+        var сохранить = new Button
+        {
+            Text = "Сохранить правку",
+            AccessibleName = "Сохранить правку записи",
+            AccessibleDescription = "Сохранить изменения текущей записи.",
+            Location = new Point(524, 320),
+            Size = new Size(140, 26),
+        };
         сохранить.Click += (_, _) => ПрименитьПравку();
 
-        var следующая = new Button { Text = "Следующая запись >>", Location = new Point(524, 286), Size = new Size(140, 26) };
+        var следующая = new Button
+        {
+            Text = "Следующая запись >>",
+            AccessibleName = "Следующая запись",
+            AccessibleDescription = "Перейти к следующей записи предпросмотра.",
+            Location = new Point(524, 286),
+            Size = new Size(140, 26),
+        };
         следующая.Click += (_, _) =>
         {
             _контроллер.MoveNextRecord();
@@ -805,6 +860,8 @@ public sealed class FormImportWizard : Form
         var вернуться = new Button
         {
             Text = "Вернуться к редактированию",
+            AccessibleName = "Вернуться к редактированию",
+            AccessibleDescription = "Вернуться к экрану правки импортируемых записей.",
             Location = new Point(12, 248),
             Size = new Size(200, 28),
         };
@@ -834,6 +891,8 @@ public sealed class FormImportWizard : Form
         var импортировать = new Button
         {
             Text = "Импортировать",
+            AccessibleName = "Импортировать записи",
+            AccessibleDescription = "Запустить импорт по выбранным политикам.",
             Location = new Point(12, 44),
             Size = new Size(160, 30),
         };
@@ -852,16 +911,22 @@ public sealed class FormImportWizard : Form
     private void ПостроитьКнопки()
     {
         _назад.Text = "<< Назад";
+        _назад.AccessibleName = "Назад";
+        _назад.AccessibleDescription = "Вернуться к предыдущему шагу мастера импорта.";
         _назад.Location = new Point(10, 500);
         _назад.Size = new Size(100, 26);
         _назад.Click += (_, _) => ВернутьсяНазад();
 
         _далее.Text = "Далее >>";
+        _далее.AccessibleName = "Далее";
+        _далее.AccessibleDescription = "Перейти к следующему шагу мастера импорта.";
         _далее.Location = new Point(118, 500);
         _далее.Size = new Size(100, 26);
         _далее.Click += (_, _) => ПерейтиВперёд();
 
         _отмена.Text = "Отмена";
+        _отмена.AccessibleName = "Отмена импорта";
+        _отмена.AccessibleDescription = "Закрыть мастер без импорта записей.";
         _отмена.Location = new Point(586, 500);
         _отмена.Size = new Size(100, 26);
         _отмена.DialogResult = DialogResult.Cancel;
@@ -1320,12 +1385,16 @@ public sealed class FormImportWizard : Form
         var создать = new Button
         {
             Text = "Создать",
+            AccessibleName = "Создать категорию",
+            AccessibleDescription = "Создать новую категорию адресной книги.",
             Location = new Point(172, 74),
             Size = new Size(90, 26),
         };
         var отмена = new Button
         {
             Text = "Отмена",
+            AccessibleName = "Отменить создание категории",
+            AccessibleDescription = "Закрыть диалог без создания категории.",
             Location = new Point(272, 74),
             Size = new Size(90, 26),
             DialogResult = DialogResult.Cancel,

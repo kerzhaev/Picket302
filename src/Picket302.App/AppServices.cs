@@ -44,6 +44,7 @@ public sealed class AppServices : IAsyncDisposable
     public const string ИмяФайлаБазы = "picket302.db";
 
     private readonly SqliteUnitOfWork _сессия;
+    private readonly Picket302ProfilePaths _профиль;
 
     private AppServices(
         SqliteUnitOfWork сессия,
@@ -54,7 +55,8 @@ public sealed class AppServices : IAsyncDisposable
     {
         // Пути профиля: производственный код использует каталог по умолчанию
         // (%AppData%\Picket302), изолированные проверки — временный корень.
-        var профиль = пути ?? Picket302ProfilePaths.ПоУмолчанию();
+        _профиль = пути ?? Picket302ProfilePaths.ПоУмолчанию();
+        var профиль = _профиль;
 
         _сессия = сессия;
         ПутьБазы = путьБазы;
@@ -177,11 +179,8 @@ public sealed class AppServices : IAsyncDisposable
 
         // Реквизиты подключения к базе и справочник серверов (ТЗ §8.8,
         // функции 101 и 102; §8.11, функция 127).
-        МенеджерПодключения = new ConnectionManager(
-            профиль.ConnectionSettingsPath,
-            профиль.SecretsDirectory,
-            профиль.DatabasePath);
-        РеестрСерверов = new ServerRegistry(профиль.ServerRegistryPath);
+        МенеджерПодключения = СоздатьМенеджерПодключенияДляДиалога();
+        РеестрСерверов = СоздатьРеестрСерверовДляДиалога();
 
         // Менеджер локализации: переключение языка без перезапуска (ТЗ §8.11,
         // функция 112). Проблемы локализации попадают в журнал ошибок.
@@ -329,9 +328,29 @@ public sealed class AppServices : IAsyncDisposable
     public ConnectionManager МенеджерПодключения { get; }
 
     /// <summary>
+    /// Создаёт независимый менеджер для диалога подключения в том же профиле,
+    /// что и состав приложения. Производственный состав по-прежнему получает
+    /// менеджер в <c>%AppData%\Picket302</c>, а изолированный состав не
+    /// пересекается с профилем пользователя при открытии «Открыть базу…».
+    /// </summary>
+    /// <returns>Новый менеджер с путями текущего профиля.</returns>
+    public ConnectionManager СоздатьМенеджерПодключенияДляДиалога() => new(
+        _профиль.ConnectionSettingsPath,
+        _профиль.SecretsDirectory,
+        _профиль.DatabasePath);
+
+    /// <summary>
     /// Справочник серверов БД (ТЗ §8.8, функция 101; §8.11, функция 127).
     /// </summary>
     public ServerRegistry РеестрСерверов { get; }
+
+    /// <summary>
+    /// Создаёт независимый справочник серверов для диалога подключения в том
+    /// же профиле, что и состав приложения.
+    /// </summary>
+    /// <returns>Новый справочник серверов текущего профиля.</returns>
+    public ServerRegistry СоздатьРеестрСерверовДляДиалога() => new(
+        _профиль.ServerRegistryPath);
 
     /// <summary>
     /// Менеджер локализации интерфейса (ТЗ §8.11, функция 112).

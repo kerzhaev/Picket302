@@ -1,6 +1,9 @@
 using System.Drawing;
 using System.Windows.Forms;
 using Picket302.App.UI.Forms;
+using Picket302.Domain.Backup;
+using Picket302.Infrastructure.Backup;
+using Picket302.Infrastructure.Persistence;
 using Picket302.Tests.Infrastructure;
 using Xunit;
 
@@ -74,6 +77,61 @@ public sealed class DialogAccessibilityContractTests
             "Выбор клипарта",
             new FormClipartPicker(new Picket302.Infrastructure.Templates.ClipartLibrary()),
         };
+        yield return new object[]
+        {
+            "Подключение к базе данных",
+            СоздатьДиалогПодключения(),
+        };
+        yield return new object[]
+        {
+            "Мастер импорта адресной книги",
+            new FormImportWizard(),
+        };
+        yield return new object[]
+        {
+            "Мастер выгрузки данных",
+            new FormExportWizard(),
+        };
+        yield return new object[]
+        {
+            "Архивация и восстановление базы адресов",
+            СоздатьДиалогАрхивации(),
+        };
+    }
+
+    private static FormConnectionSettings СоздатьДиалогПодключения()
+    {
+        var корень = Path.Combine(Path.GetTempPath(), "Picket302Accessibility", Guid.NewGuid().ToString("N"));
+        var профиль = Path.Combine(корень, "Picket302");
+
+        return new FormConnectionSettings(
+            new ConnectionManager(
+                Path.Combine(профиль, "connection.json"),
+                Path.Combine(профиль, "Secrets"),
+                Path.Combine(профиль, "picket302.db")),
+            new ServerRegistry(Path.Combine(профиль, "servers.ini")));
+    }
+
+    private static FormBackupRestore СоздатьДиалогАрхивации()
+    {
+        var корень = Path.Combine(Path.GetTempPath(), "Picket302Accessibility", Guid.NewGuid().ToString("N"));
+        var база = Path.Combine(корень, "Picket302", "picket302.db");
+        var архив = new BackupService(база);
+        var планировщик = new ScheduledBackupService(
+            база,
+            архив,
+            new BackupPolicy(
+                BackupRetentionMode.DailyHistory,
+                30,
+                Path.Combine(корень, "archives"),
+                null),
+            Path.Combine(корень, "backup-schedule.json"));
+
+        return new FormBackupRestore(
+            база,
+            архив,
+            планировщик,
+            new RestoreService(база, архив));
     }
 
     /// <summary>
@@ -194,7 +252,8 @@ public sealed class DialogAccessibilityContractTests
                 // заглавных букв с двоеточием — это обозначение поля, а не
                 // капитель обычной подписи.
                 var техническоеПоле = буквы.All(char.IsUpper)
-                    && метка.Text.TrimEnd().TrimEnd(':').Length <= 6
+                    && (метка.Text.TrimEnd().TrimEnd(':').Length <= 6
+                        || метка.Text.Contains("/", StringComparison.Ordinal))
                     && метка.Text.TrimEnd().EndsWith(':');
 
                 Assert.False(

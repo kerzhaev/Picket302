@@ -451,6 +451,8 @@ public sealed class FormExportWizard : Form
         _путь.Width = 300;
 
         _обзор.Text = "Обзор...";
+        _обзор.AccessibleName = "Выбрать файл выгрузки";
+        _обзор.AccessibleDescription = "Открыть выбор файла для сохранения выгрузки.";
         _обзор.Location = new Point(418, 22);
         _обзор.Size = new Size(70, 24);
         _обзор.Click += (_, _) => ВыбратьФайл();
@@ -497,11 +499,15 @@ public sealed class FormExportWizard : Form
     private void ПостроитьКнопки()
     {
         _экспорт.Text = "Экспорт";
+        _экспорт.AccessibleName = "Выполнить экспорт";
+        _экспорт.AccessibleDescription = "Выполнить выгрузку адресной книги в выбранный формат.";
         _экспорт.Location = new Point(10, 428);
         _экспорт.Size = new Size(120, 26);
         _экспорт.Click += (_, _) => ВыполнитьВыгрузку();
 
         _отмена.Text = "Закрыть";
+        _отмена.AccessibleName = "Закрыть мастер выгрузки";
+        _отмена.AccessibleDescription = "Закрыть мастер выгрузки.";
         _отмена.Location = new Point(390, 428);
         _отмена.Size = new Size(120, 26);
         _отмена.DialogResult = DialogResult.Cancel;

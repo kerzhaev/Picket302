@@ -2063,10 +2063,11 @@ public sealed class MainShell : Form
     /// </summary>
     private async void ОткрытьБазу()
     {
-        // Диалог создаётся с независимым менеджером подключения, как при
-        // запуске приложения (Program.Main): выбранные реквизиты не должны
-        // зависеть от текущей сессии.
-        using var диалог = new FormConnectionSettings(new ConnectionManager(), new ServerRegistry());
+        // Диалог создаётся с независимым менеджером подключения. Если окно
+        // работает на переданном составе, зависимости остаются в его профиле:
+        // изолированная приёмка больше не читает и не пишет %AppData%.
+        // При обычном запуске без состава сохраняется production-поведение.
+        using var диалог = СоздатьДиалогПодключения();
 
         if (диалог.ShowDialog(this) != DialogResult.OK)
         {
@@ -2112,6 +2113,21 @@ public sealed class MainShell : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
         }
+    }
+
+    /// <summary>
+    /// Создаёт независимый диалог подключения с путями текущего состава.
+    /// При обычном production-запуске без заранее переданного состава
+    /// используется прежний профиль пользователя.
+    /// </summary>
+    internal FormConnectionSettings СоздатьДиалогПодключения()
+    {
+        var менеджер = _состав?.СоздатьМенеджерПодключенияДляДиалога()
+            ?? new ConnectionManager();
+        var реестр = _состав?.СоздатьРеестрСерверовДляДиалога()
+            ?? new ServerRegistry();
+
+        return new FormConnectionSettings(менеджер, реестр);
     }
 
     /// <summary>

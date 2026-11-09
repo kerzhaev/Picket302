@@ -358,6 +358,8 @@ public sealed class FormBackupRestore : Form
         }
 
         _глаз.Text = ПарольВидим ? "Скрыть" : "Показать";
+        _глаз.AccessibleName = ПарольВидим ? "Скрыть пароль" : "Показать пароль";
+        _глаз.AccessibleDescription = "Переключить видимость пароля архива.";
     }
 
     /// <summary>
@@ -408,6 +410,8 @@ public sealed class FormBackupRestore : Form
         _целеваяПапка.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
         _обзор.Text = "Обзор…";
+        _обзор.AccessibleName = "Выбрать папку архивов";
+        _обзор.AccessibleDescription = "Открыть выбор папки для хранения архивов.";
         _обзор.Size = new Size(80, 23);
         _обзор.Location = new Point(610, 50);
         _обзор.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -425,6 +429,8 @@ public sealed class FormBackupRestore : Form
         _пароль.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
         _глаз.Text = "Показать";
+        _глаз.AccessibleName = "Показать пароль";
+        _глаз.AccessibleDescription = "Переключить видимость пароля архива.";
         _глаз.Size = new Size(80, 23);
         _глаз.Location = new Point(540, 80);
         _глаз.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -564,24 +570,32 @@ public sealed class FormBackupRestore : Form
     private void ПостроитьКнопки()
     {
         _создатьАрхив.Text = "Создать архив";
+        _создатьАрхив.AccessibleName = "Создать архив";
+        _создатьАрхив.AccessibleDescription = "Создать архив текущей базы данных.";
         _создатьАрхив.Size = new Size(130, 26);
         _создатьАрхив.Location = new Point(10, 578);
         _создатьАрхив.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _создатьАрхив.Click += (_, _) => СоздатьАрхив();
 
         _восстановить.Text = "Восстановить";
+        _восстановить.AccessibleName = "Восстановить базу данных";
+        _восстановить.AccessibleDescription = "Восстановить выбранный архив в текущую базу данных.";
         _восстановить.Size = new Size(130, 26);
         _восстановить.Location = new Point(150, 578);
         _восстановить.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _восстановить.Click += (_, _) => Восстановить(null);
 
         _предпросмотр.Text = "Предпросмотр";
+        _предпросмотр.AccessibleName = "Предпросмотр архива";
+        _предпросмотр.AccessibleDescription = "Показать сведения о выбранном архиве.";
         _предпросмотр.Size = new Size(120, 26);
         _предпросмотр.Location = new Point(290, 578);
         _предпросмотр.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
         _предпросмотр.Click += (_, _) => Предпросмотр();
 
         _закрыть.Text = "Закрыть";
+        _закрыть.AccessibleName = "Закрыть архивирование и восстановление";
+        _закрыть.AccessibleDescription = "Закрыть диалог архивирования и восстановления.";
         _закрыть.Size = new Size(100, 26);
         _закрыть.Location = new Point(645, 578);
         _закрыть.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;

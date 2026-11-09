@@ -216,11 +216,15 @@ public sealed class FormConnectionSettings : Form
         _состояние.AutoEllipsis = true;
 
         _проверить.Text = "Проверить соединение";
+        _проверить.AccessibleName = "Проверить соединение";
+        _проверить.AccessibleDescription = "Проверить доступность выбранного подключения.";
         _проверить.Size = new Size(140, 24);
         _проверить.Location = new Point(12, 296);
         _проверить.Click += (_, _) => CheckServer();
 
         _применить.Text = "Применить";
+        _применить.AccessibleName = "Применить настройки подключения";
+        _применить.AccessibleDescription = "Сохранить выбранные реквизиты подключения.";
         _применить.Size = new Size(90, 24);
         _применить.Location = new Point(266, 296);
         _применить.Click += (_, _) =>
@@ -232,6 +236,8 @@ public sealed class FormConnectionSettings : Form
         };
 
         _отмена.Text = "Отмена";
+        _отмена.AccessibleName = "Отмена";
+        _отмена.AccessibleDescription = "Закрыть диалог без применения изменений.";
         _отмена.Size = new Size(90, 24);
         _отмена.Location = new Point(362, 296);
         _отмена.DialogResult = DialogResult.Cancel;
