@@ -207,7 +207,12 @@ function Get-SentinelState([string]$path) {
 # Запускает harness. stdout читается инкрементально на вызывающем потоке
 # через чистый .NET ReadLineAsync (PowerShell-замыкания в фоновых потоках
 # обращаются к SessionState и взаимно блокируются).
-function Start-Acceptance([string]$exe, [string]$mode, [string]$profileRoot, [bool]$keep = $false) {
+function Start-Acceptance(
+    [string]$exe,
+    [string]$mode,
+    [string]$profileRoot,
+    [bool]$keep = $false,
+    [bool]$неактивирующий = $false) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $exe
     $psi.Arguments = "$mode `"$profileRoot`"" + $(if ($keep) { " keep" } else { "" })
@@ -216,6 +221,13 @@ function Start-Acceptance([string]$exe, [string]$mode, [string]$profileRoot, [bo
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
+
+    # Снимки и DPI-проверки не должны забирать фокус у пользователя. Флаг
+    # передаётся только этим драйверам; обычные acceptance-сценарии сохраняют
+    # прежнее поведение. EnvironmentVariables совместим с PS 5.1 и PS 7.
+    if ($неактивирующий) {
+        $psi.EnvironmentVariables['PICKET302_ACCEPTANCE_NONACTIVATING'] = '1'
+    }
 
     # Явный контракт декодирования вывода harness (регрессия 2026-11-08):
     # harness пишет UTF-8 без BOM (Program.cs), поэтому обе трубы

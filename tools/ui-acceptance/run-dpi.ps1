@@ -161,7 +161,7 @@ try {
     $корень = Join-Path ([System.IO.Path]::GetTempPath()) ("Picket302Acceptance\" + [Guid]::NewGuid().ToString('N'))
     Запись "temp profile: $корень"
 
-    $h = Start-Acceptance $exe 'screens2' $корень
+    $h = Start-Acceptance $exe 'screens2' $корень $false $true
 
     if (-not (Read-HarnessLines $h '^READY ' 30)) {
         Запись 'FAIL: READY не получен за 30 c'
@@ -174,7 +174,8 @@ try {
     Запись "harness READY: $готовность"
 
     # Компактное окно ДО масштабирования: после 150 % форма остаётся в экране.
-    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 10, 10, 1000, 700, 0x0040) | Out-Null
+    # 0x0054 = SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW.
+    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 10, 10, 1000, 700, 0x0054) | Out-Null
     Start-Sleep -Seconds 2
 
     $успех = $true
@@ -189,7 +190,7 @@ try {
 
     if ($результатD1) {
         # Рескал сдвигает форму (центрирование suggested-rect): вернуть в экран.
-        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 20, 20, 0, 0, 0x0001 -bor 0x0004) | Out-Null
+        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 20, 20, 0, 0, 0x0015) | Out-Null
         Start-Sleep -Seconds 2
         $компоновка = ПроверитьКомпоновкуDpi 120
         Запись "компоновка 125 %: $компоновка"
@@ -211,7 +212,7 @@ try {
         # Рескал 125 % сдвигает и диалог: вернуть в видимую область.
         if ($результатD2 -match 'counterparty (\d+)') {
             $hwndКарточки2 = [IntPtr][long]$Matches[1]
-            [AccWin]::SetWindowPos($hwndКарточки2, [IntPtr](-1), 20, 20, 0, 0, 0x0001 -bor 0x0004) | Out-Null
+            [AccWin]::SetWindowPos($hwndКарточки2, [IntPtr]::Zero, 20, 20, 0, 0, 0x0015) | Out-Null
         }
 
         Start-Sleep -Seconds 2
@@ -239,7 +240,7 @@ try {
     $результатD3 = Команда 'SETDPI 150' '^OK SETDPI 150'
 
     if ($результатD3) {
-        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 20, 20, 0, 0, 0x0001 -bor 0x0004) | Out-Null
+        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 20, 20, 0, 0, 0x0015) | Out-Null
         Start-Sleep -Seconds 2
         $компоновка3 = ПроверитьКомпоновкуDpi 144
         Запись "компоновка 150 %: $компоновка3"
@@ -260,7 +261,7 @@ try {
     if ($результатD4) {
         if ($результатD4 -match 'mailedit (\d+)') {
             $hwndКарточки4 = [IntPtr][long]$Matches[1]
-            [AccWin]::SetWindowPos($hwndКарточки4, [IntPtr](-1), 20, 20, 0, 0, 0x0001 -bor 0x0004) | Out-Null
+            [AccWin]::SetWindowPos($hwndКарточки4, [IntPtr]::Zero, 20, 20, 0, 0, 0x0015) | Out-Null
         }
 
         Start-Sleep -Seconds 2
@@ -286,7 +287,7 @@ try {
     $результатD5 = Команда 'SETDPI 100' '^OK SETDPI 100'
 
     if ($результатD5) {
-        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 10, 10, 0, 0, 0x0001 -bor 0x0004) | Out-Null
+        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 10, 10, 0, 0, 0x0015) | Out-Null
         Start-Sleep -Seconds 2
         $компоновка5 = ПроверитьКомпоновкуDpi 96
         Запись "компоновка 100 %: $компоновка5"

@@ -324,7 +324,7 @@ try {
     $корень = Join-Path ([System.IO.Path]::GetTempPath()) ("Picket302Acceptance\" + [Guid]::NewGuid().ToString('N'))
     Запись "temp profile: $корень"
 
-    $h = Start-Acceptance $exe 'screens2' $корень
+    $h = Start-Acceptance $exe 'screens2' $корень $false $true
 
     if (-not (Read-HarnessLines $h '^READY ' 30)) {
         Запись 'FAIL: READY не получен за 30 c'
@@ -339,7 +339,8 @@ try {
     $гард = Get-HarnessLines $h | Where-Object { $_ -match '^GUARD PASS ' } | Select-Object -First 1
     Запись "guard line: $гард"
 
-    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 30, 30, 1280, 720, 0x0040) | Out-Null
+    # 0x0054 = SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW.
+    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 30, 30, 1280, 720, 0x0054) | Out-Null
     Start-Sleep -Seconds 2
 
     $успех = $true

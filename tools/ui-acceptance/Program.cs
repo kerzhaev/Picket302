@@ -25,6 +25,9 @@ using Picket302.Printing.Preview;
 //   screens <профиль>        — снимки экранов матрицы визуального сравнения:
 //                              открывает рабочие диалоги по одному, дожидаясь
 //                              команды оператора «СЛЕДУЮЩИЙ» перед закрытием.
+//   PICKET302_ACCEPTANCE_NONACTIVATING=1 — для screenshots/DPI: окна
+//                              создаются с WS_EX_NOACTIVATE, не становятся
+//                              foreground и не вызывают BringToFront/Activate.
 //
 // Гард изоляции: путь профиля проверяется ДО создания каких-либо каталогов
 // и состава. Проверяются и сам корень, и рассчитанный
@@ -66,6 +69,12 @@ if (args.Length < 2)
 
 var режим = args[0];
 var кореньПрофиля = Path.GetFullPath(args[1]);
+
+static bool НеактивирующийРежим()
+    => string.Equals(
+        Environment.GetEnvironmentVariable("PICKET302_ACCEPTANCE_NONACTIVATING"),
+        "1",
+        StringComparison.Ordinal);
 
 if (режим is not ("emptybook" or "printflow" or "noaddress" or "screens" or "screens2" or "noprinter"))
 {
@@ -186,6 +195,8 @@ try
         StartPosition = FormStartPosition.Manual,
         WindowState = FormWindowState.Normal,
     };
+
+    ПодготовитьНеактивирующееОкно(окно);
 
     await окно.ИнициализироватьAsync().ConfigureAwait(false);
 
@@ -804,9 +815,14 @@ static void ПоказатьДиалог(MainShell окно, AppServices сос�
 
         диалог.StartPosition = FormStartPosition.Manual;
         диалог.Location = new Point(60, 60);
+        ПодготовитьНеактивирующееОкно(диалог);
         диалог.Show();
-        диалог.BringToFront();
-        диалог.Activate();
+
+        if (!НеактивирующийРежим())
+        {
+            диалог.BringToFront();
+            диалог.Activate();
+        }
 
         // Симуляция DPI (stage3.1): диалог, открытый при активной цели DPI,
         // перемасштабируется тем же реальным конвейером WM_DPICHANGED.
@@ -822,6 +838,26 @@ static void ПоказатьДиалог(MainShell окно, AppServices сос�
     }
 
     Console.Out.Flush();
+}
+
+/// <summary>
+/// Включает native-стиль, запрещающий окну становиться foreground, только
+/// для явно запрошенного неактивирующего acceptance-режима. Стиль задаётся
+/// после создания HWND, но до первого Show(), поэтому окно не успевает
+/// активироваться на короткое время.
+/// </summary>
+static void ПодготовитьНеактивирующееОкно(Form форма)
+{
+    if (!НеактивирующийРежим())
+    {
+        return;
+    }
+
+    форма.ShowInTaskbar = false;
+    var hwnd = форма.Handle;
+    var стиль = Платформенно.GetWindowLongPtr(hwnd, Платформенно.РасширенныйСтиль);
+    var новыйСтиль = стиль.ToInt64() | Платформенно.СтильНеактивирующегоОкна;
+    _ = Платформенно.SetWindowLongPtr(hwnd, Платформенно.РасширенныйСтиль, new IntPtr(новыйСтиль));
 }
 
 /// <summary>
@@ -1683,6 +1719,18 @@ sealed class ПустойМенеджерПринтеров : Picket302.Printing
 /// </summary>
 internal static class Платформенно
 {
+    /// <summary>GWL_EXSTYLE.</summary>
+    internal const int РасширенныйСтиль = -20;
+
+    /// <summary>WS_EX_NOACTIVATE: окно не становится активным при показе.</summary>
+    internal const long СтильНеактивирующегоОкна = 0x08000000L;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    internal static extern IntPtr GetWindowLongPtr(IntPtr окно, int индекс);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    internal static extern IntPtr SetWindowLongPtr(IntPtr окно, int индекс, IntPtr значение);
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     internal static extern IntPtr SendMessageW(
         IntPtr окно,

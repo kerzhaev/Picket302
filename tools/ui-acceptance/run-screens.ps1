@@ -116,7 +116,7 @@ try {
     $корень = Join-Path ([System.IO.Path]::GetTempPath()) ("Picket302Acceptance\" + [Guid]::NewGuid().ToString('N'))
     Запись "temp profile: $корень"
 
-    $h = Start-Acceptance $exe 'screens' $корень
+    $h = Start-Acceptance $exe 'screens' $корень $false $true
 
     if (-not (Read-HarnessLines $h '^READY ' 30)) {
         Запись 'FAIL: READY не получен за 30 c'
@@ -136,7 +136,10 @@ try {
 
     # --- Главное окно: 1280x720 и 1000x700 -------------------------------
     foreach ($размер in @(@(1280, 720), @(1000, 700))) {
-        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 20, 20, $размер[0], $размер[1], 0x0040) | Out-Null
+        # 0x0054 = SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW.
+        # Окно видно для собственного BitBlt, но не становится foreground и
+        # не поднимается поверх пользовательских окон.
+        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 20, 20, $размер[0], $размер[1], 0x0054) | Out-Null
         Start-Sleep -Seconds 2
 
         $файл = "main-{0}x{1}.png" -f $размер[0], $размер[1]
@@ -144,7 +147,7 @@ try {
         & $всёОк ($байт -gt 0) "снимок главного окна $файл"
     }
 
-    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 20, 20, 1280, 720, 0x0040) | Out-Null
+    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 20, 20, 1280, 720, 0x0054) | Out-Null
     Start-Sleep -Seconds 1
 
     # --- Диалоги рабочих поверхностей -------------------------------------
