@@ -70,6 +70,9 @@ public static class AccWin
     [DllImport("gdi32.dll")]
     public static extern bool BitBlt(IntPtr dst, int x, int y, int w, int h, IntPtr src, int x1, int y1, int rop);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint flags);
+
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
 
@@ -144,20 +147,84 @@ public static class AccWin
     public static void Capture(IntPtr hwnd, string path)
     {
         RECT r;
-        GetWindowRect(hwnd, out r);
+        if (!GetWindowRect(hwnd, out r))
+        {
+            throw new InvalidOperationException(string.Format(
+                "GetWindowRect failed for hwnd={0}: {1}",
+                hwnd,
+                Marshal.GetLastWin32Error()));
+        }
+
         int w = r.Right - r.Left, h = r.Bottom - r.Top;
-        if (w <= 0 || h <= 0) return;
+        if (w <= 0 || h <= 0)
+        {
+            throw new InvalidOperationException(string.Format(
+                "Window has invalid capture size {0}x{1} for hwnd={2}",
+                w,
+                h,
+                hwnd));
+        }
+
+        var directory = System.IO.Path.GetDirectoryName(path);
+        if (!String.IsNullOrWhiteSpace(directory))
+        {
+            System.IO.Directory.CreateDirectory(directory);
+        }
+
         using (var bmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
         {
             using (var g = System.Drawing.Graphics.FromImage(bmp))
             {
                 IntPtr dst = g.GetHdc();
-                IntPtr src = GetWindowDC(hwnd);
-                BitBlt(dst, 0, 0, w, h, src, 0, 0, 0x00CC0020);
-                ReleaseDC(hwnd, src);
-                g.ReleaseHdc(dst);
+                try
+                {
+                    IntPtr src = GetWindowDC(hwnd);
+                    try
+                    {
+                        var copied = src != IntPtr.Zero
+                            && BitBlt(dst, 0, 0, w, h, src, 0, 0, 0x00CC0020);
+
+                        // DWM/неактивное модальное окно может отказать в
+                        // BitBlt. PW_RENDERFULLCONTENT просит Win32 вернуть
+                        // отложенно отрисованную поверхность окна.
+                        if (!copied)
+                        {
+                            copied = PrintWindow(hwnd, dst, 0x00000002);
+                        }
+
+                        if (!copied)
+                        {
+                            throw new InvalidOperationException(string.Format(
+                                "BitBlt/PrintWindow failed for hwnd={0}: {1}",
+                                hwnd,
+                                Marshal.GetLastWin32Error()));
+                        }
+                    }
+                    finally
+                    {
+                        if (src != IntPtr.Zero)
+                        {
+                            ReleaseDC(hwnd, src);
+                        }
+                    }
+                }
+                finally
+                {
+                    g.ReleaseHdc(dst);
+                }
             }
-            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+            // FileStream избегает неоднозначного GDI+ поведения при записи
+            // в уже существующий/частично созданный PNG после повторной
+            // попытки capture.
+            using (var stream = new System.IO.FileStream(
+                path,
+                System.IO.FileMode.Create,
+                System.IO.FileAccess.Write,
+                System.IO.FileShare.Read))
+            {
+                bmp.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+            }
         }
     }
 }

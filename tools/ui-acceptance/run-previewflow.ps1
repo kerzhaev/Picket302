@@ -67,10 +67,27 @@ function ДобавитьФлагОчистки([string]$флаг) {
     }
 }
 
+# Окно MessageBox/предпросмотра может сообщить о существовании раньше,
+# чем завершится его первый WM_PAINT. Ограниченная пауза и одна повторная
+# попытка предотвращают ложный GDI+ generic error, не превращая capture в
+# бесконечное ожидание.
+function Захват([IntPtr]$окно, [string]$путь) {
+    Start-Sleep -Milliseconds 700
+
+    try {
+        [AccWin]::Capture($окно, $путь) | Out-Null
+    }
+    catch {
+        Запись "capture повтор: $($_.Exception.Message)"
+        Start-Sleep -Milliseconds 500
+        [AccWin]::Capture($окно, $путь) | Out-Null
+    }
+}
+
 function ЗафиксироватьНеожиданное([string]$тип, [IntPtr]$окно, [string]$префиксСкриншота) {
     $заголовок = [AccWin]::Title($окно)
     $файл = Join-Path $out ("$префиксСкриншота-" + (Get-Date -Format 'HHmmss') + '.png')
-    [AccWin]::Capture($окно, $файл) | Out-Null
+    Захват $окно $файл
     Запись "UNEXPECTED ${тип}: '$заголовок' hwnd=$окно (скриншот: $(Split-Path -Leaf $файл))"
     $script:unexpectedFired = $true
 }
@@ -126,7 +143,7 @@ try {
     $корень = Join-Path ([System.IO.Path]::GetTempPath()) ("Picket302Acceptance\" + [Guid]::NewGuid().ToString('N'))
     Запись "temp profile: $корень"
 
-    $h = Start-Acceptance $exe 'printflow' $корень
+    $h = Start-Acceptance $exe 'printflow' $корень $false $true
 
     if (-not (Read-HarnessLines $h '^READY ' 30)) {
         Запись 'FAIL: READY не получен за 30 c'
@@ -155,7 +172,8 @@ try {
     Запись "заданий в спулере до: $спулерДо (ошибка: '$спулерОшибка')"
 
     # --- 5. Цепочка F6: Карточка -> ОК -> MessageBox -> Печать -> Подача -> Предпросмотр
-    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 30, 30, 1280, 720, 0x0040) | Out-Null
+    # 0x0054 = SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW.
+    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 30, 30, 1280, 720, 0x0054) | Out-Null
     Start-Sleep -Seconds 2
 
     $успех = $true
@@ -207,7 +225,7 @@ try {
                     $кнопкаОтмена = [AccWin]::FindButton($w, 'Отмена')
                     if ($кнопкаОк -ne [IntPtr]::Zero -and $кнопкаОтмена -eq [IntPtr]::Zero) {
                         $скр = Join-Path $out ('31-messagebox-формирование-' + (Get-Date -Format 'HHmmss') + '.png')
-                        [AccWin]::Capture($w, $скр) | Out-Null
+                        Захват $w $скр
                         [AccWin]::Click($кнопкаОк)
                         $подтверждёнФормированиеМб = $true
                         Запись "MessageBox формирования подтверждён (ОК), скриншот: $(Split-Path -Leaf $скр)"
@@ -321,7 +339,7 @@ try {
         }
 
         $скр = Join-Path $out '32-предпросмотр-с-полями.png'
-        [AccWin]::Capture($предпросмотр, $скр) | Out-Null
+        Захват $предпросмотр $скр
         Start-Sleep -Milliseconds 300
         $скриншотРазмер = 0
         if (Test-Path $скр) { $скриншотРазмер = (Get-Item $скр).Length }

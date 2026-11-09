@@ -76,11 +76,27 @@ function ДобавитьФлагОчистки([string]$флаг) {
     }
 }
 
+# Ограниченная задержка до первого WM_PAINT и одна повторная попытка.
+# Без неё ранний BitBlt модального MessageBox/диалога предпросмотра может
+# закончиться GDI+ generic error, хотя окно уже найдено через EnumWindows.
+function Захват([IntPtr]$окно, [string]$путь) {
+    Start-Sleep -Milliseconds 700
+
+    try {
+        [AccWin]::Capture($окно, $путь) | Out-Null
+    }
+    catch {
+        Запись "capture повтор: $($_.Exception.Message)"
+        Start-Sleep -Milliseconds 500
+        [AccWin]::Capture($окно, $путь) | Out-Null
+    }
+}
+
 # Снимает и записываетUnexpected-окно (не входящее в ожидаемую цепочку).
 function ЗафиксироватьНеожиданное([string]$тип, [IntPtr]$окно, [string]$префиксСкриншота) {
     $заголовок = [AccWin]::Title($окно)
     $файл = Join-Path $out ("$префиксСкриншота-" + (Get-Date -Format 'HHmmss') + '.png')
-    [AccWin]::Capture($окно, $файл) | Out-Null
+    Захват $окно $файл
     Запись "UNEXPECTED ${тип}: '$заголовок' hwnd=$окно (скриншот: $(Split-Path -Leaf $файл))"
     $script:unexpectedFired = $true
 }
@@ -159,7 +175,7 @@ try {
         $корень = Join-Path ([System.IO.Path]::GetTempPath()) ("Picket302Acceptance\" + [Guid]::NewGuid().ToString('N'))
         Запись "temp profile: $корень"
 
-        $h = Start-Acceptance $exe 'printflow' $корень
+        $h = Start-Acceptance $exe 'printflow' $корень $false $true
 
         if (-not (Read-HarnessLines $h '^READY ' 30)) {
             Запись 'FAIL: READY не получен за 30 c'
@@ -174,7 +190,8 @@ try {
 
     # --- 3. Сценарная часть (только не-fault режим) ------------------------
     if (-not $faultРежим) {
-        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 30, 30, 1280, 720, 0x0040) | Out-Null
+        # 0x0054 = SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW.
+        [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 30, 30, 1280, 720, 0x0054) | Out-Null
         Start-Sleep -Seconds 2
 
         $успех = $true
@@ -204,7 +221,7 @@ try {
             if ($карточка -ne [IntPtr]::Zero) {
                 Запись "Карточка отправления появилась: hwnd=$карточка title='Карточка отправления'"
                 $скр = Join-Path $out '20-карточка-отправления-f5.png'
-                [AccWin]::Capture($карточка, $скр) | Out-Null
+            Захват $карточка $скр
                 Запись "скриншот карточки: $(Split-Path -Leaf $скр)"
 
                 $кнопка = Wait-Button $карточка 'ОК' 8
@@ -225,7 +242,7 @@ try {
             if ($печать -ne [IntPtr]::Zero) {
                 Запись "Диалог «Печать» появился: hwnd=$печать"
                 $скр = Join-Path $out '21-диалог-печати-f5.png'
-                [AccWin]::Capture($печать, $скр) | Out-Null
+                Захват $печать $скр
                 Запись "скриншот диалога печати: $(Split-Path -Leaf $скр)"
 
                 Start-Sleep -Milliseconds 500
@@ -295,7 +312,7 @@ try {
                         $кнопкаОтмена = [AccWin]::FindButton($w, 'Отмена')
                         if ($кнопкаОк -ne [IntPtr]::Zero -and $кнопкаОтмена -eq [IntPtr]::Zero) {
                             $скр = Join-Path $out ('24-messagebox-формирование-' + (Get-Date -Format 'HHmmss') + '.png')
-                            [AccWin]::Capture($w, $скр) | Out-Null
+                        Захват $w $скр
                             [AccWin]::Click($кнопкаОк)
                             $подтверждёнФормированиеМб = $true
                             Запись "MessageBox подтверждён (ОК), скриншот: $(Split-Path -Leaf $скр)"
@@ -340,7 +357,7 @@ try {
                     $подачаНайдена = $true
                     Запись "Окно «Подача конвертов» появилось: hwnd=$подача"
                     $скр = Join-Path $out ('25-подача-конвертов-' + (Get-Date -Format 'HHmmss') + '.png')
-                    [AccWin]::Capture($подача, $скр) | Out-Null
+                    Захват $подача $скр
                     Запись "скриншот подачи: $(Split-Path -Leaf $скр)"
                     $продолжить = Wait-Button $подача 'Продолжить' 8
                     if ($продолжить -ne [IntPtr]::Zero) {
@@ -390,7 +407,7 @@ try {
             if ($предпросмотр -ne [IntPtr]::Zero -and $успех) {
                 Запись "Окно «Предпросмотр печати» появилось: hwnd=$предпросмотр"
                 $скр = Join-Path $out '22-предпросмотр-f6.png'
-                [AccWin]::Capture($предпросмотр, $скр) | Out-Null
+        Захват $предпросмотр $скр
                 Запись "скриншот предпросмотра: $(Split-Path -Leaf $скр)"
 
                 $кнопка = Wait-Button $предпросмотр 'Закрыть' 8

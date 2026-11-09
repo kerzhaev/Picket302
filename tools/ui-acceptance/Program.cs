@@ -148,6 +148,7 @@ AppServices? состав = null;
 MainShell? окно = null;
 var основнойКод = 0;
 var cleanupКод = 0;
+var неактивирующийПерехват = IntPtr.Zero;
 
 try
 {
@@ -200,6 +201,16 @@ try
 
     await окно.ИнициализироватьAsync().ConfigureAwait(false);
 
+    if (НеактивирующийРежим())
+    {
+        // Флаг WS_EX_NOACTIVATE на известных формах не покрывает нативные
+        // MessageBox и модальные формы, созданные глубоко внутри MainShell
+        // во время F5/F6. Thread-local CBT hook срабатывает до активации
+        // любого нового окна именно этого UI-потока; обычный запуск без
+        // переменной окружения этот путь не использует.
+        неактивирующийПерехват = Платформенно.УстановитьНеактивирующийПерехват();
+    }
+
     // Чтение команд — в фоне; исполнение на UI-потоке через BeginInvoke.
     _ = Task.Run(async () =>
     {
@@ -251,6 +262,20 @@ catch (Exception ошибка)
 // --- Cleanup fail-closed: каждый шаг независимо, итог учитывается ------
 try
 {
+    try
+    {
+        if (неактивирующийПерехват != IntPtr.Zero)
+        {
+            Платформенно.СнятьНеактивирующийПерехват(неактивирующийПерехват);
+            неактивирующийПерехват = IntPtr.Zero;
+        }
+    }
+    catch (Exception ошибка)
+    {
+        Console.Error.WriteLine($"CLEANUP: ошибка снятия неактивирующего перехвата: {ошибка.Message}");
+        cleanupКод = 1;
+    }
+
     try
     {
         окно?.Dispose();
@@ -1719,17 +1744,105 @@ sealed class ПустойМенеджерПринтеров : Picket302.Printing
 /// </summary>
 internal static class Платформенно
 {
+    private const int CbtHook = 5; // WH_CBT
+    private const int CbtCreateWindow = 3; // HCBT_CREATEWND
+    private const int CbtActivate = 5; // HCBT_ACTIVATE
+
+    private delegate IntPtr HookProcedure(int code, IntPtr wParam, IntPtr lParam);
+
+    // Делегат должен жить столько же, сколько native hook; static field
+    // предотвращает сборку GC callback-а во время работы UI-потока.
+    private static readonly HookProcedure НеактивирующийCallback = ОбработатьCbt;
+
     /// <summary>GWL_EXSTYLE.</summary>
     internal const int РасширенныйСтиль = -20;
 
     /// <summary>WS_EX_NOACTIVATE: окно не становится активным при показе.</summary>
     internal const long СтильНеактивирующегоОкна = 0x08000000L;
 
+    internal static IntPtr УстановитьНеактивирующийПерехват()
+    {
+        var hook = SetWindowsHookEx(
+            CbtHook,
+            НеактивирующийCallback,
+            IntPtr.Zero,
+            GetCurrentThreadId());
+
+        if (hook == IntPtr.Zero)
+        {
+            throw new System.ComponentModel.Win32Exception(
+                System.Runtime.InteropServices.Marshal.GetLastWin32Error(),
+                "SetWindowsHookEx(WH_CBT) не установил неактивирующий перехват.");
+        }
+
+        return hook;
+    }
+
+    internal static void СнятьНеактивирующийПерехват(IntPtr hook)
+    {
+        if (hook != IntPtr.Zero && !UnhookWindowsHookEx(hook))
+        {
+            throw new System.ComponentModel.Win32Exception(
+                System.Runtime.InteropServices.Marshal.GetLastWin32Error(),
+                "UnhookWindowsHookEx не снял неактивирующий перехват.");
+        }
+    }
+
+    private static IntPtr ОбработатьCbt(int code, IntPtr wParam, IntPtr lParam)
+    {
+        if (code >= 0 && (code == CbtCreateWindow || code == CbtActivate))
+        {
+            ПрименитьНеактивирующийСтиль(wParam);
+
+            // HCBT_ACTIVATE вызывается непосредственно перед активацией.
+            // Ненулевой результат запрещает активацию, но оставляет окно
+            // доступным для EnumWindows/BM_CLICK/BitBlt драйвера.
+            if (code == CbtActivate)
+            {
+                return new IntPtr(1);
+            }
+        }
+
+        return CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
+    }
+
+    private static void ПрименитьНеактивирующийСтиль(IntPtr окно)
+    {
+        if (окно == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var стиль = GetWindowLongPtr(окно, РасширенныйСтиль);
+        var новыйСтиль = стиль.ToInt64() | СтильНеактивирующегоОкна;
+        _ = SetWindowLongPtr(окно, РасширенныйСтиль, new IntPtr(новыйСтиль));
+    }
+
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     internal static extern IntPtr GetWindowLongPtr(IntPtr окно, int индекс);
 
     [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
     internal static extern IntPtr SetWindowLongPtr(IntPtr окно, int индекс, IntPtr значение);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(
+        int idHook,
+        HookProcedure lpfn,
+        IntPtr hMod,
+        uint dwThreadId);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hook);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr CallNextHookEx(
+        IntPtr hook,
+        int code,
+        IntPtr wParam,
+        IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     internal static extern IntPtr SendMessageW(

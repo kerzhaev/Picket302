@@ -100,6 +100,9 @@ function ОкноЗакрыто([IntPtr]$hwnd) {
 }
 
 try {
+    # Скриншоты F5/F6 сохраняются до финального markdown-evidence.
+    New-Item -ItemType Directory -Force -Path $out -ErrorAction Stop | Out-Null
+
     # Межпроцессная блокировка общего ресурса: отказ — fail-closed exit 1.
     $блокировка = Enter-SharedTestLock
 
@@ -118,7 +121,7 @@ try {
     $корень = Join-Path ([System.IO.Path]::GetTempPath()) ("Picket302Acceptance\" + [Guid]::NewGuid().ToString('N'))
     Запись "temp profile: $корень"
 
-    $h = Start-Acceptance $exe 'noaddress' $корень
+    $h = Start-Acceptance $exe 'noaddress' $корень $false $true
 
     if (-not (Read-HarnessLines $h '^READY ' 30)) {
         Запись 'FAIL: READY не получен за 30 c'
@@ -130,7 +133,8 @@ try {
     $pid_ = [uint32]$h.Proc.Id
     Запись "harness READY: $готовность"
 
-    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr](-1), 30, 30, 1280, 720, 0x0040) | Out-Null
+    # 0x0054 = SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW.
+    [AccWin]::SetWindowPos($h.Hwnd, [IntPtr]::Zero, 30, 30, 1280, 720, 0x0054) | Out-Null
     Start-Sleep -Seconds 2
 
     $успех = $true

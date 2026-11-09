@@ -20,6 +20,9 @@ Assert-Static ($program.Contains('PICKET302_ACCEPTANCE_NONACTIVATING')) 'Program
 Assert-Static ($program.Contains('WS_EX_NOACTIVATE')) 'Program.cs missing WS_EX_NOACTIVATE documentation.'
 Assert-Static ($program.Contains('GetWindowLongPtrW')) 'Program.cs missing native extended-style read.'
 Assert-Static ($program.Contains('SetWindowLongPtrW')) 'Program.cs missing native extended-style write.'
+Assert-Static ($program.Contains('SetWindowsHookEx')) 'Program.cs missing thread-local CBT hook.'
+Assert-Static ($program.Contains('HCBT_ACTIVATE') -or $program.Contains('CbtActivate')) 'Program.cs missing pre-activation interception.'
+Assert-Static ($program.Contains('UnhookWindowsHookEx')) 'Program.cs missing CBT hook cleanup.'
 Assert-Static ($program.Contains('ShowInTaskbar = false')) 'MainShell/dialog preparation does not hide taskbar entries.'
 Assert-Static ($program.Contains('BringToFront();')) 'Program.cs no longer contains the normal-mode foreground action.'
 Assert-Static ($program.Contains('Activate();')) 'Program.cs no longer contains the normal-mode activation action.'
@@ -31,7 +34,7 @@ Assert-Static ($runtime.Contains('WS_EX_TOPMOST')) 'Runtime smoke does not check
 Assert-Static ($runtime.Contains("WaitForExit(5000)")) 'Runtime smoke does not require bounded graceful shutdown.'
 Assert-Static ((Get-Content -LiteralPath (Join-Path $PSScriptRoot 'run-screens.ps1') -Raw).Contains('New-Item -ItemType Directory -Force -Path $out')) 'run-screens.ps1 does not create the capture output directory before BitBlt.'
 
-foreach ($name in @('run-screens.ps1', 'run-screens2.ps1', 'run-dpi.ps1')) {
+foreach ($name in @('run-screens.ps1', 'run-screens2.ps1', 'run-dpi.ps1', 'run-emptybook.ps1', 'run-noaddress.ps1', 'run-noprinter.ps1', 'run-previewflow.ps1', 'run-printflow.ps1')) {
     $path = Join-Path $PSScriptRoot $name
     $text = Get-Content -LiteralPath $path -Raw
 
@@ -46,5 +49,5 @@ if ($violations.Count -gt 0) {
 }
 
 Write-Output 'NONACTIVATING_CAPTURE_STATIC: PASS'
-Write-Output 'Checked Program.cs, acceptance-lib.ps1, runtime smoke, run-screens.ps1, run-screens2.ps1, run-dpi.ps1.'
+Write-Output 'Checked Program.cs, acceptance-lib.ps1, runtime smoke, and all UI acceptance capture drivers.'
 exit 0
