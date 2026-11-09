@@ -15,6 +15,17 @@ namespace Picket302.Tests.App;
 public sealed class MainShellConnectionProfileTests
 {
     [Fact]
+    public void ДиалогПодключения_ДоИнициализации_ОтказываетБезПроизводственногоFallback()
+    {
+        using var окно = new MainShell();
+
+        var ошибка = Assert.Throws<InvalidOperationException>(
+            () => окно.СоздатьДиалогПодключения());
+
+        Assert.Contains("до инициализации состава", ошибка.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ДиалогПодключения_ИспользуетПрофильПереданногоСостава()
     {
         using var профиль = new ИзолированныйПрофиль();

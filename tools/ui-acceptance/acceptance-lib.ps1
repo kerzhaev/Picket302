@@ -178,24 +178,26 @@ public static class AccWin
                 IntPtr dst = g.GetHdc();
                 try
                 {
-                    IntPtr src = GetWindowDC(hwnd);
+                    // Сначала просим само окно отрисовать содержимое в HDC.
+                    // BitBlt читает экранную поверхность и при перекрытии
+                    // может честно вернуть чужое окно, лежащее под HWND.
+                    // Это особенно важно для неактивирующего режима, где
+                    // foreground намеренно не меняется.
+                    var copied = PrintWindow(hwnd, dst, 0x00000002);
+                    IntPtr src = IntPtr.Zero;
                     try
                     {
-                        var copied = src != IntPtr.Zero
-                            && BitBlt(dst, 0, 0, w, h, src, 0, 0, 0x00CC0020);
-
-                        // DWM/неактивное модальное окно может отказать в
-                        // BitBlt. PW_RENDERFULLCONTENT просит Win32 вернуть
-                        // отложенно отрисованную поверхность окна.
                         if (!copied)
                         {
-                            copied = PrintWindow(hwnd, dst, 0x00000002);
+                            src = GetWindowDC(hwnd);
+                            copied = src != IntPtr.Zero
+                                && BitBlt(dst, 0, 0, w, h, src, 0, 0, 0x00CC0020);
                         }
 
                         if (!copied)
                         {
                             throw new InvalidOperationException(string.Format(
-                                "BitBlt/PrintWindow failed for hwnd={0}: {1}",
+                                "PrintWindow/BitBlt failed for hwnd={0}: {1}",
                                 hwnd,
                                 Marshal.GetLastWin32Error()));
                         }

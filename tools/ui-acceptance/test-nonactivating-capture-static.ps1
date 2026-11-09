@@ -33,6 +33,10 @@ Assert-Static ($runtime.Contains('WS_EX_NOACTIVATE')) 'Runtime smoke does not ch
 Assert-Static ($runtime.Contains('WS_EX_TOPMOST')) 'Runtime smoke does not check WS_EX_TOPMOST.'
 Assert-Static ($runtime.Contains("WaitForExit(5000)")) 'Runtime smoke does not require bounded graceful shutdown.'
 Assert-Static ((Get-Content -LiteralPath (Join-Path $PSScriptRoot 'run-screens.ps1') -Raw).Contains('New-Item -ItemType Directory -Force -Path $out')) 'run-screens.ps1 does not create the capture output directory before BitBlt.'
+$printInCapture = $library.IndexOf('var copied = PrintWindow(hwnd, dst, 0x00000002);', [StringComparison]::Ordinal)
+$bitBltInCapture = $library.IndexOf('&& BitBlt(dst, 0, 0, w, h, src, 0, 0, 0x00CC0020);', [StringComparison]::Ordinal)
+Assert-Static ($printInCapture -ge 0) 'acceptance-lib.ps1 does not prefer PrintWindow for HWND capture.'
+Assert-Static ($bitBltInCapture -ge 0 -and $printInCapture -lt $bitBltInCapture) 'acceptance-lib.ps1 may use occluding BitBlt before PrintWindow.'
 
 foreach ($name in @('run-screens.ps1', 'run-screens2.ps1', 'run-dpi.ps1', 'run-emptybook.ps1', 'run-noaddress.ps1', 'run-noprinter.ps1', 'run-previewflow.ps1', 'run-printflow.ps1')) {
     $path = Join-Path $PSScriptRoot $name
