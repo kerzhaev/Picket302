@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Windows.Forms;
+using Picket302.Application.Import;
 using Picket302.App;
 using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
@@ -238,6 +239,81 @@ public sealed class AdaptiveLayoutTests
             Assert.False(string.IsNullOrWhiteSpace(поле.AccessibleName));
             Assert.StartsWith("Строка", поле.AccessibleName, StringComparison.Ordinal);
         });
+    }
+
+    [Fact]
+    public void ВторичныеДиалоги_ИнтерактивныеЭлементыИмеютДоступныеИмена()
+    {
+        var хранилище = new DelegateCsvProfileStore(
+            (_, _) => { },
+            _ => new Picket302.Domain.Contracts.CsvProfile(),
+            _ => Array.Empty<string>());
+
+        using var поиск = new FormSearch();
+        using var выбор = new FormValuePicker("Индекс", new[] { "101000" });
+        using var фильтр = new FormFilterName("Название фильтра");
+        using var калькулятор = new FormCalculator();
+        using var csv = new FormCsvImportConfig(хранилище);
+
+        foreach (var форма in new Form[] { поиск, выбор, фильтр, калькулятор, csv })
+        {
+            var интерактивные = Обойти(форма)
+                .Where(контрол => контрол is TextBox
+                    or ComboBox
+                    or CheckBox
+                    or NumericUpDown
+                    or ListBox
+                    or DataGridView
+                    or Button)
+                // NumericUpDown создаёт внутренний UpDownEdit (TextBox).
+                // Это служебная часть родительского контрола, а не отдельное
+                // пользовательское поле с независимым UIA-именем.
+                .Where(контрол => контрол.Parent is not NumericUpDown)
+                .ToList();
+
+            Assert.NotEmpty(интерактивные);
+            Assert.All(интерактивные, контрол =>
+            {
+                Assert.False(
+                    string.IsNullOrWhiteSpace(контрол.AccessibleName),
+                    $"Контрол {контрол.GetType().Name} в форме «{форма.Text}» не имеет AccessibleName.");
+            });
+        }
+    }
+
+    [Fact]
+    public void НастройкаCsv_НижняяПанельКнопокНеВыходитЗаКлиентскуюОбласть()
+    {
+        var хранилище = new DelegateCsvProfileStore(
+            (_, _) => { },
+            _ => new Picket302.Domain.Contracts.CsvProfile(),
+            _ => Array.Empty<string>());
+
+        using var форма = new FormCsvImportConfig(хранилище);
+        форма.StartPosition = FormStartPosition.Manual;
+        форма.Show();
+        форма.PerformLayout();
+        System.Windows.Forms.Application.DoEvents();
+
+        try
+        {
+            var панель = Обойти(форма)
+                .OfType<FlowLayoutPanel>()
+                .Single(элемент => элемент.AccessibleName == "Действия настройки разбора CSV");
+
+            Assert.Equal(DockStyle.Bottom, панель.Dock);
+            Assert.True(
+                форма.ClientRectangle.Contains(панель.Bounds),
+                $"Панель кнопок выходит за клиентскую область: {панель.Bounds} против {форма.ClientRectangle}.");
+            Assert.All(панель.Controls.OfType<Button>(), кнопка =>
+                Assert.True(
+                    панель.ClientRectangle.Contains(кнопка.Bounds),
+                    $"Кнопка «{кнопка.Text}» обрезана внутри нижней панели: {кнопка.Bounds} против {панель.ClientRectangle}."));
+        }
+        finally
+        {
+            форма.Close();
+        }
     }
 
     [Fact]

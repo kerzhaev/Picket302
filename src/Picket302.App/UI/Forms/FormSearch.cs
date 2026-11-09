@@ -28,6 +28,8 @@ public sealed class FormSearch : Form
     public FormSearch(string? текущийЗапрос = null, int совпадений = 0)
     {
         Text = "Поиск";
+        AccessibleName = "Поиск по адресной книге";
+        AccessibleDescription = "Диалог последовательного поиска записи в текущей таблице.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -40,11 +42,14 @@ public sealed class FormSearch : Form
             Text = "Найти:",
             AutoSize = true,
             Location = new Point(10, 12),
+            AccessibleName = "Подпись условия поиска",
         };
 
         _поле.Location = new Point(70, 9);
         _поле.Width = 270;
         _поле.Text = текущийЗапрос ?? string.Empty;
+        _поле.AccessibleName = "Условие поиска";
+        _поле.AccessibleDescription = "Текст, по которому выполняется последовательный поиск в адресной книге.";
 
         _подсказка.AutoSize = false;
         _подсказка.Location = new Point(10, 40);
@@ -52,10 +57,14 @@ public sealed class FormSearch : Form
         _подсказка.Text = совпадений > 0
             ? $"Совпадений в выборке: {совпадений}"
             : "Введите условие поиска и нажмите «Найти далее».";
+        _подсказка.AccessibleName = "Подсказка поиска";
+        _подсказка.AccessibleDescription = "Сведения о текущем результате и способе запуска поиска.";
 
         _найтиДалее.Text = "Найти далее";
         _найтиДалее.Size = new Size(100, 24);
         _найтиДалее.Location = new Point(10, 92);
+        _найтиДалее.AccessibleName = "Найти далее";
+        _найтиДалее.AccessibleDescription = "Найти следующую запись после текущей позиции таблицы.";
         _найтиДалее.Click += (_, _) =>
         {
             НайтиСНачала = false;
@@ -66,6 +75,8 @@ public sealed class FormSearch : Form
         _найтиСНачала.Text = "Найти с начала";
         _найтиСНачала.Size = new Size(110, 24);
         _найтиСНачала.Location = new Point(120, 92);
+        _найтиСНачала.AccessibleName = "Найти с начала";
+        _найтиСНачала.AccessibleDescription = "Начать поиск с первой записи текущей таблицы.";
         _найтиСНачала.Click += (_, _) =>
         {
             НайтиСНачала = true;
@@ -79,6 +90,8 @@ public sealed class FormSearch : Form
             Size = new Size(90, 24),
             Location = new Point(240, 92),
             DialogResult = DialogResult.Cancel,
+            AccessibleName = "Закрыть поиск",
+            AccessibleDescription = "Закрыть диалог без выполнения поиска.",
         };
 
         Controls.Add(метка);

@@ -21,6 +21,8 @@ public sealed class FormFilterName : Form
         ArgumentException.ThrowIfNullOrWhiteSpace(заголовок);
 
         Text = "Фильтр адресной книги";
+        AccessibleName = "Имя фильтра адресной книги";
+        AccessibleDescription = "Диалог ввода имени сохраняемого фильтра адресной книги.";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
@@ -32,11 +34,14 @@ public sealed class FormFilterName : Form
             Text = заголовок,
             AutoSize = true,
             Location = new Point(16, 18),
+            AccessibleName = "Подпись имени фильтра",
         };
 
         _поле.Location = new Point(16, 44);
         _поле.Width = 348;
         _поле.Text = начальное;
+        _поле.AccessibleName = "Имя фильтра";
+        _поле.AccessibleDescription = "Название, под которым фильтр будет сохранён в адресной книге.";
 
         var кнопкаОк = new Button
         {
@@ -44,6 +49,8 @@ public sealed class FormFilterName : Form
             DialogResult = DialogResult.OK,
             Size = new Size(110, 28),
             Location = new Point(158, 78),
+            AccessibleName = "Сохранить имя фильтра",
+            AccessibleDescription = "Подтвердить имя фильтра и сохранить его.",
         };
 
         var кнопкаОтмена = new Button
@@ -52,6 +59,8 @@ public sealed class FormFilterName : Form
             DialogResult = DialogResult.Cancel,
             Size = new Size(110, 28),
             Location = new Point(274, 78),
+            AccessibleName = "Отменить ввод имени фильтра",
+            AccessibleDescription = "Закрыть диалог без сохранения фильтра.",
         };
 
         Controls.AddRange(new Control[] { надпись, _поле, кнопкаОк, кнопкаОтмена });

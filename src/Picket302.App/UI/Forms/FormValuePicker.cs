@@ -23,6 +23,8 @@ public sealed class FormValuePicker : Form
         ArgumentNullException.ThrowIfNull(значения);
 
         Text = заголовок;
+        AccessibleName = $"Выбор значения: {заголовок}";
+        AccessibleDescription = "Диалог выбора одного значения из списка имеющихся записей.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -33,6 +35,8 @@ public sealed class FormValuePicker : Form
         _список.Location = new Point(8, 8);
         _список.Size = new Size(304, 200);
         _список.Font = new Font("Segoe UI", 8f);
+        _список.AccessibleName = "Список доступных значений";
+        _список.AccessibleDescription = "Выберите значение из списка или дважды щёлкните по нему для подтверждения.";
 
         foreach (var значение in значения)
         {
@@ -64,6 +68,8 @@ public sealed class FormValuePicker : Form
             Text = "Выбрать",
             Size = new Size(90, 24),
             Location = new Point(8, 216),
+            AccessibleName = "Выбрать значение",
+            AccessibleDescription = "Подтвердить выбранное значение.",
         };
 
         выбрать.Click += (_, _) =>
@@ -78,6 +84,8 @@ public sealed class FormValuePicker : Form
             Size = new Size(90, 24),
             Location = new Point(222, 216),
             DialogResult = DialogResult.Cancel,
+            AccessibleName = "Отменить выбор значения",
+            AccessibleDescription = "Закрыть диалог без выбора значения.",
         };
 
         Controls.Add(_список);

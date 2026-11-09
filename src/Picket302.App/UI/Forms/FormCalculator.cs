@@ -16,7 +16,9 @@ public sealed class FormCalculator : Form
         Height = 28,
         ReadOnly = true,
         TextAlign = HorizontalAlignment.Right,
-            Font = new Font("Segoe UI", 12f),
+        Font = new Font("Segoe UI", 12f),
+        AccessibleName = "Результат вычисления",
+        AccessibleDescription = "Текущее число или результат операции калькулятора.",
     };
 
     private readonly Label _операция = new()
@@ -24,6 +26,8 @@ public sealed class FormCalculator : Form
         Dock = DockStyle.Top,
         Height = 18,
         TextAlign = ContentAlignment.MiddleRight,
+        AccessibleName = "Текущая операция",
+        AccessibleDescription = "Операция и накопленное значение перед вычислением.",
     };
 
     private double _накопитель;
@@ -43,6 +47,8 @@ public sealed class FormCalculator : Form
     public FormCalculator()
     {
         Text = "Калькулятор";
+        AccessibleName = "Калькулятор";
+        AccessibleDescription = "Встроенный калькулятор для вычисления арифметических выражений.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedToolWindow;
@@ -85,6 +91,8 @@ public sealed class FormCalculator : Form
             Dock = DockStyle.Fill,
             ColumnCount = 4,
             RowCount = 5,
+            AccessibleName = "Клавиатура калькулятора",
+            AccessibleDescription = "Цифровые клавиши и операции встроенного калькулятора.",
         };
 
         for (var колонка = 0; колонка < 4; колонка++)
@@ -112,7 +120,14 @@ public sealed class FormCalculator : Form
             for (var колонка = 0; колонка < 4; колонка++)
             {
                 var надпись = надписи[индекс++];
-                var кнопка = new Button { Text = надпись, Dock = DockStyle.Fill, Margin = new Padding(1) };
+                var кнопка = new Button
+                {
+                    Text = надпись,
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(1),
+                    AccessibleName = $"Клавиша {надпись}",
+                    AccessibleDescription = $"Нажать клавишу «{надпись}» калькулятора.",
+                };
 
                 кнопка.Click += (_, _) => Нажать(надпись);
 
@@ -120,10 +135,24 @@ public sealed class FormCalculator : Form
             }
         }
 
-        var равно = new Button { Text = "=", Dock = DockStyle.Fill, Margin = new Padding(1) };
+        var равно = new Button
+        {
+            Text = "=",
+            Dock = DockStyle.Fill,
+            Margin = new Padding(1),
+            AccessibleName = "Вычислить результат",
+            AccessibleDescription = "Выполнить текущую арифметическую операцию.",
+        };
         равно.Click += (_, _) => Нажать("=");
 
-        var плюсМинус = new Button { Text = "±", Dock = DockStyle.Fill, Margin = new Padding(1) };
+        var плюсМинус = new Button
+        {
+            Text = "±",
+            Dock = DockStyle.Fill,
+            Margin = new Padding(1),
+            AccessibleName = "Изменить знак числа",
+            AccessibleDescription = "Изменить знак текущего числа на противоположный.",
+        };
         плюсМинус.Click += (_, _) => Нажать("±");
 
         панель.Controls.Add(равно, 0, 4);

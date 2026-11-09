@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using Picket302.Application.Import;
 using Picket302.App.UI.Forms;
 using Picket302.Domain.Backup;
 using Picket302.Infrastructure.Backup;
@@ -112,6 +113,25 @@ public sealed class DialogAccessibilityContractTests
             "Подача конвертов",
             new FormFeedOrientationHint(),
         };
+        yield return new object[] { "Поиск", new FormSearch("Иванов", 1) };
+        yield return new object[]
+        {
+            "Выбор значения",
+            new FormValuePicker("Индекс", new[] { "101000", "190000" }),
+        };
+        yield return new object[] { "Имя фильтра", new FormFilterName("Название фильтра") };
+        yield return new object[] { "Калькулятор", new FormCalculator() };
+        yield return new object[] { "Настройка разбора CSV", СоздатьДиалогCsv() };
+    }
+
+    private static FormCsvImportConfig СоздатьДиалогCsv()
+    {
+        var хранилище = new DelegateCsvProfileStore(
+            (_, _) => { },
+            _ => new Picket302.Domain.Contracts.CsvProfile(),
+            _ => Array.Empty<string>());
+
+        return new FormCsvImportConfig(хранилище);
     }
 
     private static FormConnectionSettings СоздатьДиалогПодключения()

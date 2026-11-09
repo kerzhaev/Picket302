@@ -72,12 +72,16 @@ public sealed class FormCsvImportConfig : Form
         _хранилище = хранилище ?? ImportWizardController.CreateProfileStore();
 
         Text = "Настройка разбора CSV";
+        AccessibleName = "Настройка разбора CSV";
+        AccessibleDescription = "Параметры кодировки, разделителя и профиля импорта CSV.";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(640, 520);
+        // Нижняя панель кнопок имеет собственную строку. Прежний размер 520
+        // оставлял кнопки на координатах 506..530 за пределами клиента.
+        ClientSize = new Size(640, 560);
 
         ПостроитьПараметры();
         ПостроитьПредпросмотр();
@@ -147,6 +151,8 @@ public sealed class FormCsvImportConfig : Form
         var надписьКодировки = new Label { Text = "Кодировка:", Location = new Point(12, 15), AutoSize = true };
         _кодировка.Location = new Point(90, 12);
         _кодировка.Width = 200;
+        _кодировка.AccessibleName = "Кодировка файла";
+        _кодировка.AccessibleDescription = "Выберите кодировку исходного CSV-файла.";
 
         foreach (var (имя, подпись) in Кодировки)
         {
@@ -156,6 +162,8 @@ public sealed class FormCsvImportConfig : Form
         var надписьРазделителя = new Label { Text = "Разделитель:", Location = new Point(12, 41), AutoSize = true };
         _разделитель.Location = new Point(90, 38);
         _разделитель.Width = 200;
+        _разделитель.AccessibleName = "Разделитель столбцов";
+        _разделитель.AccessibleDescription = "Выберите символ, разделяющий столбцы CSV-файла.";
 
         foreach (var (знак, подпись) in Разделители)
         {
@@ -165,17 +173,25 @@ public sealed class FormCsvImportConfig : Form
         var надписьКавычек = new Label { Text = "Кавычки:", Location = new Point(300, 41), AutoSize = true };
         _кавычки.Location = new Point(360, 38);
         _кавычки.Width = 30;
+        _кавычки.AccessibleName = "Символ кавычек";
+        _кавычки.AccessibleDescription = "Один символ, используемый для экранирования значения CSV.";
 
         _заголовки.Location = new Point(12, 66);
         _заголовки.AutoSize = true;
+        _заголовки.AccessibleName = "Первая строка содержит заголовки";
+        _заголовки.AccessibleDescription = "Указать, что первая строка CSV содержит названия столбцов.";
 
         var надписьНачала = new Label { Text = "Первая строка данных:", Location = new Point(210, 69), AutoSize = true };
         _началоДанных.Location = new Point(320, 66);
         _началоДанных.Width = 70;
+        _началоДанных.AccessibleName = "Номер первой строки данных";
+        _началоДанных.AccessibleDescription = "Номер строки, с которой начинается импорт данных.";
 
         var надписьИмени = new Label { Text = "Имя профиля:", Location = new Point(12, 96), AutoSize = true };
         _имяПрофиля.Location = new Point(90, 93);
         _имяПрофиля.Width = 300;
+        _имяПрофиля.AccessibleName = "Имя профиля импорта";
+        _имяПрофиля.AccessibleDescription = "Имя профиля параметров разбора CSV.";
 
         Controls.Add(надписьКодировки);
         Controls.Add(_кодировка);
@@ -200,15 +216,21 @@ public sealed class FormCsvImportConfig : Form
         _предпросмотр.RowHeadersVisible = false;
         _предпросмотр.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _предпросмотр.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _предпросмотр.AccessibleName = "Предпросмотр CSV";
+        _предпросмотр.AccessibleDescription = "Предпросмотр строк CSV с результатом разбора и ошибками столбцов.";
 
         _сведения.Location = new Point(12, 448);
         _сведения.AutoSize = false;
         _сведения.Size = new Size(616, 32);
+        _сведения.AccessibleName = "Сведения о разборе CSV";
+        _сведения.AccessibleDescription = "Количество строк и столбцов в текущем предпросмотре.";
 
         _ошибка.Location = new Point(12, 482);
         _ошибка.AutoSize = false;
         _ошибка.Size = new Size(616, 20);
         _ошибка.ForeColor = Color.Firebrick;
+        _ошибка.AccessibleName = "Ошибка разбора CSV";
+        _ошибка.AccessibleDescription = "Сообщение об ошибке текущих параметров разбора CSV.";
 
         Controls.Add(_предпросмотр);
         Controls.Add(_сведения);
@@ -221,7 +243,8 @@ public sealed class FormCsvImportConfig : Form
         {
             Text = "Сохранить профиль…",
             Size = new Size(140, 24),
-            Location = new Point(12, 506),
+            AccessibleName = "Сохранить профиль импорта",
+            AccessibleDescription = "Сохранить текущие параметры разбора в профиль CSV.",
         };
 
         сохранить.Click += (_, _) => СохранитьПрофиль();
@@ -230,7 +253,8 @@ public sealed class FormCsvImportConfig : Form
         {
             Text = "Загрузить профиль…",
             Size = new Size(140, 24),
-            Location = new Point(160, 506),
+            AccessibleName = "Загрузить профиль импорта",
+            AccessibleDescription = "Загрузить параметры разбора из сохранённого профиля CSV.",
         };
 
         загрузить.Click += (_, _) => ЗагрузитьПрофиль();
@@ -239,7 +263,8 @@ public sealed class FormCsvImportConfig : Form
         {
             Text = "Применить",
             Size = new Size(100, 24),
-            Location = new Point(430, 506),
+            AccessibleName = "Применить параметры разбора CSV",
+            AccessibleDescription = "Принять параметры разбора и продолжить импорт.",
         };
 
         применить.Click += (_, _) =>
@@ -253,14 +278,27 @@ public sealed class FormCsvImportConfig : Form
         {
             Text = "Отмена",
             Size = new Size(90, 24),
-            Location = new Point(538, 506),
             DialogResult = DialogResult.Cancel,
+            AccessibleName = "Отменить настройку разбора CSV",
+            AccessibleDescription = "Закрыть диалог без применения параметров разбора.",
         };
 
-        Controls.Add(сохранить);
-        Controls.Add(загрузить);
-        Controls.Add(применить);
-        Controls.Add(отмена);
+        var панельКнопок = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 40,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(8, 6, 8, 4),
+            AccessibleName = "Действия настройки разбора CSV",
+            AccessibleDescription = "Сохранение, загрузка, применение или отмена параметров импорта.",
+        };
+
+        панельКнопок.Controls.Add(отмена);
+        панельКнопок.Controls.Add(применить);
+        панельКнопок.Controls.Add(загрузить);
+        панельКнопок.Controls.Add(сохранить);
+        Controls.Add(панельКнопок);
 
         AcceptButton = применить;
         CancelButton = отмена;
