@@ -106,6 +106,37 @@ public sealed class AdaptiveLayoutTests
     }
 
     [Fact]
+    public async Task РедакторРассылок_ИнтерактивныеЭлементыИмеютДоступныеИмена()
+    {
+        using var профиль = new ИзолированныйПрофиль();
+        using var форма = await СоздатьРедактор(профиль);
+
+        var проверяемые = new Control[]
+        {
+            Поле<TextBox>(форма, "_наименование"),
+            Поле<ComboBox>(форма, "_видРассылки"),
+            Поле<ComboBox>(форма, "_категории"),
+            Поле<DataGridView>(форма, "_доступные"),
+            Поле<ListView>(форма, "_получатели"),
+            Поле<Button>(форма, "_добавитьВсехАктивных"),
+            Поле<Button>(форма, "_удалитьВыбранных"),
+            Поле<Button>(форма, "_очистить"),
+            Поле<Button>(форма, "_сохранить"),
+            Поле<Button>(форма, "_отмена"),
+        };
+
+        Assert.All(проверяемые, контрол =>
+        {
+            Assert.False(
+                string.IsNullOrWhiteSpace(контрол.AccessibleName),
+                $"Контрол {контрол.GetType().Name} не имеет AccessibleName.");
+        });
+
+        Assert.All(проверяемые.OfType<Button>().Where(кнопка => кнопка != форма.AcceptButton), кнопка =>
+            Assert.False(string.IsNullOrWhiteSpace(кнопка.AccessibleDescription)));
+    }
+
+    [Fact]
     public void РедакторАдреса_ПереключательОсновногоВСеткеНеПерекрываетИндекс()
     {
         using var редактор = new AddressEditor("Тест", показыватьЗаголовок: false);

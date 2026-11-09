@@ -114,6 +114,8 @@ public sealed class FormDistributionEditor : Form
 
         _наименование.Dock = DockStyle.Fill;
         _наименование.Margin = new Padding(0, 0, 8, 0);
+        _наименование.AccessibleName = "Название рассылки";
+        _наименование.AccessibleDescription = "Название, под которым будет сохранена рассылка.";
 
         var меткаВида = new Label
         {
@@ -126,6 +128,8 @@ public sealed class FormDistributionEditor : Form
         _видРассылки.DropDownStyle = ComboBoxStyle.DropDownList;
         _видРассылки.Dock = DockStyle.Fill;
         _видРассылки.Margin = new Padding(0, 0, 8, 0);
+        _видРассылки.AccessibleName = "Вид рассылки";
+        _видРассылки.AccessibleDescription = "Выбор направления рассылки: один ко многим или многие к одному.";
         _видРассылки.Items.Add("Один ко многим");
         _видРассылки.Items.Add("Многие к одному");
         _видРассылки.SelectedIndex = 0;
@@ -152,6 +156,8 @@ public sealed class FormDistributionEditor : Form
 
         _категории.DropDownStyle = ComboBoxStyle.DropDownList;
         _категории.Dock = DockStyle.Fill;
+        _категории.AccessibleName = "Фильтр по категории";
+        _категории.AccessibleDescription = "Ограничить список доступных контрагентов выбранной категорией.";
         _категории.SelectedIndexChanged += (_, _) => ОбновитьДоступные();
 
         верх.Controls.Add(меткаНаименования, 0, 0);
@@ -169,6 +175,8 @@ public sealed class FormDistributionEditor : Form
         };
 
         _доступные.Dock = DockStyle.Fill;
+        _доступные.AccessibleName = "Доступные контрагенты";
+        _доступные.AccessibleDescription = "Список контрагентов, которых можно добавить в рассылку.";
         _доступные.ReadOnly = true;
         _доступные.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _доступные.MultiSelect = true;
@@ -185,6 +193,8 @@ public sealed class FormDistributionEditor : Form
         _доступные.CellDoubleClick += (_, _) => ДобавитьВыделенные();
 
         _получатели.Dock = DockStyle.Fill;
+        _получатели.AccessibleName = "Получатели рассылки";
+        _получатели.AccessibleDescription = "Список контрагентов, включённых в текущую рассылку.";
         _получатели.View = View.Details;
         _получатели.FullRowSelect = true;
         _получатели.AllowDrop = true;
@@ -217,14 +227,20 @@ public sealed class FormDistributionEditor : Form
 
         _добавитьВсехАктивных.Text = "Добавить всех активных";
         _добавитьВсехАктивных.AutoSize = true;
+        _добавитьВсехАктивных.AccessibleName = "Добавить всех активных контрагентов";
+        _добавитьВсехАктивных.AccessibleDescription = "Добавить в рассылку всех активных контрагентов, которых ещё нет в списке.";
         _добавитьВсехАктивных.Click += (_, _) => ДобавитьВсехАктивных();
 
         _удалитьВыбранных.Text = "Удалить выбранные";
         _удалитьВыбранных.AutoSize = true;
+        _удалитьВыбранных.AccessibleName = "Удалить выбранных получателей";
+        _удалитьВыбранных.AccessibleDescription = "Удалить выбранные строки из состава рассылки.";
         _удалитьВыбранных.Click += (_, _) => УдалитьВыбранных();
 
         _очистить.Text = "Очистить";
         _очистить.AutoSize = true;
+        _очистить.AccessibleName = "Очистить получателей рассылки";
+        _очистить.AccessibleDescription = "Удалить всех получателей из текущей рассылки.";
         _очистить.Click += (_, _) =>
         {
             _получатели.Items.Clear();
@@ -245,6 +261,7 @@ public sealed class FormDistributionEditor : Form
         var низ = new Panel { Dock = DockStyle.Bottom, Height = 52, Padding = new Padding(8, 0, 8, 0) };
 
         _счётчикКонвертов.Dock = DockStyle.Fill;
+        _счётчикКонвертов.AccessibleName = "Количество конвертов в рассылке";
         _счётчикКонвертов.TextAlign = ContentAlignment.MiddleLeft;
         _счётчикКонвертов.Font = EnvelopeUiTheme.ШрифтЗаголовка(8.5f);
         _счётчикКонвертов.Text = "Всего необходимо конвертов: 0";
@@ -259,10 +276,14 @@ public sealed class FormDistributionEditor : Form
 
         _сохранить.Text = "Сохранить";
         _сохранить.AutoSize = true;
+        _сохранить.AccessibleName = "Сохранить рассылку";
+        _сохранить.AccessibleDescription = "Сохранить рассылку и сформировать её отправления.";
         _сохранить.Click += (_, _) => Сохранить();
 
         _отмена.Text = "Отмена";
         _отмена.AutoSize = true;
+        _отмена.AccessibleName = "Отменить редактирование рассылки";
+        _отмена.AccessibleDescription = "Закрыть редактор без сохранения изменений.";
         _отмена.DialogResult = DialogResult.Cancel;
 
         кнопкиИтога.Controls.Add(_отмена);
