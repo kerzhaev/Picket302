@@ -63,6 +63,17 @@ public sealed class FormBlankEditor : Form
 
         _контроллер = new CanvasController(new BlankLayoutValidator(zipcodeFontAvailable));
 
+        _холст.AccessibleName = "Холст бланка";
+        _холст.AccessibleDescription = "Рабочая область для размещения и редактирования элементов бланка.";
+        _палитра.AccessibleName = "Палитра элементов бланка";
+        _палитра.AccessibleDescription = "Выбор типа элемента, который можно добавить на холст бланка.";
+        _инспектор.AccessibleName = "Свойства выбранного элемента";
+        _инспектор.AccessibleDescription = "Редактирование свойств выбранного элемента бланка.";
+        _скрипт.AccessibleName = "Скрипт перед печатью";
+        _скрипт.AccessibleDescription = "Текст скрипта onBeforePrint для выбранного элемента бланка.";
+        _предупреждения.AccessibleName = "Предупреждения разметки";
+        _предупреждения.AccessibleDescription = "Список проблем разметки, которые могут запретить сохранение бланка.";
+
         ПостроитьПанели();
         ПостроитьМеню();
 
@@ -221,9 +232,12 @@ public sealed class FormBlankEditor : Form
     private void ПостроитьПанели()
     {
         var события = new TabControl { Dock = DockStyle.Bottom, Height = 200 };
+        события.AccessibleName = "Дополнительные панели редактора бланка";
         var вкладкаСобытий = new TabPage("События");
+        вкладкаСобытий.AccessibleName = "События бланка";
         вкладкаСобытий.Controls.Add(_скрипт);
         var вкладкаПредупреждений = new TabPage("Предупреждения");
+        вкладкаПредупреждений.AccessibleName = "Предупреждения бланка";
         вкладкаПредупреждений.Controls.Add(_предупреждения);
         события.TabPages.Add(вкладкаСобытий);
         события.TabPages.Add(вкладкаПредупреждений);
@@ -242,6 +256,7 @@ public sealed class FormBlankEditor : Form
     private void ПостроитьМеню()
     {
         var меню = new MenuStrip();
+        меню.AccessibleName = "Меню редактора бланков";
         var вид = new ToolStripMenuItem("Вид");
         var настройки = new ToolStripMenuItem("Настройки редактора");
 
@@ -256,6 +271,7 @@ public sealed class FormBlankEditor : Form
         foreach (var (название, единица) in пункты)
         {
             var пункт = new ToolStripMenuItem(название);
+            пункт.AccessibleName = $"Единицы измерения: {название}";
 
             пункт.Click += (_, _) => SetUnit(единица, название.Contains("120") ? EditorUnits.LargeScreenDpi : EditorUnits.DefaultScreenDpi);
             настройки.DropDownItems.Add(пункт);
@@ -265,6 +281,7 @@ public sealed class FormBlankEditor : Form
 
         var файл = new ToolStripMenuItem("Файл");
         var сохранить = new ToolStripMenuItem("Сохранить");
+        сохранить.AccessibleName = "Сохранить бланк в файл";
 
         // Меню «Сохранить» записывает XML в выбранный файл (F-E20): прежде
         // пункт вызывал Save() и отбрасывал результат — сохранение не
@@ -274,6 +291,7 @@ public sealed class FormBlankEditor : Form
 
         var объект = new ToolStripMenuItem("Объект");
         var удалить = new ToolStripMenuItem("Удалить");
+        удалить.AccessibleName = "Удалить выбранный элемент бланка";
 
         удалить.Click += (_, _) =>
         {
@@ -292,6 +310,8 @@ public sealed class FormBlankEditor : Form
         var макет = new ToolStripMenuItem("Макет");
         var стандартная = new ToolStripMenuItem("Стандартная разметка");
         var безРазметки = new ToolStripMenuItem("Без стандартной разметки (поля вручную)");
+        стандартная.AccessibleName = "Применить стандартную разметку бланка";
+        безРазметки.AccessibleName = "Отключить стандартную разметку бланка";
 
         стандартная.Click += (_, _) => ПрименитьРазметку(StandardLayoutMode.Standard);
         безРазметки.Click += (_, _) => ПрименитьРазметку(StandardLayoutMode.None);

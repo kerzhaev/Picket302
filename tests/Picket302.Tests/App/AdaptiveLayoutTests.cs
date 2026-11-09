@@ -137,6 +137,36 @@ public sealed class AdaptiveLayoutTests
     }
 
     [Fact]
+    public void РедакторБланков_РабочиеПоверхностиИмеютДоступныеИмена()
+    {
+        using var форма = new FormBlankEditor();
+
+        var именаПолей = new[]
+        {
+            "_холст",
+            "_палитра",
+            "_инспектор",
+            "_скрипт",
+            "_предупреждения",
+        };
+
+        foreach (var имяПоля in именаПолей)
+        {
+            var поле = typeof(FormBlankEditor)
+                .GetField(имяПоля, BindingFlags.NonPublic | BindingFlags.Instance);
+
+            var контрол = Assert.IsAssignableFrom<Control>(поле?.GetValue(форма));
+
+            Assert.False(
+                string.IsNullOrWhiteSpace(контрол.AccessibleName),
+                $"Рабочая поверхность {имяПоля} не имеет AccessibleName.");
+            Assert.False(
+                string.IsNullOrWhiteSpace(контрол.AccessibleDescription),
+                $"Рабочая поверхность {имяПоля} не имеет AccessibleDescription.");
+        }
+    }
+
+    [Fact]
     public void РедакторАдреса_ПереключательОсновногоВСеткеНеПерекрываетИндекс()
     {
         using var редактор = new AddressEditor("Тест", показыватьЗаголовок: false);
