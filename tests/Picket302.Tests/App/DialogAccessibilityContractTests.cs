@@ -97,6 +97,21 @@ public sealed class DialogAccessibilityContractTests
             "Архивация и восстановление базы адресов",
             СоздатьДиалогАрхивации(),
         };
+        yield return new object[]
+        {
+            "Проверка размера бумаги",
+            new FormPaperSizeBlocked(new SizeF(324f, 229f), new SizeF(210f, 297f), "Тестовый принтер"),
+        };
+        yield return new object[]
+        {
+            "Слишком большой конверт",
+            new FormOversizeWarning("Размер конверта превышает печатную область."),
+        };
+        yield return new object[]
+        {
+            "Подача конвертов",
+            new FormFeedOrientationHint(),
+        };
     }
 
     private static FormConnectionSettings СоздатьДиалогПодключения()

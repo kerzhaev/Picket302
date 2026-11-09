@@ -40,6 +40,8 @@ public sealed class FormOversizeWarning : Form
         var кнопка = new Button
         {
             Text = "ОК",
+            AccessibleName = "Закрыть предупреждение о размере",
+            AccessibleDescription = "Закрыть предупреждение о слишком большом конверте.",
             DialogResult = DialogResult.OK,
             Size = new Size(96, 28),
             Location = new Point(372, 116),

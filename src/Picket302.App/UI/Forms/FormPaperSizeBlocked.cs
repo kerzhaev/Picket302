@@ -81,6 +81,8 @@ public sealed class FormPaperSizeBlocked : Form
         var кнопкаОтмена = new Button
         {
             Text = "Отмена",
+            AccessibleName = "Отменить печать",
+            AccessibleDescription = "Отменить печать и закрыть проверку размера бумаги.",
             DialogResult = DialogResult.Cancel,
             Size = new Size(112, 28),
             Location = new Point(12, 144),
@@ -89,6 +91,8 @@ public sealed class FormPaperSizeBlocked : Form
         var кнопкаA4 = new Button
         {
             Text = "Зафиксировать A4",
+            AccessibleName = "Зафиксировать размер A4",
+            AccessibleDescription = "Повторить печать с зафиксированным размером A4.",
             Size = new Size(140, 28),
             Location = new Point(140, 144),
         };
@@ -103,6 +107,8 @@ public sealed class FormPaperSizeBlocked : Form
         var кнопкаПринтер = new Button
         {
             Text = "Выбрать другой принтер",
+            AccessibleName = "Выбрать другой принтер",
+            AccessibleDescription = "Вернуться к выбору другого принтера.",
             Size = new Size(160, 28),
             Location = new Point(296, 144),
         };
