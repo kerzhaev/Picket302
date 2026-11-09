@@ -98,6 +98,8 @@ public sealed class AddressEditor : UserControl
         _полеИндекса.Dock = DockStyle.Fill;
         _полеИндекса.Font = EnvelopeUiTheme.ШрифтТекста(8.5f);
         _полеИндекса.Margin = new Padding(0, 2, 2, 2);
+        _полеИндекса.AccessibleName = "Почтовый индекс";
+        _полеИндекса.AccessibleDescription = "Почтовый индекс адреса, шесть цифр.";
         _полеИндекса.KeyDown += (_, аргументы) =>
         {
             if (!FieldValueAutoComplete.ТребуетсяПодбор(
@@ -161,6 +163,8 @@ public sealed class AddressEditor : UserControl
         _переключательОсновного.ForeColor = EnvelopeUiTheme.MutedText;
         _переключательОсновного.Anchor = AnchorStyles.Left;
         _переключательОсновного.Margin = new Padding(6, 2, 0, 2);
+        _переключательОсновного.AccessibleName = "Основной адрес";
+        _переключательОсновного.AccessibleDescription = "Сделать этот адрес основным для контрагента.";
         _подсказки.SetToolTip(_переключательОсновного, "Считать этот адрес основным для контрагента");
         сетка.Controls.Add(_переключательОсновного, 3, 0);
 
@@ -168,6 +172,8 @@ public sealed class AddressEditor : UserControl
 
         _историяИндексов.Visible = false;
         _историяИндексов.DropDownStyle = ComboBoxStyle.DropDownList;
+        _историяИндексов.AccessibleName = "История почтовых индексов";
+        _историяИндексов.AccessibleDescription = "Выбор ранее использованного почтового индекса.";
 
         Controls.Add(сетка);
         Controls.Add(_заголовок);

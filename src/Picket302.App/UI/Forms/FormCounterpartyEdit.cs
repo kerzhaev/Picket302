@@ -101,6 +101,18 @@ public sealed class FormCounterpartyEdit : Form
         _создание = контрагент is null;
         _контрагент = контрагент ?? new Counterparty();
 
+        _вкладки.AccessibleName = "Разделы карточки контрагента";
+        _страницаРеквизитов.AccessibleName = "Реквизиты контрагента";
+        _страницаБанка.AccessibleName = "Банковские реквизиты контрагента";
+        _страницаПаспорта.AccessibleName = "Паспортные данные контрагента";
+        _типЮридическое.AccessibleName = "Юридическое лицо";
+        _типЮридическое.AccessibleDescription = "Выбрать тип контрагента: юридическое лицо.";
+        _типФизическое.AccessibleName = "Физическое лицо";
+        _типФизическое.AccessibleDescription = "Выбрать тип контрагента: физическое лицо.";
+        _адреснаяСетка.AccessibleName = "Адреса контрагента";
+        _пользовательскиеПоля.AccessibleName = "Пользовательские поля контрагента";
+        _пользовательскиеПоля.AccessibleDescription = "Таблица дополнительных полей, доступных в шаблонах бланков.";
+
         Text = _создание ? "Новый контрагент" : "Карточка контрагента";
         Font = new Font("Segoe UI", 8f);
         StartPosition = FormStartPosition.CenterParent;
@@ -474,6 +486,8 @@ public sealed class FormCounterpartyEdit : Form
         поле.Dock = DockStyle.Fill;
         поле.Font = new Font("Segoe UI", 8f);
         поле.Margin = new Padding(0, 0, 6, 2);
+        поле.AccessibleName ??= текст.TrimEnd(':').Trim();
+        поле.AccessibleDescription ??= $"Поле «{текст.TrimEnd(':').Trim()}» карточки контрагента.";
 
         таблица.Controls.Add(метка, колонка, строка);
         таблица.Controls.Add(поле, колонка + 1, строка);

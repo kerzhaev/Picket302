@@ -167,6 +167,46 @@ public sealed class AdaptiveLayoutTests
     }
 
     [Fact]
+    public void КарточкиОтправленияИКонтрагента_ИнтерактивныеПоляИмеютДоступныеИмена()
+    {
+        using var отправление = new FormMailEdit();
+        var поляОтправления = new Control[]
+        {
+            отправление.ПереченьКатегорий,
+            отправление.ПереченьУведомлений,
+            отправление.ПереченьФорматов,
+            отправление.ФлажокУведомления,
+            отправление.ПолеКопий,
+        };
+
+        Assert.All(поляОтправления, поле =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(поле.AccessibleName));
+            Assert.False(string.IsNullOrWhiteSpace(поле.AccessibleDescription));
+        });
+
+        using var контрагент = new FormCounterpartyEdit();
+        var интерактивные = Обойти(контрагент)
+            .Where(контрол => контрол is TextBox
+                or ComboBox
+                or CheckBox
+                or RadioButton
+                or NumericUpDown
+                or DateTimePicker
+                or DataGridView
+                or Button)
+            .ToList();
+
+        Assert.NotEmpty(интерактивные);
+        Assert.All(интерактивные, контрол =>
+        {
+            Assert.False(
+                string.IsNullOrWhiteSpace(контрол.AccessibleName),
+                $"Контрол {контрол.GetType().Name} не имеет AccessibleName.");
+        });
+    }
+
+    [Fact]
     public void РедакторАдреса_ПереключательОсновногоВСеткеНеПерекрываетИндекс()
     {
         using var редактор = new AddressEditor("Тест", показыватьЗаголовок: false);

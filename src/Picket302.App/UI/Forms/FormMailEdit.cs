@@ -45,6 +45,8 @@ public sealed class FormMailEdit : Form
         var начальные = значения ?? new MailCardValues();
 
         _категория.DropDownStyle = ComboBoxStyle.DropDownList;
+        _категория.AccessibleName = "Категория отправления";
+        _категория.AccessibleDescription = "Выбор категории отправления для карточки и журнала печати.";
         _категория.Location = new Point(180, 24);
         _категория.Width = 250;
         _категория.Items.AddRange(КатегорияОпции.Список());
@@ -55,6 +57,8 @@ public sealed class FormMailEdit : Form
         }
 
         _уведомление.DropDownStyle = ComboBoxStyle.DropDownList;
+        _уведомление.AccessibleName = "Вид уведомления о вручении";
+        _уведомление.AccessibleDescription = "Выбор вида уведомления, который будет записан в карточку отправления.";
         _уведомление.Location = new Point(180, 62);
         _уведомление.Width = 250;
         _уведомление.Items.AddRange(УведомлениеОпции.Список());
@@ -65,6 +69,8 @@ public sealed class FormMailEdit : Form
         }
 
         _формат.DropDownStyle = ComboBoxStyle.DropDownList;
+        _формат.AccessibleName = "Формат конверта";
+        _формат.AccessibleDescription = "Выбор формата конверта для отправления.";
         _формат.Location = new Point(180, 100);
         _формат.Width = 250;
         _формат.Items.AddRange(ФорматОпции.Список());
@@ -75,11 +81,15 @@ public sealed class FormMailEdit : Form
         }
 
         _нужноУведомление.Text = "Нужно уведомление о вручении";
+        _нужноУведомление.AccessibleName = "Нужно уведомление о вручении";
+        _нужноУведомление.AccessibleDescription = "Включить оформление уведомления о вручении.";
         _нужноУведомление.AutoSize = true;
         _нужноУведомление.Location = new Point(180, 142);
         _нужноУведомление.Checked = начальные.НужноУведомление;
 
         _копий.Location = new Point(180, 180);
+        _копий.AccessibleName = "Число экземпляров";
+        _копий.AccessibleDescription = "Количество печатаемых экземпляров отправления.";
         _копий.Width = 80;
         _копий.Minimum = Mail.MinimumCopyCount;
         _копий.Maximum = 99;
@@ -104,6 +114,7 @@ public sealed class FormMailEdit : Form
         // программа чтения с экрана объявляет кнопку безымянной, хотя подпись
         // «ОК» нарисована.
         кнопкаОк.AccessibleName = "Подтвердить карточку отправления";
+        кнопкаОк.AccessibleDescription = "Сохранить выбранные параметры отправления.";
 
         var кнопкаОтмена = new Button
         {
@@ -114,6 +125,7 @@ public sealed class FormMailEdit : Form
         };
 
         кнопкаОтмена.AccessibleName = "Закрыть карточку отправления без сохранения";
+        кнопкаОтмена.AccessibleDescription = "Закрыть карточку и отменить изменения.";
 
         Controls.AddRange(new Control[]
         {
