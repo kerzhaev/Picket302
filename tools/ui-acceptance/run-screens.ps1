@@ -104,6 +104,12 @@ function ДампатьОкна([uint32]$procId, [string]$метка) {
 }
 
 try {
+    # Capture вызывается до финальной записи evidence. Поэтому каталог
+    # должен существовать заранее, в том числе при P302_EVIDENCE_ROOT,
+    # указывающем на новый временный корень. Иначе GDI+ Bitmap.Save даёт
+    # неинформативный «A generic error occurred».
+    New-Item -ItemType Directory -Force -Path $out -ErrorAction Stop | Out-Null
+
     $блокировка = Enter-SharedTestLock
 
     New-Item -ItemType Directory -Force -Path $реальныйПрофиль -ErrorAction Stop | Out-Null

@@ -14,6 +14,7 @@ function Assert-Static([bool]$condition, [string]$message) {
 
 $program = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Program.cs') -Raw
 $library = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'acceptance-lib.ps1') -Raw
+$runtime = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'test-nonactivating-capture-runtime.ps1') -Raw
 
 Assert-Static ($program.Contains('PICKET302_ACCEPTANCE_NONACTIVATING')) 'Program.cs missing non-activating mode variable.'
 Assert-Static ($program.Contains('WS_EX_NOACTIVATE')) 'Program.cs missing WS_EX_NOACTIVATE documentation.'
@@ -23,6 +24,12 @@ Assert-Static ($program.Contains('ShowInTaskbar = false')) 'MainShell/dialog pre
 Assert-Static ($program.Contains('BringToFront();')) 'Program.cs no longer contains the normal-mode foreground action.'
 Assert-Static ($program.Contains('Activate();')) 'Program.cs no longer contains the normal-mode activation action.'
 Assert-Static ($library.Contains('EnvironmentVariables[''PICKET302_ACCEPTANCE_NONACTIVATING''] = ''1''')) 'Start-Acceptance does not pass the child-process variable.'
+Assert-Static ($runtime.Contains("Start-Acceptance `$exe 'screens' `$tempRoot `$false `$true")) 'Runtime smoke does not opt into non-activating mode.'
+Assert-Static ($runtime.Contains('GetForegroundWindow')) 'Runtime smoke does not observe the foreground window.'
+Assert-Static ($runtime.Contains('WS_EX_NOACTIVATE')) 'Runtime smoke does not check WS_EX_NOACTIVATE.'
+Assert-Static ($runtime.Contains('WS_EX_TOPMOST')) 'Runtime smoke does not check WS_EX_TOPMOST.'
+Assert-Static ($runtime.Contains("WaitForExit(5000)")) 'Runtime smoke does not require bounded graceful shutdown.'
+Assert-Static ((Get-Content -LiteralPath (Join-Path $PSScriptRoot 'run-screens.ps1') -Raw).Contains('New-Item -ItemType Directory -Force -Path $out')) 'run-screens.ps1 does not create the capture output directory before BitBlt.'
 
 foreach ($name in @('run-screens.ps1', 'run-screens2.ps1', 'run-dpi.ps1')) {
     $path = Join-Path $PSScriptRoot $name
@@ -39,5 +46,5 @@ if ($violations.Count -gt 0) {
 }
 
 Write-Output 'NONACTIVATING_CAPTURE_STATIC: PASS'
-Write-Output 'Checked Program.cs, acceptance-lib.ps1, run-screens.ps1, run-screens2.ps1, run-dpi.ps1.'
+Write-Output 'Checked Program.cs, acceptance-lib.ps1, runtime smoke, run-screens.ps1, run-screens2.ps1, run-dpi.ps1.'
 exit 0
