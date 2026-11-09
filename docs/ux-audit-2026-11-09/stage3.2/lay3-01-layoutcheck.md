@@ -47,6 +47,28 @@ delta 0/0/0; маркер подтверждён в каждой строке.
 идемпотентность повторного PerformLayout. Красные до исправления
 (воспроизведение 7/7 с учётом снятых DPI-кейсов), зелёные после.
 
+## Исправление изоляции layout-тестов
+
+Первый вариант теста показывал `new MainShell()` без состава. `Show()` запускал
+`MainShell.OnLoad` (`async void`), который успевал открыть production-базу
+`%AppData%\Picket302\picket302.db` уже после завершения тестового метода. В
+полном прогоне это оставляло файловый дескриптор и делало
+`ProfileIsolationTests.SentinelФайлРеальногоПрофиля_НеИзменяетсяПрогоном`
+порядкозависимым.
+
+Исправлено в `MainShellLayoutOverflowTests`: форма заранее создаётся через
+`ИзолированныйПрофиль`, получает явный временный `AppServices` и полностью
+инициализируется до `Show()`. Профиль и окно освобождаются в гарантированном
+порядке; production-путь и runtime-поведение `MainShell` не изменены.
+
+Проверка после исправления:
+
+- targeted `MainShellLayoutOverflowTests` + `ProfileIsolationTests`: **10/10**;
+- строгий non-COM Debug:
+  `FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&FullyQualifiedName!~Printing.PrintEngineTests` — **1301/1301**;
+- строгий non-COM Release с тем же фильтром — **1301/1301**;
+- в обоих прогонах: 0 fail, 0 skip, production-профиль не изменён.
+
 120/144 DPI проверяются runtime-харнессом (см. выше): процесс testhost —
 SystemAware, симуляция WM_DPICHANGED в нём не отслеживается DeviceDpi
 (проверено 2026-11-09); подмена реального DPI ручным масштабированием в

@@ -1,6 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Picket302.App;
+using Picket302.Tests.Infrastructure;
 using Xunit;
 
 namespace Picket302.Tests.App;
@@ -56,21 +57,38 @@ public sealed class MainShellLayoutOverflowTests
     /// <summary>
     /// Показывает главное окно заданного размера и выполняет полную
     /// раскладку (паттерн FormCounterpartyLayoutTests: Show + PerformLayout
-    /// + DoEvents); вызов закрывает окно возвратом через using.
+    /// + DoEvents). Окно заранее получает изолированный профиль и готовый
+    /// состав, поэтому Show не запускает асинхронную инициализацию
+    /// production-профиля.
     /// </summary>
-    private static MainShell ПоказатьОкно(int ширина, int высота)
+    private static async Task<(ИзолированныйПрофиль Профиль, MainShell Окно)> ПоказатьОкноAsync(
+        int ширина,
+        int высота)
     {
-        var окно = new MainShell
+        var профиль = new ИзолированныйПрофиль();
+
+        try
         {
-            StartPosition = FormStartPosition.Manual,
-        };
+            // Show запускает OnLoad. Инициализируем окно заранее с явным
+            // временным профилем, чтобы OnLoad не открыл production
+            // %AppData%/Picket302/picket302.db и не оставил файловый
+            // дескриптор после завершения layout-теста.
+            var окно = await профиль.СоздатьОболочкуAsync().ConfigureAwait(true);
+            await окно.ИнициализироватьAsync().ConfigureAwait(true);
 
-        окно.Show();
-        окно.ClientSize = new Size(ширина, высота);
-        окно.PerformLayout();
-        System.Windows.Forms.Application.DoEvents();
+            окно.StartPosition = FormStartPosition.Manual;
+            окно.Show();
+            окно.ClientSize = new Size(ширина, высота);
+            окно.PerformLayout();
+            System.Windows.Forms.Application.DoEvents();
 
-        return окно;
+            return (профиль, окно);
+        }
+        catch
+        {
+            профиль.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -128,17 +146,21 @@ public sealed class MainShellLayoutOverflowTests
     [Theory]
     [InlineData(1000, 700)]
     [InlineData(1280, 720)]
-    public void ГлавныйЭкран_ПанельОтображения_БезПереполненияНаОбычном96(int ширина, int высота)
+    public async Task ГлавныйЭкран_ПанельОтображения_БезПереполненияНаОбычном96(int ширина, int высота)
     {
         // Показ обязателен (регрессия LAY3-01): в невызванной форме колонки
         // вырождены (ширина группы 54 px, Dock=Top-таблица получает
         // отрицательную ширину) и инвариант проверки границ не имеет смысла.
-        using var окно = ПоказатьОкно(ширина, высота);
+        var (профиль, окно) = await ПоказатьОкноAsync(ширина, высота);
 
-        var контекст = $"96 DPI {ширина}×{высота}";
+        using (профиль)
+        using (окно)
+        {
+            var контекст = $"96 DPI {ширина}×{высота}";
 
-        ПроверитьОтсутствиеПереполнения(окно, контекст);
-        ПроверитьДоступностьЭлементов(окно, контекст);
+            ПроверитьОтсутствиеПереполнения(окно, контекст);
+            ПроверитьДоступностьЭлементов(окно, контекст);
+        }
     }
 
     /// <summary>
@@ -146,19 +168,23 @@ public sealed class MainShellLayoutOverflowTests
     /// исправления при последующих пересчётах).
     /// </summary>
     [Fact]
-    public void ГлавныйЭкран_ПанельОтображения_Стабильна_ПриПовторномPerformLayout()
+    public async Task ГлавныйЭкран_ПанельОтображения_Стабильна_ПриПовторномPerformLayout()
     {
-        using var окно = ПоказатьОкно(1000, 700);
+        var (профиль, окно) = await ПоказатьОкноAsync(1000, 700);
 
-        var таблица = ТаблицаПереключателей(окно);
-        var до = Обойти(таблица).Cast<Control>().Select(ребёнок => ребёнок.Bounds).ToList();
+        using (профиль)
+        using (окно)
+        {
+            var таблица = ТаблицаПереключателей(окно);
+            var до = Обойти(таблица).Cast<Control>().Select(ребёнок => ребёнок.Bounds).ToList();
 
-        окно.PerformLayout();
+            окно.PerformLayout();
 
-        var после = Обойти(таблица).Cast<Control>().Select(ребёнок => ребёнок.Bounds).ToList();
+            var после = Обойти(таблица).Cast<Control>().Select(ребёнок => ребёнок.Bounds).ToList();
 
-        Assert.Equal(до, после);
-        ПроверитьОтсутствиеПереполнения(окно, "повторный PerformLayout");
+            Assert.Equal(до, после);
+            ПроверитьОтсутствиеПереполнения(окно, "повторный PerformLayout");
+        }
     }
 
     // 120/144 DPI проверяются runtime-харнессом (tools/ui-acceptance/
