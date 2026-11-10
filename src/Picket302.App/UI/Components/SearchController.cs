@@ -22,6 +22,23 @@ public enum СбросПоиска
 }
 
 /// <summary>
+/// Режим сопоставления строки в диалоге Ctrl+F. Набор соответствует
+/// видимому legacy-контролу «Совпадение», но каждый пункт имеет реальное
+/// поведение в текущем механизме поиска.
+/// </summary>
+public enum РежимСовпадения
+{
+    /// <summary>Искомая строка встречается в любом месте поля.</summary>
+    Содержит = 0,
+
+    /// <summary>Поле начинается с искомой строки.</summary>
+    НачинаетсяС = 1,
+
+    /// <summary>Поле полностью равно искомой строке.</summary>
+    Полное = 2,
+}
+
+/// <summary>
 /// Состояние трёх механизмов поиска главного окна
 /// (ТЗ §7.7: «Три механизма поиска (все обязательны)»).
 /// </summary>
@@ -170,25 +187,32 @@ public static class SearchMechanism
         IReadOnlyList<T> элементы,
         Func<T, string?> текст,
         string запрос,
-        int текущийИндекс)
+        int текущийИндекс,
+        РежимСовпадения режим = РежимСовпадения.Содержит,
+        bool учитыватьРегистр = false,
+        bool учитыватьФормат = false)
     {
         ArgumentNullException.ThrowIfNull(элементы);
         ArgumentNullException.ThrowIfNull(текст);
 
-        if (string.IsNullOrWhiteSpace(запрос) || элементы.Count == 0)
+        var образец = НормализоватьЗапрос(запрос, учитыватьФормат);
+
+        if (string.IsNullOrWhiteSpace(образец) || элементы.Count == 0)
         {
             return -1;
         }
 
         var начало = текущийИндекс < 0 ? 0 : текущийИндекс + 1;
+        var сравнение = учитыватьРегистр
+            ? StringComparison.CurrentCulture
+            : StringComparison.CurrentCultureIgnoreCase;
 
         for (var шаг = 0; шаг < элементы.Count; шаг++)
         {
             var индекс = (начало + шаг) % элементы.Count;
             var значение = текст(элементы[индекс]);
 
-            if (значение is not null
-                && значение.Contains(запрос.Trim(), StringComparison.CurrentCultureIgnoreCase))
+            if (значение is not null && Совпадает(значение, образец, режим, сравнение))
             {
                 return индекс;
             }
@@ -196,6 +220,21 @@ public static class SearchMechanism
 
         return -1;
     }
+
+    private static string НормализоватьЗапрос(string запрос, bool учитыватьФормат) =>
+        учитыватьФормат ? запрос : запрос.Trim();
+
+    private static bool Совпадает(
+        string значение,
+        string образец,
+        РежимСовпадения режим,
+        StringComparison сравнение) =>
+        режим switch
+        {
+            РежимСовпадения.НачинаетсяС => значение.StartsWith(образец, сравнение),
+            РежимСовпадения.Полное => string.Equals(значение, образец, сравнение),
+            _ => значение.Contains(образец, сравнение),
+        };
 
     /// <summary>
     /// Прямой набор с клавиатуры: по мере набора отображаются только совпавшие

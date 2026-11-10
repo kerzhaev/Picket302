@@ -161,9 +161,17 @@ try {
         @{ Ключ = 'counterparty'; Заголовок = 'Карточка контрагента'; Файл = '05-counterparty-card.png' },
         @{ Ключ = 'mailedit'; Заголовок = 'Карточка отправления'; Файл = '06-mail-card.png' },
         @{ Ключ = 'gridappearance'; Заголовок = 'Настройка вида таблиц'; Файл = '07-grid-appearance.png' },
+        @{ Ключ = 'tablecolumns'; Заголовок = 'Список доступных столбцов'; Файл = '07a-table-columns.png' },
+        @{ Ключ = 'tableproperties'; Заголовок = 'Список доступных столбцов'; Файл = '07b-table-properties.png' },
         @{ Ключ = 'blankeditor'; Заголовок = 'Редактор бланков'; Файл = '08-blank-editor.png' },
         @{ Ключ = 'clipartpicker'; Заголовок = 'Клипарт'; Файл = '09-clipart-picker.png' },
-        @{ Ключ = 'distribution'; Заголовок = 'Новая рассылка'; Файл = '10-distribution-editor.png' }
+        @{ Ключ = 'distribution'; Заголовок = 'Новая рассылка'; Файл = '10-distribution-editor.png' },
+        # Дополнительные поверхности, для которых найден первичный legacy-
+        # reference в KonvertProNet.chm. Они открываются тем же реальным
+        # WinForms-путём, что и остальные диалоги; постановочные формы и
+        # подменные bitmap запрещены.
+        @{ Ключ = 'search'; Заголовок = 'Поиск'; Файл = '11-address-search-dialog.png' },
+        @{ Ключ = 'backup'; Заголовок = 'Архивация и восстановление базы адресов'; Файл = '12-backup-main.png' }
     )
 
     foreach ($диалог in $диалоги) {
@@ -187,6 +195,100 @@ try {
             & $всёОк $false "окно «$($диалог.Заголовок)» не найдено для снимка"
         }
 
+        Send-HarnessCommand $h 'HIDE'
+        [void](Read-HarnessLines $h '^OK HIDE' 10)
+        Start-Sleep -Milliseconds 500
+    }
+
+    # --- Реальное выпадающее меню «Печать» -------------------------------
+    Запись '## снимок: printmenu'
+    Send-HarnessCommand $h 'PRINTMENU'
+    if (-not (Read-HarnessLines $h '^OK PRINTMENU ' 15)) {
+        foreach ($строка in (Get-HarnessLines $h | Select-Object -Last 12)) { Запись "HARNESS-OUT: $строка" }
+        & $всёОк $false 'меню «Печать» не открылось'
+    } else {
+        $строкаПечати = Get-HarnessLines $h | Where-Object { $_ -match '^OK PRINTMENU ' } | Select-Object -Last 1
+        $hwndПечати = [IntPtr][long](($строкаПечати -split ' ')[2])
+        Start-Sleep -Milliseconds 500
+        $путьПечати = Join-Path $out '14-print-menu.png'
+        [AccWin]::Capture($hwndПечати, $путьПечати) | Out-Null
+        $размерПечати = if (Test-Path $путьПечати) { (Get-Item $путьПечати).Length } else { 0 }
+        $снятоПечати = $размерПечати -gt 0
+        if ($снятоПечати) { $снято.Add('14-print-menu.png') }
+        Запись "снимок: 14-print-menu.png ($размерПечати байт)"
+        & $всёОк $снятоПечати 'снимок 14-print-menu.png'
+        Send-HarnessCommand $h 'HIDE'
+        [void](Read-HarnessLines $h '^OK HIDE' 10)
+        Start-Sleep -Milliseconds 500
+    }
+
+    # --- Реальное вложенное меню «Вид → Фильтры» --------------------------
+    # Это не Form: harness возвращает HWND настоящего ToolStripDropDown.
+    Запись '## снимок: filtermenu'
+    Send-HarnessCommand $h 'FILTERMENU'
+    if (-not (Read-HarnessLines $h '^OK FILTERMENU ' 15)) {
+        foreach ($строка in (Get-HarnessLines $h | Select-Object -Last 12)) { Запись "HARNESS-OUT: $строка" }
+        & $всёОк $false 'меню «Вид → Фильтры» не открылось'
+    } else {
+        $строкаМеню = Get-HarnessLines $h | Where-Object { $_ -match '^OK FILTERMENU ' } | Select-Object -Last 1
+        $hwndМеню = [IntPtr][long](($строкаМеню -split ' ')[2])
+        Start-Sleep -Milliseconds 500
+        $путьМеню = Join-Path $out '13-address-filter-menu.png'
+        [AccWin]::Capture($hwndМеню, $путьМеню) | Out-Null
+        $размерМеню = if (Test-Path $путьМеню) { (Get-Item $путьМеню).Length } else { 0 }
+        $снятоМеню = $размерМеню -gt 0
+        if ($снятоМеню) { $снято.Add('13-address-filter-menu.png') }
+        Запись "снимок: 13-address-filter-menu.png ($размерМеню байт)"
+        & $всёОк $снятоМеню 'снимок 13-address-filter-menu.png'
+        Send-HarnessCommand $h 'HIDE'
+        [void](Read-HarnessLines $h '^OK HIDE' 10)
+        Start-Sleep -Milliseconds 500
+    }
+
+    # --- Быстрые фильтры над таблицей получателей -------------------------
+    # В legacy это funnel-style entry point рядом с таблицей; текущий UI
+    # должен открывать тот же рабочий dropdown, что и «Вид → Фильтры».
+    Запись '## снимок: quickfiltermenu'
+    Send-HarnessCommand $h 'QUICKFILTERMENU'
+    if (-not (Read-HarnessLines $h '^OK QUICKFILTERMENU ' 15)) {
+        foreach ($строка in (Get-HarnessLines $h | Select-Object -Last 12)) { Запись "HARNESS-OUT: $строка" }
+        & $всёОк $false 'быстрое меню «Фильтры…» не открылось'
+    } else {
+        $строкаБыстрыхФильтров = Get-HarnessLines $h | Where-Object { $_ -match '^OK QUICKFILTERMENU ' } | Select-Object -Last 1
+        $hwndБыстрыхФильтров = [IntPtr][long](($строкаБыстрыхФильтров -split ' ')[2])
+        Start-Sleep -Milliseconds 500
+        $путьБыстрыхФильтров = Join-Path $out '15-quick-filter-menu.png'
+        [AccWin]::Capture($hwndБыстрыхФильтров, $путьБыстрыхФильтров) | Out-Null
+        $размерБыстрыхФильтров = if (Test-Path $путьБыстрыхФильтров) { (Get-Item $путьБыстрыхФильтров).Length } else { 0 }
+        $снятоБыстрыхФильтров = $размерБыстрыхФильтров -gt 0
+        if ($снятоБыстрыхФильтров) { $снято.Add('15-quick-filter-menu.png') }
+        Запись "снимок: 15-quick-filter-menu.png ($размерБыстрыхФильтров байт)"
+        & $всёОк $снятоБыстрыхФильтров 'снимок 15-quick-filter-menu.png'
+        Send-HarnessCommand $h 'HIDE'
+        [void](Read-HarnessLines $h '^OK HIDE' 10)
+        Start-Sleep -Milliseconds 500
+    }
+
+    # --- Контекстное меню строки адресной книги ---------------------------
+    # Legacy table_menu.png показывает именно меню тела таблицы, а не меню
+    # заголовка столбца. Harness открывает реальный ContextMenuStrip текущей
+    # строки; команда ничего из меню не нажимает и не меняет данные профиля.
+    Запись '## снимок: tablemenu'
+    Send-HarnessCommand $h 'TABLEMENU'
+    if (-not (Read-HarnessLines $h '^OK TABLEMENU ' 15)) {
+        foreach ($строка in (Get-HarnessLines $h | Select-Object -Last 12)) { Запись "HARNESS-OUT: $строка" }
+        & $всёОк $false 'контекстное меню таблицы не открылось'
+    } else {
+        $строкаТаблицы = Get-HarnessLines $h | Where-Object { $_ -match '^OK TABLEMENU ' } | Select-Object -Last 1
+        $hwndТаблицы = [IntPtr][long](($строкаТаблицы -split ' ')[2])
+        Start-Sleep -Milliseconds 500
+        $путьТаблицы = Join-Path $out '16-address-table-menu.png'
+        [AccWin]::Capture($hwndТаблицы, $путьТаблицы) | Out-Null
+        $размерТаблицы = if (Test-Path $путьТаблицы) { (Get-Item $путьТаблицы).Length } else { 0 }
+        $снятоТаблицы = $размерТаблицы -gt 0
+        if ($снятоТаблицы) { $снято.Add('16-address-table-menu.png') }
+        Запись "снимок: 16-address-table-menu.png ($размерТаблицы байт)"
+        & $всёОк $снятоТаблицы 'снимок 16-address-table-menu.png'
         Send-HarnessCommand $h 'HIDE'
         [void](Read-HarnessLines $h '^OK HIDE' 10)
         Start-Sleep -Milliseconds 500
@@ -224,7 +326,7 @@ try {
     foreach ($имя in $снято) { Запись "  - $имя" }
 
     $условия = [ordered]@{
-        'снято не менее 8 снимков' = ($снято.Count -ge 8)
+        'снято не менее 16 снимков' = ($снято.Count -ge 16)
         'временный профиль удалён' = $профильОчищен
         'sentinel совпал' = ($sentinelДо -eq $sentinelПосле)
         'новых файлов реального профиля нет' = ($дельта.New.Count -eq 0)

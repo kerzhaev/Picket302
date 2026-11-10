@@ -98,6 +98,7 @@ public sealed class MainShellUxFixesTests
         Assert.Contains("Добавить", подписи);
         Assert.Contains("Изменить", подписи);
         Assert.Contains("Удалить", подписи);
+        Assert.Contains("Фильтры…", подписи);
         Assert.Contains("Сохранить вид таблицы", подписи);
         Assert.Contains("Вид таблиц…", подписи);
     }
