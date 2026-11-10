@@ -45,4 +45,10 @@
     <ProjectReference Include="..\..\src\Picket302.Printing\Picket302.Printing.csproj" />
   </ItemGroup>
 
+  <!-- Coverlet/Cecil не может переписать Picket302.App.dll без контекста компиляции:
+       AssemblyResolutionException на System.Windows.Forms (параметры с WinForms-константами)
+       молча исключало всю сборку App из coverage. Восстанавливает инструментирование App. -->
+  <PropertyGroup>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+  </PropertyGroup>
 </Project>
