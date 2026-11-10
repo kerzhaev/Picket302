@@ -59,9 +59,9 @@ S05); историческое значение интегрированного
 
 | Число | Источник | Объяснение |
 |---|---|---|
-| 1370/1370 (Debug и Release) | `stage5-verify/05-builds-tests-coverage.md`, worktree на `b9e2803` (ветка серии до интеграции) | Строгий non-COM набор второй серии **до** интеграции; 14 тестов были добавлены при интеграции stage5-UI |
-| 1384/1384 (Debug и Release) | `stage5/INTEGRATED-FINAL-REPORT.md` (интегрированная ветка → `5af9874`) | Итог интеграции; **сегодня подтверждено живым прогоном Debug 1384/1384** на чистом baseline |
-| 1374/1374 (встречалось в промежуточных заметках) | промежуточное состояние ветки серии | Промежуточное состояние, перекрыто значениями выше; как ожидаемый эталон не используется |
+| 1370/1370 (Debug и Release) | `stage5-verify/05-builds-tests-coverage.md`, worktree на `b9e2803` | Замер этапа 05 серии verify (до доработок серии) |
+| 1374/1374 (Debug и Release) | `stage5-verify/08-final-report.md` (итоговые флаги серии verify, `8aef10d`) | Финал серии verify: +4 теста к 1370, включая коммит `6e86031` (фикс V-01 + тест) |
+| 1384/1384 (Debug и Release) | `stage5/INTEGRATED-FINAL-REPORT.md` (интегрированная ветка → `5af9874`) | Интеграция stage5-UI: +10 тестов к 1374; **сегодня подтверждено живым прогоном Debug 1384/1384** на чистом baseline |
 | Visual 66,7 % | пересчёт второй серии на её исходной ветке | Историческое; после интеграции матрица не пересчитывалась, `OVERALL_70_PERCENT_MEASURED=false` — переизмерение на S04/S10 |
 | Coverage line 64,57 % / branch 52,59 % | `stage5-verify/05` на `b9e2803` | Измерено до интеграции; на 5af9874 переизмерение — этап S05 |
 
@@ -126,8 +126,8 @@ CODE_COVERAGE_MEASURED=true              HIST@b9e2803 (64,57/52,59; переиз
 COM_DIRECT_VERIFIED=true                 HIST@8aef10d
 COM_COLD_VERIFIED=true                   HIST@8aef10d (5/5 + UNC; свежая проверка — S11/S14)
 COM_FULL_ACCEPTANCE_VERIFIED=false       (PrintEnvelope через COM на 5af9874 не запускался — S14)
-VIRTUAL_PRINT_VERIFIED=true              HIST@8aef10d (повтор — S16)
-UI_TO_SPOOLER_VERIFIED=true              HIST@b9e2803 (stage5-verify; повтор — S17)
+VIRTUAL_PRINT_VERIFIED=true              HIST@8aef10d (engine PrintToFile + app-спулер→очередь→PDF; повтор — S16)
+UI_TO_SPOOLER_VERIFIED=false             HIST@b9e2803 доказан только app-уровень (спулер→winspool→очередь→PDF, P302SpoolProbe, 04-print-control); цепочка из UI до спулера не выполнялась (в UI-драйверах spooler 0→0); первичное доказательство — S17
 PHYSICAL_PRINT_VERIFIED=NOT_RUN          (стенд/согласование отсутствуют — S18/S19)
 OS_DPI_125_VERIFIED=NOT_RUN_ON_HOST      (только WM_DPICHANGED-симуляция HIST@8aef10d — S09)
 OS_DPI_150_VERIFIED=NOT_RUN_ON_HOST      (— S10)
@@ -150,6 +150,29 @@ CLEAN_MACHINE_INSTALL_VERIFIED=NOT_RUN   (— S15/S49)
 6. №127 (общая серверная БД, [К]) не реализована → S41 (решение владельца).
 7. Фраза Stage 5-отчёта об ожидающей публикации устарела — уточнена в §1
    этого документа без переписывания истории.
+8. Цепочка UI→спулер не доказана (см. флаг `UI_TO_SPOOLER_VERIFIED=false`):
+   закрытие — первичным доказательством на S17, не «повтором».
+
+### Расхождение внутри ACCEPTANCE.md (базовый дефект, выявлен ревью Q1-3)
+
+Строка сводки ACCEPTANCE.md «Из них с приоритетом [П]/[Д] | 27 PARTIAL +
+4 DEFERRED» не сходится с фактическими строками таблицы: PARTIAL с [П]/[Д]
+= 19 [П] + 6 [Д] = **25** (плюс 1 PARTIAL с [К] — №127 — итого 26 PARTIAL).
+Расхождение +2 в сводке ACCEPTANCE.md не влияет на счётчики S01
+(163/133/26/4 подтверждены по сырым строкам) и исправляется в ACCEPTANCE.md
+при первом содержательном коммите по функциям (S07+), а не молчаливо.
+
+### Соответствие имён флагов RC ↔ INTEGRATED-FINAL-REPORT (ревью Q1-4)
+
+| Имя RC (S01 §6) | Имя в stage5/INTEGRATED-FINAL-REPORT |
+|---|---|
+| COM_DIRECT_VERIFIED | DIRECT_COM_SERVER_VERIFIED |
+| COM_COLD_VERIFIED | COLD_COM_ACTIVATION_VERIFIED |
+| COM_FULL_ACCEPTANCE_VERIFIED | — (COM_VERIFIED=PARTIAL агрегат) |
+| UI_TO_SPOOLER_VERIFIED | UI_PRINT_TO_SPOOLER_VERIFIED |
+| VIRTUAL_PRINT_VERIFIED | VIRTUAL_PRINT_VERIFIED |
+| PHYSICAL_PRINT_VERIFIED | PHYSICAL_PRINT_VERIFIED |
+| CODE_COVERAGE_MEASURED=true HIST@b9e2803 | =false на 5af9874 в отчёте — не противоречие: после интеграции не измерялся; переизмерён живым прогоном на этапе S05 (см. S05-coverage-risk.md) |
 
 ## 8. Вывод этапа
 
