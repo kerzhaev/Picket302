@@ -1,4 +1,4 @@
-# Stage 5 — reference surfaces и независимая визуальная проверка
+# Stage 5 — reference surfaces и независимая визуальная проверка (UI evidence)
 
 Дата: 2026-11-10
 Статус серии: `READY_WITH_LIMITATIONS`
@@ -6,6 +6,11 @@
 Ветка рабочей копии: `main` (изменения этой серии пока незакоммичены)
 `main` и `origin/main` на момент базовой проверки указывали на тот же SHA.
 Коммит/merge/push этой серии: `не выполнялись`.
+
+> Текущий сводный вердикт после объединения двух серий находится в
+> `INTEGRATED-FINAL-REPORT.md`. Этот документ оставлен как подробный UI
+> evidence-пакет; его pre-integration metadata и исторические флаги не
+> заменяют сводный отчёт.
 
 ## 1. Что сделано
 
@@ -109,8 +114,8 @@ non-activating `PrintWindow` список столбцов и четыре ко�
 | `dotnet build Picket302.sln -c Release --no-restore` | 0 ошибок / 0 предупреждений |
 | `dotnet build tools/ui-acceptance/UiAcceptance.csproj -c Release --no-restore` | 0 ошибок / 0 предупреждений |
 | `dotnet test ... --filter "RecipientTableContextMenuTests|MainShellUxFixesTests|DialogAccessibilityContractTests"` | 85/85 targeted в Debug и 85/85 в Release |
-| strict non-COM Debug (`!~Acceptance&!~ComAutomation&!~Printing.PrintEngineTests`) | 1380/1380 |
-| strict non-COM Release (`!~Acceptance&!~ComAutomation&!~Printing.PrintEngineTests`) | 1380/1380 |
+| strict non-COM Debug (`!~Acceptance&!~ComAutomation&!~Printing.PrintEngineTests`) | 1384/1384 |
+| strict non-COM Release (`!~Acceptance&!~ComAutomation&!~Printing.PrintEngineTests`) | 1384/1384 |
 | static non-activating capture guard | PASS |
 | `run-emptybook.ps1` после изменений меню | exit 0, `COUNTS всего=0` |
 | `run-screens.ps1` (после пересборки App и harness) | 16/16, exit 0 |
@@ -180,8 +185,8 @@ BUILD_DEBUG_VERIFIED=true
 BUILD_RELEASE_VERIFIED=true
 HARNESS_BUILD_VERIFIED=true
 UI_HIDDEN_CAPTURE_VERIFIED=true
-STRICT_NONCOM_DEBUG_VERIFIED=true (1380/1380)
-STRICT_NONCOM_RELEASE_VERIFIED=true (1380/1380)
+STRICT_NONCOM_DEBUG_VERIFIED=true (1384/1384)
+STRICT_NONCOM_RELEASE_VERIFIED=true (1384/1384)
 PRINT_MENU_F8_ICONS_VERIFIED=true
 QUICK_FILTER_MENU_VERIFIED=true
 QUICK_FILTER_BUTTON_RUNTIME_VERIFIED=true

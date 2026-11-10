@@ -11,7 +11,7 @@
 | `current-main-1000x700-printwindow.png` | `C4E32C6B6A02F43F0BB37138A612618094C88D1F7E80C12462B6391F7779E0C0` | 43 448 байт |
 | `current-counterparty-card-printwindow.png` | `A942BD1F16CEC40BB3A1A26042BDCAD661EF50725A1D7142F63F7064DBE083B4` | 18 334 байт |
 | `current-mail-card-printwindow.png` | `27C9A2E3BE9ED6D3120611CB62E12B10F96BB29EF135385AB7A304DCB314347E` | 11 167 байт |
-| `current-grid-appearance-printwindow.png` | `45C4A32E77F974BB87E62E9E80F5336287464A558DA652FADD32FC8915737A34` | 10 018 байт |
+| `current-grid-appearance-printwindow.png` | `BB72C4E507F021B32323043E81D36995CF42C1986573CFB7175EDDE5E915E994` | 10 315 байт |
 | `current-table-columns-printwindow.png` | `6C475D428A252B3F171437E6935FF54B9F17F38FAEB686A388953C70FE76B589` | 13 558 байт |
 | `current-table-properties-printwindow.png` | `28B85DB5AD21FF12F9CF9277A92F19344D99695747AB41AB39228CEE2F10C663` | 13 344 байт |
 | `current-blank-editor-printwindow.png` | `28EAA3B73A145CC8FE527C4B5B9035A3A62013E102CF9027A50E4A2A63FDE337` | 24 078 байт |
@@ -70,6 +70,9 @@
 - Отдельный сырой журнал контекстного меню сохранён в
   `screens-happy-evidence-table-menu-2026-11-10.md`; команда `TABLEMENU`
   открыла реальный `ContextMenuStrip`, снимок записан до закрытия меню.
+- Свежий интеграционный прогон после объединения двух серий сохранён в
+  `screens-happy-evidence-integrated-2026-11-10.md`: 16/16 кадров,
+  `graceful=True`, `killed=False`, `TreeOk=True`, production delta `0/0/0`.
 - Первый параллельный прогон был корректно отклонён защитой профиля из-за
   одновременной COM-сессии, дописавшей append-only `com-automation.log`;
   raw-диагностика сохранена в `screens-failure-evidence-concurrent-com-2026-11-10.md`.
