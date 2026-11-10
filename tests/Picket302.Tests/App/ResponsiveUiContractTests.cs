@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Forms;
 using Picket302.App;
+using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
 using Picket302.Domain.Entities;
 using Picket302.Printing.Devices;
@@ -105,6 +106,7 @@ public sealed class ResponsiveUiContractTests
         Assert.DoesNotContain(кнопки, кнопка => кнопка.Text.StartsWith("F7", StringComparison.Ordinal));
         Assert.Contains(кнопки, кнопка => кнопка.Text == "Печать текущего конверта");
         Assert.Contains(кнопки, кнопка => кнопка.Text == "Предпросмотр и печать");
+        Assert.Contains(кнопки, кнопка => кнопка.Text == "Фильтры…");
 
         var печать = кнопки.Single(кнопка => кнопка.Text == "Печать текущего конверта");
         var превью = кнопки.Single(кнопка => кнопка.Text == "Предпросмотр и печать");
@@ -123,6 +125,40 @@ public sealed class ResponsiveUiContractTests
         Assert.Contains("Текущий конверт (F5)", пунктыПечати);
         Assert.Contains("Выделенные с предпросмотром (F6)", пунктыПечати);
         Assert.Contains("Выделенные без предпросмотра (F7)", пунктыПечати);
+        Assert.Contains("Редактор бланков (F8)", пунктыПечати);
+
+        var менюПечати = окно.MainMenuStrip.Items.Cast<ToolStripItem>()
+            .OfType<ToolStripMenuItem>()
+            .Single(пункт => пункт.Text == "Печать");
+
+        foreach (var подпись in new[]
+                 {
+                     "Текущий конверт (F5)",
+                     "Выделенные с предпросмотром (F6)",
+                     "Выделенные без предпросмотра (F7)",
+                     "Редактор бланков (F8)",
+                     "Настройки принтера…",
+                 })
+        {
+            var пункт = менюПечати.DropDownItems
+                .OfType<ToolStripMenuItem>()
+                .Single(элемент => элемент.Text == подпись);
+
+            Assert.NotNull(пункт.Image);
+        }
+
+        var пунктыФильтра = окно.MainMenuStrip.Items.Cast<ToolStripItem>()
+            .OfType<ToolStripMenuItem>()
+            .Single(пункт => пункт.Text == "Вид")
+            .DropDownItems.Cast<ToolStripItem>()
+            .OfType<ToolStripMenuItem>()
+            .Single(пункт => пункт.Text == "Фильтры")
+            .DropDownItems.Cast<ToolStripItem>()
+            .Select(пункт => пункт.Text)
+            .ToList();
+
+        Assert.Contains("Избранные", пунктыФильтра);
+        Assert.Contains("Все категории", пунктыФильтра);
     }
 
     /// <summary>
@@ -151,6 +187,40 @@ public sealed class ResponsiveUiContractTests
                 окно.ClientRectangle.Contains(кнопка.Bounds),
                 $"Кнопка «{кнопка.Text}» выходит за клиентскую область: {кнопка.Bounds}.");
         });
+    }
+
+    /// <summary>
+    /// Диалог Ctrl+F сохраняет реальные поисковые действия и одновременно
+    /// повторяет структуру legacy-поверхности: образец, область, режим
+    /// совпадения, просмотр и параметры регистра/формата.
+    /// </summary>
+    [Fact]
+    public void FormSearch_СтруктураПараметров_СоответствуетLegacyИФункциональна()
+    {
+        using var форма = new FormSearch("гост", совпадений: 3);
+        форма.CreateControl();
+
+        var метки = Обойти(форма).OfType<Label>().Select(метка => метка.Text).ToList();
+        Assert.Contains("Образец:", метки);
+        Assert.Contains("Поиск в:", метки);
+        Assert.Contains("Совпадение:", метки);
+        Assert.Contains("Просмотр:", метки);
+
+        var списки = Обойти(форма).OfType<ComboBox>().ToList();
+        Assert.Equal(3, списки.Count);
+        Assert.Contains(списки, список => список.Items.Cast<object>().Contains("Наименование"));
+        Assert.Contains(списки, список => список.Items.Cast<object>().Contains("С любой части поля"));
+        Assert.Contains(списки, список => список.Items.Cast<object>().Contains("Все"));
+
+        var флаги = Обойти(форма).OfType<CheckBox>().Select(флаг => флаг.Text).ToList();
+        Assert.Contains("С учетом регистра", флаги);
+        Assert.Contains("С учетом формата", флаги);
+        Assert.Equal("гост", форма.Запрос);
+        Assert.Equal(РежимСовпадения.Содержит, форма.Режим);
+        Assert.False(форма.УчитыватьРегистр);
+        Assert.False(форма.УчитыватьФормат);
+        Assert.True(форма.ClientSize.Width >= 500);
+        Assert.True(форма.ClientSize.Height >= 140);
     }
 
     // ------------------------------------------------------------------

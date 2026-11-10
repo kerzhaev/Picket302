@@ -11,6 +11,7 @@ using Picket302.Domain.Email;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Licensing;
 using Picket302.Domain.Services;
+using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure;
 using Picket302.Infrastructure.Export;
 using Picket302.Infrastructure.Integration;
@@ -154,7 +155,17 @@ public sealed class MainShell : Form
     private readonly ToolStripMenuItem _пунктИзбранного = new("Избранное (VIP)");
     private readonly ToolStripMenuItem _пунктОбъединить = new("Объединить в рассылку");
     private readonly ToolStripMenuItem _пунктПереместить = new("Переместить в категорию");
-    private readonly ToolStripMenuItem _пунктПометитьОтправителем = new("Пометить как отправителя");
+    private readonly ToolStripMenuItem _пунктПометитьОтправителем = new("Скопировать в таблицу «От кого»");
+
+    /// <summary>
+    /// Контекстное меню строк адресной книги. Хранится отдельно от меню
+    /// заголовка: команды строки и команды столбца имеют разные области
+    /// применения (ТЗ §8.11, функции 131 и 139).
+    /// </summary>
+    private ContextMenuStrip? _контекстноеМенюАдреснойКниги;
+
+    /// <summary>Контекстное меню заголовка столбца адресной книги.</summary>
+    private ContextMenuStrip? _контекстноеМенюСтолбцовАдреснойКниги;
 
     /// <summary>
     /// Идентификатор таблицы адресной книги в настройках вида таблиц
@@ -191,6 +202,17 @@ public sealed class MainShell : Form
     /// выполняется только для этого имени.
     /// </summary>
     private string? _применённыйФильтрИмя;
+
+    /// <summary>
+    /// Встроенные быстрые фильтры, визуально доступные из меню «Вид →
+    /// Фильтры». Сохранённые пользовательские фильтры остаются ниже и не
+    /// смешиваются с фильтрами по избранному/категории.
+    /// </summary>
+    private readonly ToolStripMenuItem _пунктМенюИзбранного = new("Избранные");
+    private readonly ToolStripMenuItem _пунктМенюВсехКатегорий = new("Все категории");
+    private readonly ToolStripSeparator _разделительБыстрыхФильтров = new();
+    private readonly List<ToolStripMenuItem> _пунктыМенюКатегорий = [];
+    private ToolStripMenuItem? _менюФильтров;
 
     /// <summary>
     /// Пункт меню «Печать» с галкой «Показывать список шаблонов перед
@@ -344,6 +366,95 @@ public sealed class MainShell : Form
         }
 
         return критерии;
+    }
+
+    /// <summary>
+    /// Обновляет быстрый список категорий в меню фильтров. Список строится из
+    /// того же справочника, что и дерево слева от таблицы, поэтому меню не
+    /// содержит выдуманных legacy-значений и не дублирует источник данных.
+    /// </summary>
+    /// <param name="категории">Актуальные узлы дерева категорий.</param>
+    private void ОбновитьМенюФильтров(IEnumerable<Category> категории)
+    {
+        if (_менюФильтров is null)
+        {
+            return;
+        }
+
+        foreach (var пункт in _пунктыМенюКатегорий)
+        {
+            _менюФильтров.DropDownItems.Remove(пункт);
+            пункт.Dispose();
+        }
+
+        _пунктыМенюКатегорий.Clear();
+
+        var индекс = _менюФильтров.DropDownItems.IndexOf(_разделительБыстрыхФильтров);
+
+        foreach (var категория in категории)
+        {
+            var идентификатор = категория.Id;
+            var отступ = категория.ParentId is null ? string.Empty : "  ";
+            var пункт = new ToolStripMenuItem(отступ + категория.Name)
+            {
+                Tag = идентификатор,
+            };
+
+            пункт.Click += (_, _) => ВыбратьФильтрКатегории(идентификатор);
+            _менюФильтров.DropDownItems.Insert(индекс++, пункт);
+            _пунктыМенюКатегорий.Add(пункт);
+        }
+
+        ОбновитьСостояниеМенюФильтров();
+    }
+
+    /// <summary>Синхронизирует отметки быстрых фильтров с SearchSession.</summary>
+    private void ОбновитьСостояниеМенюФильтров()
+    {
+        _пунктМенюИзбранного.Checked = _поиск.ТолькоИзбранное;
+        _пунктМенюВсехКатегорий.Checked = _поиск.Группа is null;
+
+        foreach (var пункт in _пунктыМенюКатегорий)
+        {
+            пункт.Checked = пункт.Tag is long идентификатор
+                && _поиск.Группа == идентификатор;
+        }
+    }
+
+    /// <summary>Выбирает категорию из быстрого меню фильтров.</summary>
+    private void ВыбратьФильтрКатегории(long идентификатор)
+    {
+        _поиск.ЗадатьФильтрГрупп(идентификатор);
+        ОбновитьСостояниеМенюФильтров();
+        _ = ОбновитьПолучателейAsync();
+    }
+
+    /// <summary>Снимает быстрый фильтр категории, сохраняя «Избранные».</summary>
+    private void СброситьФильтрКатегории()
+    {
+        _поиск.ЗадатьФильтрГрупп(null);
+        ОбновитьСостояниеМенюФильтров();
+        _ = ОбновитьПолучателейAsync();
+    }
+
+    /// <summary>
+    /// Открывает тот же быстрый фильтр из полосы действий адресной книги.
+    /// Legacy-интерфейс показывал funnel-кнопку непосредственно над таблицей;
+    /// здесь используется единый dropdown, чтобы действия из меню «Вид» и
+    /// из рабочей области всегда имели одинаковое состояние.
+    /// </summary>
+    /// <param name="якорь">Кнопка, под которой нужно показать меню.</param>
+    private void ПоказатьБыстрыеФильтры(Control якорь)
+    {
+        var меню = _менюФильтров?.DropDown;
+
+        if (меню is null)
+        {
+            return;
+        }
+
+        ОбновитьСостояниеМенюФильтров();
+        меню.Show(якорь, new Point(0, якорь.Height));
     }
 
     /// <summary>
@@ -682,6 +793,13 @@ public sealed class MainShell : Form
 
         // Фильтры и сортировка адресной книги (ТЗ §8.1, функция 9).
         var фильтры = new ToolStripMenuItem("Фильтры");
+        _менюФильтров = фильтры;
+
+        _пунктМенюИзбранного.Click += (_, _) => ПереключитьФильтрИзбранного();
+        _пунктМенюВсехКатегорий.Click += (_, _) => СброситьФильтрКатегории();
+        фильтры.DropDownItems.Add(_пунктМенюИзбранного);
+        фильтры.DropDownItems.Add(_пунктМенюВсехКатегорий);
+        фильтры.DropDownItems.Add(_разделительБыстрыхФильтров);
         фильтры.DropDownItems.Add("Сохранить фильтр…", null, (_, _) => СохранитьФильтр());
         фильтры.DropDownItems.Add("Применить фильтр…", null, (_, _) => ПрименитьФильтр());
         фильтры.DropDownItems.Add("Удалить фильтр…", null, (_, _) => УдалитьФильтр());
@@ -723,11 +841,27 @@ public sealed class MainShell : Form
         сервис.DropDownItems.Add("Регистрация программы…", null, (_, _) => ОткрытьРегистрацию());
 
         var печать = new ToolStripMenuItem("Печать");
-        печать.DropDownItems.Add("Текущий конверт (F5)", null, (_, _) => ПечатьТекущийКонверт());
-        печать.DropDownItems.Add("Выделенные с предпросмотром (F6)", null, (_, _) => ПечатьВыделенные(сПредпросмотром: true));
-        печать.DropDownItems.Add("Выделенные без предпросмотра (F7)", null, (_, _) => ПечатьВыделенные(сПредпросмотром: false));
+        печать.DropDownItems.Add(new ToolStripMenuItem(
+            "Текущий конверт (F5)",
+            EnvelopeUiTheme.СоздатьЗначок("print"),
+            (_, _) => ПечатьТекущийКонверт()));
+        печать.DropDownItems.Add(new ToolStripMenuItem(
+            "Выделенные с предпросмотром (F6)",
+            EnvelopeUiTheme.СоздатьЗначок("preview"),
+            (_, _) => ПечатьВыделенные(сПредпросмотром: true)));
+        печать.DropDownItems.Add(new ToolStripMenuItem(
+            "Выделенные без предпросмотра (F7)",
+            EnvelopeUiTheme.СоздатьЗначок("print"),
+            (_, _) => ПечатьВыделенные(сПредпросмотром: false)));
+        печать.DropDownItems.Add(new ToolStripMenuItem(
+            "Редактор бланков (F8)",
+            EnvelopeUiTheme.СоздатьЗначок("edit"),
+            (_, _) => ОткрытьРедакторБланков()));
         печать.DropDownItems.Add(new ToolStripSeparator());
-        печать.DropDownItems.Add("Настройки принтера…", null, (_, _) => НастройкиПринтера());
+        печать.DropDownItems.Add(new ToolStripMenuItem(
+            "Настройки принтера…",
+            EnvelopeUiTheme.СоздатьЗначок("settings"),
+            (_, _) => НастройкиПринтера()));
         печать.DropDownItems.Add(new ToolStripSeparator());
 
         _пунктСпискаШаблонов = new ToolStripMenuItem("Показывать список шаблонов перед печатью")
@@ -1353,6 +1487,12 @@ public sealed class MainShell : Form
         var удалить = Кнопка("Удалить", "Удалить получателя");
         удалить.Click += (_, _) => УдалитьВыделенные();
 
+        var фильтры = Кнопка(
+            "Фильтры…",
+            "Быстрый отбор по избранному и категориям адресной книги",
+            значок: "filter");
+        фильтры.Click += (_, _) => ПоказатьБыстрыеФильтры(фильтры);
+
         var печать = Кнопка(
             "Печать текущего конверта",
             "Напечатать конверт по редактору и выбранной записи (F5)",
@@ -1384,6 +1524,7 @@ public sealed class MainShell : Form
         кнопки.Controls.Add(добавить);
         кнопки.Controls.Add(изменить);
         кнопки.Controls.Add(удалить);
+        кнопки.Controls.Add(фильтры);
         кнопки.Controls.Add(печать);
         кнопки.Controls.Add(превью);
 
@@ -1408,23 +1549,20 @@ public sealed class MainShell : Form
         // «Группа» заполняет свободную ширину — без серого поля справа
         // (аудит UX 2026-11-03, A2).
         _таблицаПолучателей.Columns[6].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        _таблицаПолучателей.MouseDown += ОбработатьНажатиеЗаголовка;
+        _таблицаПолучателей.CellMouseDown += ОбработатьНажатиеЯчейкиАдреснойКниги;
+        _таблицаПолучателей.CellContextMenuStripNeeded += ОбработатьКонтекстноеМенюАдреснойКниги;
         _таблицаПолучателей.SelectionChanged += (_, _) => ОбновитьВыделенное();
         _таблицаПолучателей.CellDoubleClick += (_, _) => ИзменитьПолучателя();
         _таблицаПолучателей.KeyDown += ОбработатьНаборВТаблице;
         _таблицаПолучателей.KeyPress += ОбработатьНаборВТаблицеПоСимволу;
 
-        var контекстноеМеню = new ContextMenuStrip { Font = EnvelopeUiTheme.ШрифтТекста(8.5f) };
+        var контекстноеМеню = ПостроитьКонтекстноеМенюАдреснойКниги();
+        _контекстноеМенюАдреснойКниги = контекстноеМеню;
         _пунктИзбранного.Checked = false;
         _пунктИзбранного.Click += (_, _) => ПереключитьФильтрИзбранного();
         _пунктОбъединить.Click += (_, _) => ОбъединитьВРассылку();
         _пунктПереместить.Click += (_, _) => ПереместитьВКатегорию();
         _пунктПометитьОтправителем.Click += (_, _) => ПометитьОтправителем();
-
-        контекстноеМеню.Items.Add(_пунктИзбранного);
-        контекстноеМеню.Items.Add(_пунктОбъединить);
-        контекстноеМеню.Items.Add(_пунктПереместить);
-        контекстноеМеню.Items.Add(_пунктПометитьОтправителем);
 
         _таблицаПолучателей.ContextMenuStrip = контекстноеМеню;
 
@@ -2539,6 +2677,7 @@ public sealed class MainShell : Form
         "Удалить" => "delete",
         "Печать текущего конверта" => "print",
         "Предпросмотр и печать" => "preview",
+        "Фильтры…" => "filter",
         "Открыть список в Excel" => "export",
         "Сохранить вид таблицы" or "Вид таблиц…" => "settings",
         _ => "default",
@@ -2660,6 +2799,7 @@ public sealed class MainShell : Form
         }
 
         _деревоКатегорий.ExpandAll();
+        ОбновитьМенюФильтров(категории);
 
         // Подписка однократная (F-E9): загрузка дерева выполняется при каждом
         // обновлении, и повторная подписка накапливала обработчики — выбор
@@ -2684,6 +2824,7 @@ public sealed class MainShell : Form
         }
 
         _поиск.ЗадатьФильтрГрупп(идентификатор);
+        ОбновитьСостояниеМенюФильтров();
         _ = ОбновитьПолучателейAsync();
     }
 
@@ -3004,6 +3145,8 @@ public sealed class MainShell : Form
             _пунктИзбранного.Checked = _поиск.ТолькоИзбранное;
         }
 
+        ОбновитьСостояниеМенюФильтров();
+
         _ = ОбновитьПолучателейAsync();
     }
 
@@ -3014,6 +3157,7 @@ public sealed class MainShell : Form
     {
         _поиск.ЗадатьФильтрИзбранного(!_поиск.ТолькоИзбранное);
         _пунктИзбранного.Checked = _поиск.ТолькоИзбранное;
+        ОбновитьСостояниеМенюФильтров();
         _ = ОбновитьПолучателейAsync();
     }
 
@@ -3306,6 +3450,151 @@ public sealed class MainShell : Form
         }
 
         await ЗагрузитьОтправителейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Создаёт независимую копию первой выбранной записи адресной книги.
+    /// Адреса и логотип копируются в новые объекты, поэтому последующее
+    /// редактирование копии не меняет исходную запись (ТЗ §8.11).
+    /// </summary>
+    private async void СоздатьКопиюСтроки()
+    {
+        if (_состав is null || _выбранныеПолучатели.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var исходная = await _состав.Контрагенты
+                .GetByIdAsync(_выбранныеПолучатели[0])
+                .ConfigureAwait(true);
+
+            if (исходная is null)
+            {
+                return;
+            }
+
+            var копия = КопироватьКонтрагента(исходная);
+            var результат = await _состав.СлужбаКонтрагентов
+                .SaveAsync(копия)
+                .ConfigureAwait(true);
+
+            if (результат.IsFailure)
+            {
+                MessageBox.Show(this, результат.Error!, "Адресная книга", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
+
+            foreach (DataGridViewRow строка in _таблицаПолучателей.Rows)
+            {
+                if (строка.Tag is long идентификатор && идентификатор == копия.Id)
+                {
+                    _таблицаПолучателей.ClearSelection();
+                    строка.Selected = true;
+                    _таблицаПолучателей.CurrentCell = строка.Cells["Получатель"];
+                    break;
+                }
+            }
+        }
+#pragma warning disable CA1031 // Обработчик контекстного меню не должен оставлять необработанное исключение в UI-потоке.
+        catch (Exception ошибка)
+#pragma warning restore CA1031
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось создать копию строки: {ошибка.Message}",
+                "Адресная книга",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>Копирует реквизиты контрагента без идентификатора и аудита.</summary>
+    private static Counterparty КопироватьКонтрагента(Counterparty исходная)
+    {
+        var копия = new Counterparty
+        {
+            Type = исходная.Type,
+            Name = исходная.Name + " (копия)",
+            ShortName = исходная.ShortName,
+            Inn = исходная.Inn,
+            Kpp = исходная.Kpp,
+            Ogrn = исходная.Ogrn,
+            Okfs = исходная.Okfs,
+            Okpo = исходная.Okpo,
+            Okved = исходная.Okved,
+            Bik = исходная.Bik,
+            Ks = исходная.Ks,
+            Rs = исходная.Rs,
+            Rkc = исходная.Rkc,
+            BankName = исходная.BankName,
+            PassportSeries = исходная.PassportSeries,
+            PassportNumber = исходная.PassportNumber,
+            PassportIssuedBy = исходная.PassportIssuedBy,
+            PassportIssuedDate = исходная.PassportIssuedDate,
+            BirthDate = исходная.BirthDate,
+            BirthPlace = исходная.BirthPlace,
+            Position = исходная.Position,
+            DirectorFio = исходная.DirectorFio,
+            Email = исходная.Email,
+            Phone = исходная.Phone,
+            SpecialNotes = исходная.SpecialNotes,
+            Source = исходная.Source,
+            Logo = исходная.Logo?.ToArray(),
+            GroupId = исходная.GroupId,
+            IsVip = исходная.IsVip,
+            IsSender = исходная.IsSender,
+            IsActive = исходная.IsActive,
+            IsDeleted = false,
+        };
+
+        копия.SetAddress(AddressMainType.Legal, КопироватьАдрес(исходная.LegalAddress));
+        копия.SetAddress(AddressMainType.Actual, КопироватьАдрес(исходная.ActualAddress));
+        копия.SetAddress(AddressMainType.Postal, КопироватьАдрес(исходная.PostalAddress));
+        копия.AddressMainType = исходная.AddressMainType;
+        return копия;
+    }
+
+    /// <summary>Создаёт независимую копию структурированного адреса.</summary>
+    private static Address? КопироватьАдрес(Address? адрес)
+    {
+        if (адрес is null)
+        {
+            return null;
+        }
+
+        return Address.Create(адрес.Zip, адрес.Lines.ToArray(), адрес.Raw).Value;
+    }
+
+    /// <summary>Копирует текст текущей ячейки в системный буфер обмена.</summary>
+    private void КопироватьТекущуюЯчейку()
+    {
+        var ячейка = _таблицаПолучателей.CurrentCell;
+        var текст = ячейка?.FormattedValue?.ToString() ?? string.Empty;
+
+        if (ячейка is null || текст.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(текст);
+        }
+#pragma warning disable CA1031 // Clipboard может быть временно занят другим процессом.
+        catch (Exception ошибка)
+#pragma warning restore CA1031
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось скопировать ячейку: {ошибка.Message}",
+                "Буфер обмена",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     /// <summary>
@@ -4022,8 +4311,20 @@ public sealed class MainShell : Form
             return;
         }
 
-        // Сохраняется фактическое состояние столбцов адресной книги:
-        // видимость, подписи и ширина (ТЗ §8.11, функция 131; §7.6).
+        // Legacy-поверхность открывала настоящий редактор столбцов, а не
+        // безликое подтверждение сохранения. Черновик формы изменяет таблицу
+        // только после ОК; Отмена не трогает рабочее состояние.
+        using var форма = new FormTableSettings(_таблицаПолучателей);
+        if (форма.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        форма.Применить();
+
+        // После применения сохраняется фактическое состояние столбцов
+        // адресной книги: видимость, подписи и ширина (ТЗ §8.11, функция 131;
+        // §7.6).
         if (_настройкиВидаТаблиц is not null)
         {
             await _настройкиВидаТаблиц
@@ -4049,30 +4350,187 @@ public sealed class MainShell : Form
         "Вид таблицы «Адресная книга получателей» сохранён: видимость, подписи и ширины столбцов.";
 
     /// <summary>
-    /// Обрабатывает нажатие правой кнопки мыши по заголовку столбца
-    /// адресной книги: показывает контекстное меню столбцов (ТЗ §8.11,
-    /// функция 131: «скрытие колонок»).
+    /// Строит контекстное меню строки адресной книги по образцу legacy
+    /// KonvertProNet. Все пункты подключены к существующим рабочим потокам:
+    /// здесь нет декоративных команд, которые только меняют подпись.
     /// </summary>
-    /// <param name="отправитель">Таблица адресной книги.</param>
-    /// <param name="аргументы">Аргументы нажатия.</param>
-    private void ОбработатьНажатиеЗаголовка(object? отправитель, MouseEventArgs аргументы)
+    /// <returns>Готовое меню строк адресной книги.</returns>
+    private ContextMenuStrip ПостроитьКонтекстноеМенюАдреснойКниги()
     {
-        if (аргументы.Button != MouseButtons.Right)
+        var меню = new ContextMenuStrip
+        {
+            Font = EnvelopeUiTheme.ШрифтТекста(8.5f),
+            AccessibleName = "Контекстное меню адресной книги",
+        };
+
+        меню.Items.Add(ПунктКонтекстногоМеню(
+            "Поиск",
+            "Открыть форму поиска по адресной книге.",
+            НачатьПоиск,
+            Keys.Control | Keys.F,
+            "search"));
+        меню.Items.Add(ПунктКонтекстногоМеню(
+            "История печати конвертов",
+            "Открыть вкладку «Отправленные» с историей созданных отправлений.",
+            ОткрытьИсториюПечати,
+            Keys.Control | Keys.H,
+            "history"));
+        меню.Items.Add(ПунктКонтекстногоМеню(
+            "Группы конвертов",
+            "Открыть вкладку «Рассылки» для работы с группами конвертов.",
+            ОткрытьГруппыКонвертов,
+            Keys.Control | Keys.G,
+            "group"));
+        меню.Items.Add(ПунктКонтекстногоМеню(
+            "Создать копию строки",
+            "Создать новую запись с реквизитами выбранной строки и пометкой «(копия)».",
+            СоздатьКопиюСтроки,
+            icon: "copy"));
+
+        _пунктПометитьОтправителем.AccessibleName = "Скопировать в таблицу «От кого»";
+        _пунктПометитьОтправителем.AccessibleDescription =
+            "Пометить выбранные записи отправителями: они появятся в таблице «От кого».";
+        _пунктПометитьОтправителем.Image = EnvelopeUiTheme.СоздатьЗначок("sender");
+        меню.Items.Add(_пунктПометитьОтправителем);
+
+        меню.Items.Add(ПунктКонтекстногоМеню(
+            "Копировать ячейку",
+            "Скопировать текст текущей ячейки в буфер обмена.",
+            КопироватьТекущуюЯчейку,
+            Keys.Control | Keys.C,
+            "copy"));
+
+        var обмен = new ToolStripMenuItem("Экспорт/импорт таблицы")
+        {
+            AccessibleName = "Экспорт и импорт таблицы",
+            AccessibleDescription = "Обменяться данными адресной книги с файлами и внешними источниками.",
+            Image = EnvelopeUiTheme.СоздатьЗначок("exchange"),
+        };
+        обмен.DropDownItems.Add(ПунктКонтекстногоМеню(
+            "Открыть список в Excel",
+            "Сохранить текущую таблицу в формате XLSX.",
+            ОткрытьСписокВExcel,
+            icon: "export"));
+        обмен.DropDownItems.Add(ПунктКонтекстногоМеню(
+            "Выгрузить данные…",
+            "Открыть мастер выгрузки адресной книги.",
+            ВыгрузитьДанные,
+            icon: "export"));
+        обмен.DropDownItems.Add(new ToolStripSeparator());
+        обмен.DropDownItems.Add(ПунктКонтекстногоМеню(
+            "Мастер импорта адресной книги…",
+            "Открыть мастер импорта записей адресной книги.",
+            ОткрытьМастерИмпорта,
+            icon: "import"));
+        обмен.DropDownItems.Add(ПунктКонтекстногоМеню(
+            "Импорт из 1С…",
+            "Импортировать контрагентов из выгрузки 1С.",
+            ИмпортИз1С,
+            icon: "import"));
+        меню.Items.Add(обмен);
+
+        меню.Items.Add(ПунктКонтекстногоМеню(
+            "Настройка таблицы",
+            "Настроить видимость, подписи и ширины столбцов адресной книги.",
+            НастроитьТаблицу,
+            icon: "settings"));
+
+        меню.Items.Add(new ToolStripSeparator());
+        _пунктИзбранного.AccessibleName = "Избранное (VIP)";
+        _пунктИзбранного.AccessibleDescription = "Показать или скрыть только избранные записи.";
+        _пунктОбъединить.AccessibleName = "Объединить в рассылку";
+        _пунктОбъединить.AccessibleDescription = "Создать рассылку из выбранных получателей.";
+        _пунктПереместить.AccessibleName = "Переместить в категорию";
+        _пунктПереместить.AccessibleDescription = "Переместить выбранные записи в категорию.";
+        меню.Items.Add(_пунктИзбранного);
+        меню.Items.Add(_пунктОбъединить);
+        меню.Items.Add(_пунктПереместить);
+
+        return меню;
+    }
+
+    /// <summary>Создаёт единообразный пункт контекстного меню.</summary>
+    private static ToolStripMenuItem ПунктКонтекстногоМеню(
+        string текст,
+        string описание,
+        Action действие,
+        Keys горячаяКлавиша = Keys.None,
+        string? icon = null)
+    {
+        var пункт = new ToolStripMenuItem(текст)
+        {
+            AccessibleName = текст,
+            AccessibleDescription = описание,
+        };
+
+        if (горячаяКлавиша != Keys.None)
+        {
+            пункт.ShortcutKeys = горячаяКлавиша;
+        }
+
+        if (!string.IsNullOrWhiteSpace(icon))
+        {
+            пункт.Image = EnvelopeUiTheme.СоздатьЗначок(icon);
+        }
+
+        пункт.Click += (_, _) => действие();
+        return пункт;
+    }
+
+    /// <summary>Открывает вкладку с историей напечатанных отправлений.</summary>
+    private void ОткрытьИсториюПечати() => _вкладки.SelectedIndex = 3;
+
+    /// <summary>Открывает вкладку групп/рассылок конвертов.</summary>
+    private void ОткрытьГруппыКонвертов() => _вкладки.SelectedIndex = 2;
+
+    /// <summary>
+    /// Выбирает строку под правой кнопкой мыши, чтобы последующее действие
+    /// контекстного меню было адресовано именно строке под курсором.
+    /// </summary>
+    private void ОбработатьНажатиеЯчейкиАдреснойКниги(
+        object? отправитель,
+        DataGridViewCellMouseEventArgs аргументы)
+    {
+        if (аргументы.Button != MouseButtons.Right || аргументы.RowIndex < 0)
         {
             return;
         }
 
-        var попадание = _таблицаПолучателей.HitTest(аргументы.X, аргументы.Y);
-
-        if (попадание.ColumnIndex < 0)
+        if (аргументы.RowIndex >= _таблицаПолучателей.Rows.Count)
         {
             return;
         }
 
-        _индексСтолбцаПодКурсором = попадание.ColumnIndex;
+        var строка = _таблицаПолучателей.Rows[аргументы.RowIndex];
 
-        var меню = МенюСтолбцовАдреснойКниги();
-        меню.Show(_таблицаПолучателей, аргументы.Location);
+        if (!строка.Selected)
+        {
+            _таблицаПолучателей.ClearSelection();
+            строка.Selected = true;
+        }
+
+        if (аргументы.ColumnIndex >= 0 && аргументы.ColumnIndex < _таблицаПолучателей.ColumnCount)
+        {
+            _таблицаПолучателей.CurrentCell = строка.Cells[аргументы.ColumnIndex];
+        }
+    }
+
+    /// <summary>
+    /// Разделяет контекстное меню строк и контекстное меню заголовка столбца.
+    /// </summary>
+    private void ОбработатьКонтекстноеМенюАдреснойКниги(
+        object? отправитель,
+        DataGridViewCellContextMenuStripNeededEventArgs аргументы)
+    {
+        if (аргументы.RowIndex < 0 && аргументы.ColumnIndex >= 0)
+        {
+            _индексСтолбцаПодКурсором = аргументы.ColumnIndex;
+            _контекстноеМенюСтолбцовАдреснойКниги ??= МенюСтолбцовАдреснойКниги();
+            аргументы.ContextMenuStrip = _контекстноеМенюСтолбцовАдреснойКниги;
+            return;
+        }
+
+        аргументы.ContextMenuStrip = _контекстноеМенюАдреснойКниги;
     }
 
     /// <summary>
@@ -5106,7 +5564,10 @@ public sealed class MainShell : Form
             _текущиеПолучатели,
             получатель => получатель.Наименование,
             форма.Запрос,
-            начало);
+            начало,
+            форма.Режим,
+            форма.УчитыватьРегистр,
+            форма.УчитыватьФормат);
 
         if (индекс < 0)
         {

@@ -408,7 +408,7 @@ public static class EnvelopeUiTheme
     /// Добавляет на кнопку небольшой векторный знак. Текст кнопки сохраняется,
     /// чтобы горячие действия оставались понятными и доступными для UIA.
     /// </summary>
-    /// <param name="вид">Тип действия: add, edit, delete, print, preview, export или settings.</param>
+    /// <param name="вид">Тип действия: add, edit, delete, print, preview, export, filter, settings, search, history, group, copy, sender или exchange.</param>
     /// <returns>Bitmap для свойства <see cref="Button.Image"/>.</returns>
     public static Bitmap СоздатьЗначок(string вид)
     {
@@ -473,6 +473,61 @@ public static class EnvelopeUiTheme
                 graphics.DrawLine(pen, 7, 11, 7, 13);
                 graphics.DrawLine(pen, 1, 7, 3, 7);
                 graphics.DrawLine(pen, 11, 7, 13, 7);
+                break;
+
+            case "filter":
+                graphics.DrawLine(pen, 2, 2, 12, 2);
+                graphics.DrawLine(pen, 2, 2, 6, 7);
+                graphics.DrawLine(pen, 12, 2, 8, 7);
+                graphics.DrawLine(pen, 6, 7, 6, 12);
+                graphics.DrawLine(pen, 8, 7, 8, 12);
+                graphics.DrawLine(pen, 6, 12, 8, 12);
+                break;
+
+            case "search":
+                graphics.DrawEllipse(pen, 2, 2, 7, 7);
+                graphics.DrawLine(pen, 8, 8, 12, 12);
+                break;
+
+            case "history":
+                graphics.DrawEllipse(pen, 2, 2, 10, 10);
+                graphics.DrawLine(pen, 7, 4, 7, 7);
+                graphics.DrawLine(pen, 7, 7, 10, 8);
+                graphics.DrawLine(pen, 2, 5, 1, 3);
+                graphics.DrawLine(pen, 2, 5, 4, 4);
+                break;
+
+            case "group":
+                graphics.DrawRectangle(pen, 1, 3, 5, 8);
+                graphics.DrawRectangle(pen, 8, 3, 5, 8);
+                graphics.DrawLine(pen, 6, 6, 8, 6);
+                graphics.DrawLine(pen, 6, 9, 8, 9);
+                break;
+
+            case "copy":
+                graphics.DrawRectangle(pen, 4, 2, 8, 9);
+                graphics.DrawRectangle(pen, 1, 5, 8, 8);
+                break;
+
+            case "sender":
+                graphics.DrawEllipse(pen, 4, 1, 6, 6);
+                graphics.DrawArc(pen, 2, 7, 10, 7, 180, 180);
+                break;
+
+            case "exchange":
+                graphics.DrawLine(pen, 2, 5, 11, 5);
+                graphics.DrawLine(pen, 8, 2, 11, 5);
+                graphics.DrawLine(pen, 11, 5, 8, 8);
+                graphics.DrawLine(pen, 12, 9, 3, 9);
+                graphics.DrawLine(pen, 6, 6, 3, 9);
+                graphics.DrawLine(pen, 3, 9, 6, 12);
+                break;
+
+            case "import":
+                graphics.DrawRectangle(pen, 2, 2, 10, 10);
+                graphics.DrawLine(pen, 7, 4, 7, 10);
+                graphics.DrawLine(pen, 4, 7, 7, 10);
+                graphics.DrawLine(pen, 7, 10, 10, 7);
                 break;
 
             default:

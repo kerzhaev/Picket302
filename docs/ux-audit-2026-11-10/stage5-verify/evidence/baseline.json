@@ -1,0 +1,102 @@
+﻿{
+    "screens":  [
+                    {
+                        "DeviceName":  "\\\\.\\DISPLAY1",
+                        "Primary":  false,
+                        "Bounds":  "{X=1920,Y=0,Width=1920,Height=1080}"
+                    },
+                    {
+                        "DeviceName":  "\\\\.\\DISPLAY2",
+                        "Primary":  true,
+                        "Bounds":  "{X=0,Y=0,Width=1920,Height=1080}"
+                    }
+                ],
+    "com_hklm_clsid_pepro":  [
+                                 "HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\CLSID\\{083863F1-70DE-11D0-BD40-00A0C911CE86}\\Instance\\{1f26a602-2b5c-4b63-b8e8-9ea5c1a7dc2e}",
+                                 "HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\CLSID\\{1f26a602-2b5c-4b63-b8e8-9ea5c1a7dc2e}"
+                             ],
+    "procmon_on_path":  false,
+    "com_hkcu_clsid":  [
+
+                       ],
+    "reference_exe_exists":  true,
+    "print_jobs_all_queues":  [
+                                  ""
+                              ],
+    "etw_logman":  true,
+    "dpi_scaling_keys":  [
+                             "\r\nHKEY_CURRENT_USER\\Control Panel\\Desktop\\WindowMetrics\r\n    AppliedDPI    REG_DWORD    0x60\r\n\r\n"
+                         ],
+    "profile_files":  [
+                          {
+                              "Path":  "com-automation.log",
+                              "Sha256":  "22E803C009204E974D05E2A280341FF2502B30554DEFFE39BB915E58FE207FC2",
+                              "Size":  541848,
+                              "LastWriteUtc":  "2026-11-10T15:45:21.9608004Z"
+                          },
+                          {
+                              "Path":  "connection.json",
+                              "Sha256":  "399006D91EC787C5F4B6185DF7477EB8ABE8D549640E681A1D2B45162D6972D5",
+                              "Size":  225,
+                              "LastWriteUtc":  "2026-11-08T21:56:04.3626507Z"
+                          },
+                          {
+                              "Path":  "print_audit.log",
+                              "Sha256":  "215769F4A382BE47F7379D57CAAEC78070A25B0D06A35C3EE13BA2B3D8A46658",
+                              "Size":  48074,
+                              "LastWriteUtc":  "2026-11-07T22:53:29.4979076Z"
+                          }
+                      ],
+    "os":  {
+               "Caption":  "Майкрософт Windows 11 Pro",
+               "Build":  "26200",
+               "User":  "Nachfin",
+               "SessionType":  "Console"
+           },
+    "reference_exe_info":  {
+                               "Size":  6281728,
+                               "LastWriteUtc":  "2026-04-19T03:11:52.0000000Z",
+                               "Sha256":  "D74AB1168B8A351E58F40B306559496C42CB87D65F919607AB703E6E99B454F7"
+                           },
+    "video_controllers":  [
+                              "\r\nName                       CurrentHorizontalResolution CurrentVerticalResolution CurrentRefreshRate\r\n----                       --------------------------- ------------------------- ------------------\r\nNVIDIA GeForce RTX 4060 Ti                        1920                      1080                 74\r\n\r\n\r\n"
+                          ],
+    "com_hkcr_pepro_visible":  false,
+    "wpr":  true,
+    "profile_root":  "C:\\Users\\Nachfin\\AppData\\Roaming\\Picket302",
+    "per_monitor_dpi":  [
+                            ""
+                        ],
+    "procmon_exists":  null,
+    "hkcu_logpixels":  null,
+    "processes":  [
+
+                  ],
+    "printers_wmi":  [
+                         "\r\nName                      Default WorkOffline PrinterState PortName           Local\r\n----                      ------- ----------- ------------ --------           -----\r\nPDF-XChange 5.0 for ABBYY    True       False            0 PDF-XChange5-ABBYY  True\r\nOneNote (Desktop)           False       False            0 nul:                True\r\nMicrosoft Print to PDF      False       False            0 PORTPROMPT:         True\r\n\r\n\r\n"
+                     ],
+    "zipcode_ttf_hits":  [
+                             "Z:\\Picket302\\src\\Picket302.Infrastructure\\Fonts\\ZipcodeFontGuard.cs",
+                             "Z:\\Picket302\\src\\Picket302.Printing\\Elements\\IZipcodeFontGuard.cs",
+                             "D:\\KonvertProNet\\ZIPcode.ttf",
+                             "D:\\KonvertProNet\\ZIPcode2.ttf"
+                         ],
+    "eventlog_apps_log":  [
+                              "\r\nTimeCreated         ProviderName                      Id\r\n-----------         ------------                      --\r\n10.11.2026 18:35:23 Windows Error Reporting         1001\r\n10.11.2026 18:33:15 Chrome                           256\r\n10.11.2026 18:32:43 Microsoft-Windows-Security-SPP 16384\r\n\r\n\r\n"
+                          ],
+    "com_hkcu_classes":  [
+
+                         ],
+    "reference_dir":  [
+                          "\r\nName                             Length \r\n----                             ------ \r\nLogotype                                \r\nmysql4122                               \r\nsetting                                 \r\nshablon                                 \r\nSslMail                                 \r\ntemp                                    \r\nerror.log                        1418   \r\nFR_UserManual-ru_v6.pdf          3385317\r\nKonvertProNet.chm                3382319\r\nKonvertProNet.dll                390144 \r\nKonvertProNet.exe                6281728\r\nlibmysql41.dll                   1187840\r\nZIPcode.ttf                      8008   \r\nZIPcode2.ttf                     3468   \r\nКак быстро изучить программу.doc 2370048\r\n\r\n\r\n"
+                      ],
+    "eventlog_com":  [
+                         "\r\n\r\nTimeCreated      : 10.11.2026 18:32:59\r\nId               : 10016\r\nLevelDisplayName : Предупреждение\r\nMessage          : Параметры разрешений для конкретного приложения не дают разрешения Локально Активация для приложения\r\n                    COM-сервера с CLSID \r\n                   {2593F8B9-4EAF-457C-B68A-50F6B8EA6B54}\r\n                    и APPID \r\n                   {15C20B67-12E7-4BB6-92BB-7AFF07997402}\r\n                    пользователю NACHFIN\\Nachfin с ИД безопасности (S-1-5-21-184702844-1922631880-2050010164-1001) и ад\r\n                   ресом LocalHost (с использованием LRPC), выполняемого в контейнере приложения Недоступно с ИД безопа\r\n                   сности (Недоступно). Это разрешение безопасности можно изменить с помощью средства администрирования\r\n                    служб компонентов.\r\n\r\nTimeCreated      : 10.11.2026 18:32:41\r\nId               : 10010\r\nLevelDisplayName : Ошибка\r\nMessage          : Регистрация сервера {F576B2F9-7850-4226-ADB0-E5993FED4F02} DCOM не выполнена за отведенное время ожи\r\n                   дания.\r\n\r\nTimeCreated      : 10.11.2026 18:26:23\r\nId               : 10016\r\nLevelDisplayName : Предупреждение\r\nMessage          : Параметры разрешений для конкретного приложения не дают разрешения Локально Активация для приложения\r\n                    COM-сервера с CLSID \r\n                   {6B3B8D23-FA8D-40B9-8DBD-B950333E2C52}\r\n                    и APPID \r\n                   {4839DDB7-58C2-48F5-8283-E1D1807D0D7D}\r\n                    пользователю NT AUTHORITY\\LOCAL SERVICE с ИД безопасности (S-1-5-19) и адресом LocalHost (с использ\r\n                   ованием LRPC), выполняемого в контейнере приложения Недоступно с ИД безопасности (Недоступно). Это р\r\n                   азрешение безопасности можно изменить с помощью средства администрирования служб компонентов.\r\n\r\nTimeCreated      : 10.11.2026 18:26:23\r\nId               : 10016\r\nLevelDisplayName : Предупреждение\r\nMessage          : Параметры разрешений для конкретного приложения не дают разрешения Локально Активация для приложения\r\n                    COM-сервера с CLSID \r\n                   {6B3B8D23-FA8D-40B9-8DBD-B950333E2C52}\r\n                    и APPID \r\n                   {4839DDB7-58C2-48F5-8283-E1D1807D0D7D}\r\n                    пользователю NT AUTHORITY\\LOCAL SERVICE с ИД безопасности (S-1-5-19) и адресом LocalHost (с использ\r\n                   ованием LRPC), выполняемого в контейнере приложения Недоступно с ИД безопасности (Недоступно). Это р\r\n                   азрешение безопасности можно изменить с помощью средства администрирования служб компонентов.\r\n\r\nTimeCreated      : 09.11.2026 23:50:04\r\nId               : 10016\r\nLevelDisplayName : Предупреждение\r\nMessage          : Параметры разрешений для конкретного приложения не дают разрешения Локально Активация для приложения\r\n                    COM-сервера с CLSID \r\n                   {2593F8B9-4EAF-457C-B68A-50F6B8EA6B54}\r\n                    и APPID \r\n                   {15C20B67-12E7-4BB6-92BB-7AFF07997402}\r\n                    пользователю NACHFIN\\Nachfin с ИД безопасности (S-1-5-21-184702844-1922631880-2050010164-1001) и ад\r\n                   ресом LocalHost (с использованием LRPC), выполняемого в контейнере приложения Недоступно с ИД безопа\r\n                   сности (Недоступно). Это разрешение безопасности можно изменить с помощью средства администрирования\r\n                    служб компонентов.\r\n\r\n\r\n\r\n"
+                     ],
+    "printers":  [
+                     "\r\n\r\nName          : PDF-XChange 5.0 for ABBYY\r\nPrinterStatus : Normal\r\nPortName      : PDF-XChange5-ABBYY\r\nDriverName    : PDF-XChange 5.0 for ABBYY\r\nShared        : False\r\nPublished     : False\r\nDefault       : \r\n\r\nName          : OneNote (Desktop)\r\nPrinterStatus : Normal\r\nPortName      : nul:\r\nDriverName    : Send to Microsoft OneNote 16 Driver\r\nShared        : False\r\nPublished     : False\r\nDefault       : \r\n\r\nName          : Microsoft Print to PDF\r\nPrinterStatus : Normal\r\nPortName      : PORTPROMPT:\r\nDriverName    : Microsoft Print To PDF\r\nShared        : False\r\nPublished     : False\r\nDefault       : \r\n\r\n\r\n\r\n"
+                 ],
+    "dotnet_sdks":  [
+                        "8.0.420 [C:\\Program Files\\dotnet\\sdk]"
+                    ]
+}

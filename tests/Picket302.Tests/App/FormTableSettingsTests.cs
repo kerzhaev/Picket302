@@ -1,0 +1,81 @@
+using System.Windows.Forms;
+using Picket302.App.UI.Forms;
+using Xunit;
+
+namespace Picket302.Tests.App;
+
+/// <summary>
+/// Контракт реального редактора состава и свойств таблицы адресной книги.
+/// </summary>
+[Collection("WinFormsПрофиль")]
+public sealed class FormTableSettingsTests
+{
+    [Fact]
+    public void СписокСтолбцов_ПоказываетСоставТаблицыИПрименяетВидимость()
+    {
+        using var таблица = СоздатьТаблицу();
+        using var форма = new FormTableSettings(таблица);
+
+        Assert.Equal(3, форма.КоличествоСтолбцов);
+        Assert.Equal(new[] { "Индекс", "Получатель", "Город" }, форма.ПодписиСтолбцов);
+
+        var список = Обойти(форма)
+            .OfType<CheckBox>()
+            .Single(флажок => флажок.AccessibleName == "Столбец: Индекс");
+        список.Checked = false;
+        форма.Применить();
+
+        Assert.False(таблица.Columns[0].Visible);
+        Assert.True(таблица.Columns[1].Visible);
+    }
+
+    [Fact]
+    public void СбросКУмолчаниям_ВозвращаетПодписиШириныИВидимость()
+    {
+        using var таблица = СоздатьТаблицу();
+        using var форма = new FormTableSettings(таблица);
+
+        var полеНазвания = Обойти(форма)
+            .OfType<TextBox>()
+            .Single(поле => поле.AccessibleName == "Название выбранного столбца");
+        полеНазвания.Text = "Изменённый индекс";
+        форма.Применить();
+        Assert.Equal("Изменённый индекс", таблица.Columns[0].HeaderText);
+
+        форма.СброситьКУмолчаниям();
+
+        Assert.Equal(new[] { "Индекс", "Получатель", "Город" }, форма.ПодписиСтолбцов);
+        форма.Применить();
+        Assert.True(таблица.Columns[0].Visible);
+        Assert.Equal("Индекс", таблица.Columns[0].HeaderText);
+    }
+
+    private static DataGridView СоздатьТаблицу()
+    {
+        var таблица = new DataGridView
+        {
+            RowHeadersVisible = true,
+            AllowUserToOrderColumns = true,
+            AllowUserToResizeColumns = true,
+        };
+        таблица.Columns.Add("Индекс", "Индекс");
+        таблица.Columns.Add("Получатель", "Получатель");
+        таблица.Columns.Add("Город", "Город");
+        таблица.Columns[0].Width = 70;
+        таблица.Columns[1].Width = 180;
+        таблица.Columns[2].Width = 110;
+        return таблица;
+    }
+
+    private static IEnumerable<Control> Обойти(Control контейнер)
+    {
+        foreach (Control элемент in контейнер.Controls)
+        {
+            yield return элемент;
+            foreach (var вложенный in Обойти(элемент))
+            {
+                yield return вложенный;
+            }
+        }
+    }
+}

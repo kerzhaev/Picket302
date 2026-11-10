@@ -1,0 +1,11 @@
+PROBE pid=58336 x64=True mode=managed utc=2026-11-10T17:01:02.4988441Z
+CoInitializeEx(STA) hr=0x80010106
+CLSIDFromProgID hr=0x00000000 clsid={5715286e-f98f-4c1c-ac86-ab943afae004} match=True
+HKCR CLSID visible in-process: True
+  LocalServer32 default=["C:\Users\Nachfin\AppData\Local\Temp\p302-stage5-com-17b8078ccf0c42518e1e31d1feb5dca2\Picket302.ComAutomation.exe"]
+  ServerExecutable=[C:\Users\Nachfin\AppData\Local\Temp\p302-stage5-com-17b8078ccf0c42518e1e31d1feb5dca2\Picket302.ComAutomation.exe]
+  AppID=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]
+HKCR ProgID visible in-process: True
+  ProgID CLSID value=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]
+ManagedCreate OK in 94ms type=System.__ComObject
+PROBE_DONE
