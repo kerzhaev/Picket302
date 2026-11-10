@@ -514,29 +514,22 @@ static void Выполнить(MainShell окно, string команда, AppSer
             break;
 
         case "FILTERMENU":
-            // Legacy reference содержит открытое меню фильтра. В Picket302
-            // это настоящий вложенный ToolStripDropDown «Вид → Фильтры», а не
-            // отдельная форма; сохраняем его HWND для non-activating capture.
+            // Открыть настоящее вложенное меню «Вид → Фильтры».
             ПоказатьМенюФильтров(окно);
             break;
 
         case "QUICKFILTERMENU":
-            // Тот же набор быстрых фильтров доступен непосредственно над
-            // таблицей получателей. Это runtime-доказательство не только
-            // наличия кнопки, но и того, что она открывает рабочий dropdown.
+            // Открыть тот же набор быстрых фильтров через кнопку над таблицей.
             ПоказатьМенюБыстрыхФильтров(окно);
             break;
 
         case "PRINTMENU":
-            // Прямое сопоставление legacy print_menu.png: захватывается
-            // настоящее выпадающее меню «Печать» вместе с F5/F6/F7.
+            // Открыть настоящее меню «Печать» с командами F5/F6/F7/F8.
             ПоказатьМенюПечати(окно);
             break;
 
         case "TABLEMENU":
-            // Прямое сопоставление legacy table_menu.png: открывается
-            // настоящее контекстное меню строки DataGridView, а не отдельная
-            // форма и не постановочный bitmap.
+            // Открыть настоящее контекстное меню строки DataGridView.
             ПоказатьМенюТаблицы(окно);
             break;
 
@@ -868,6 +861,8 @@ static void ПоказатьДиалог(MainShell окно, AppServices сос�
             "tableproperties" => new Picket302.App.UI.Forms.FormTableSettings(
                 окно.ТаблицаПолучателей,
                 начальнаяВкладка: 1),
+            // Архивация открывается с путём базы из изолированного состава
+            // harness и не затрагивает production-профиль.
             "backup" => new Picket302.App.UI.Forms.FormBackupRestore(состав.ПутьБазы),
             _ => null,
         };
@@ -1116,6 +1111,121 @@ static void ПодготовитьНеактивирующееОкно(Form фо
     var стиль = Платформенно.GetWindowLongPtr(hwnd, Платформенно.РасширенныйСтиль);
     var новыйСтиль = стиль.ToInt64() | Платформенно.СтильНеактивирующегоОкна;
     _ = Платформенно.SetWindowLongPtr(hwnd, Платформенно.РасширенныйСтиль, new IntPtr(новыйСтиль));
+}
+
+/// <summary>
+/// Открывает настоящее выпадающее меню «Печать» для reference-снимка
+/// (поверхность R3: legacy-print-menu.png). Меню держится открытым до
+/// команды HIDE, как и рабочие диалоги снимков. В неактивирующем режиме
+/// окну dropdown задаётся WS_EX_NOACTIVATE, чтобы меню не перехватило
+/// foreground пользователя.
+/// </summary>
+static void ПоказатьМенюПечати(MainShell окно)
+{
+    try
+    {
+        СнимкиЭкранов.ПоследнееМеню?.Close();
+        СнимкиЭкранов.ПоследнееМеню = null;
+
+        var печать = окно.MainMenuStrip?.Items
+            .OfType<ToolStripMenuItem>()
+            .FirstOrDefault(пункт => пункт.Text == "Печать");
+
+        if (печать is null)
+        {
+            Console.Out.WriteLine("FAIL PRINTMENU: корневой пункт «Печать» не найден");
+            Console.Out.Flush();
+            return;
+        }
+
+        печать.ShowDropDown();
+        var меню = печать.DropDown;
+
+        if (меню is null || !меню.Visible)
+        {
+            Console.Out.WriteLine("FAIL PRINTMENU: dropdown не виден");
+            Console.Out.Flush();
+            return;
+        }
+
+        if (НеактивирующийРежим())
+        {
+            var hwndМеню = меню.Handle;
+            var стильМеню = Платформенно.GetWindowLongPtr(hwndМеню, Платформенно.РасширенныйСтиль);
+            _ = Платформенно.SetWindowLongPtr(
+                hwndМеню,
+                Платформенно.РасширенныйСтиль,
+                new IntPtr(стильМеню.ToInt64() | Платформенно.СтильНеактивирующегоОкна));
+        }
+
+        СнимкиЭкранов.ПоследнееМеню = меню;
+        Console.Out.WriteLine($"OK PRINTMENU {меню.Handle}");
+    }
+    catch (Exception ошибка)
+    {
+        Console.Out.WriteLine($"FAIL PRINTMENU: {ошибка.Message}");
+    }
+
+    Console.Out.Flush();
+}
+
+/// <summary>
+/// Открывает настоящее вложенное меню «Вид → Фильтры» для reference-снимка
+/// (поверхность R5: legacy-address-filter-menu.png). Как и «Печать», меню
+/// держится открытым до HIDE и в неактивирующем режиме получает
+/// WS_EX_NOACTIVATE.
+/// </summary>
+static void ПоказатьМенюФильтров(MainShell окно)
+{
+    try
+    {
+        СнимкиЭкранов.ПоследнееМеню?.Close();
+        СнимкиЭкранов.ПоследнееМеню = null;
+
+        var вид = окно.MainMenuStrip?.Items
+            .OfType<ToolStripMenuItem>()
+            .FirstOrDefault(пункт => пункт.Text == "Вид");
+        var фильтры = вид?.DropDownItems
+            .OfType<ToolStripMenuItem>()
+            .FirstOrDefault(пункт => пункт.Text == "Фильтры");
+
+        if (фильтры is null)
+        {
+            Console.Out.WriteLine("FAIL FILTERMENU: пункт «Вид → Фильтры» не найден");
+            Console.Out.Flush();
+            return;
+        }
+
+        вид!.ShowDropDown();
+        фильтры.ShowDropDown();
+        var меню = фильтры.DropDown;
+
+        if (меню is null || !меню.Visible)
+        {
+            Console.Out.WriteLine("FAIL FILTERMENU: dropdown не виден");
+            Console.Out.Flush();
+            return;
+        }
+
+        if (НеактивирующийРежим())
+        {
+            var hwndМеню = меню.Handle;
+            var стильМеню = Платформенно.GetWindowLongPtr(hwndМеню, Платформенно.РасширенныйСтиль);
+            _ = Платформенно.SetWindowLongPtr(
+                hwndМеню,
+                Платформенно.РасширенныйСтиль,
+                new IntPtr(стильМеню.ToInt64() | Платформенно.СтильНеактивирующегоОкна));
+        }
+
+        СнимкиЭкранов.ПоследнееМеню = меню;
+        Console.Out.WriteLine($"OK FILTERMENU {меню.Handle}");
+    }
+    catch (Exception ошибка)
+    {
+        Console.Out.WriteLine($"FAIL FILTERMENU: {ошибка.Message}");
+    }
+
+    Console.Out.Flush();
 }
 
 /// <summary>
@@ -1953,7 +2063,7 @@ static class СнимкиЭкранов
     /// <summary>Последний открытый диалог снимков.</summary>
     public static Form? ПоследнийДиалог { get; set; }
 
-    /// <summary>Последнее открытое меню, удерживаемое до команды HIDE.</summary>
+    /// <summary>Последнее открытое для снимка выпадающее меню (ToolStripDropDown).</summary>
     public static ToolStripDropDown? ПоследнееМеню { get; set; }
 
     /// <summary>
