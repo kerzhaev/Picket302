@@ -127,12 +127,19 @@ COM_DIRECT_VERIFIED=true                 HIST@8aef10d
 COM_COLD_VERIFIED=true                   HIST@8aef10d (5/5 + UNC; свежая проверка — S11/S14)
 COM_FULL_ACCEPTANCE_VERIFIED=false       (PrintEnvelope через COM на 5af9874 не запускался — S14)
 VIRTUAL_PRINT_VERIFIED=true              HIST@8aef10d (engine PrintToFile + app-спулер→очередь→PDF; повтор — S16)
-UI_TO_SPOOLER_VERIFIED=false             HIST@b9e2803 доказан только app-уровень (спулер→winspool→очередь→PDF, P302SpoolProbe, 04-print-control); цепочка из UI до спулера не выполнялась (в UI-драйверах spooler 0→0); первичное доказательство — S17
+UI_TO_SPOOLER_VERIFIED=false             HIST@8aef10d доказан только app-уровень (спулер→winspool→очередь→PDF, P302SpoolProbe, 04-print-control серии verify); цепочка из UI до спулера не выполнялась (в UI-драйверах spooler 0→0); первичное доказательство — S17
 PHYSICAL_PRINT_VERIFIED=NOT_RUN          (стенд/согласование отсутствуют — S18/S19)
 OS_DPI_125_VERIFIED=NOT_RUN_ON_HOST      (только WM_DPICHANGED-симуляция HIST@8aef10d — S09)
 OS_DPI_150_VERIFIED=NOT_RUN_ON_HOST      (— S10)
 PROFILE_SAFETY_VERIFIED=true             HIST@8aef10d
 CLEAN_MACHINE_INSTALL_VERIFIED=NOT_RUN   (— S15/S49)
+```
+
+Обновления реестра по итогам этапов (владельцы строк; по ревью Q4-4):
+
+```text
+REFERENCE_VISUAL_VERIFIED=true           (S04: 8/8 валидных пар оценены; см. S04)
+UI_VISUAL_VERIFIED=true                  (введён S04; владелец значений — S03 harness)
 ```
 
 ## 7. Известные границы baseline (входы в план RC)
@@ -177,6 +184,6 @@ CLEAN_MACHINE_INSTALL_VERIFIED=NOT_RUN   (— S15/S49)
 ## 8. Вывод этапа
 
 Критерий S01 выполнен: счётчики 163/133/26/4 подтверждены на текущем дереве,
-расхождения в числах тестов (1370→1384) и метрик объяснены, каждая из 30
+расхождения в числах тестов (1370→1374→1384) и метрик объяснены, каждая из 30
 незавершённых функций имеет ID, основание с ID допущения, приоритет,
 зависимость, закрывающий этап и целевой способ проверки.
