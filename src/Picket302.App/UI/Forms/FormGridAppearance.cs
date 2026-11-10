@@ -188,7 +188,7 @@ public sealed class FormGridAppearance : Form
         var панель = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 190,
+            Height = 110,
             ColumnCount = 3,
         };
 
@@ -200,13 +200,16 @@ public sealed class FormGridAppearance : Form
         ДобавитьСтроку(панель, 1, "Выделение:", _цветВыделения);
         ДобавитьСтроку(панель, 2, "Подсказка:", _цветПодсказки);
 
-        var меткаКегля = new Label { Text = "Кегль шрифта, pt:", AutoSize = true, Anchor = AnchorStyles.Left };
-        панель.Controls.Add(меткаКегля, 0, 3);
-        панель.Controls.Add(_кегль, 1, 3);
+        // Кегль и высота строки размещаются явными координатами контейнера,
+        // а не неявными строками TableLayoutPanel: неявные строки давали
+        // рассинхрон метки «Высота строки, px:» и её поля по вертикали на
+        // 23 px (дефект V-01 stage5-verify, виден на снимках с 2026-11-03;
+        // регрессия закрыта тестом FormGridAppearanceLayoutTests).
+        var меткаКегля = new Label { Text = "Кегль шрифта, pt:", AutoSize = true, Location = new Point(12, 122) };
+        _кегль.Location = new Point(140, 118);
 
-        var меткаВысоты = new Label { Text = "Высота строки, px:", AutoSize = true, Anchor = AnchorStyles.Left };
-        панель.Controls.Add(меткаВысоты, 0, 4);
-        панель.Controls.Add(_высотаСтроки, 1, 4);
+        var меткаВысоты = new Label { Text = "Высота строки, px:", AutoSize = true, Location = new Point(12, 156) };
+        _высотаСтроки.Location = new Point(140, 152);
 
         _показыватьЗаголовки.Text = "Показывать заголовки столбцов";
         _показыватьЗаголовки.Checked = true;
@@ -227,6 +230,10 @@ public sealed class FormGridAppearance : Form
 
         var контейнер = new Panel { Dock = DockStyle.Fill };
         контейнер.Controls.Add(панель);
+        контейнер.Controls.Add(меткаКегля);
+        контейнер.Controls.Add(_кегль);
+        контейнер.Controls.Add(меткаВысоты);
+        контейнер.Controls.Add(_высотаСтроки);
         контейнер.Controls.Add(_показыватьЗаголовки);
         контейнер.Controls.Add(пояснение);
         пояснение.Width = Math.Max(1, контейнер.ClientSize.Width - пояснение.Left - 12);
