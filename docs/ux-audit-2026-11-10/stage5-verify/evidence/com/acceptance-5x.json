@@ -1,0 +1,85 @@
+{
+  "cycles": [
+    {
+      "cycle": 1,
+      "mode": "create4",
+      "serverPid": 19504,
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "safeCallsOk": true,
+      "gracefulRevoke": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 2,
+      "mode": "managed",
+      "serverPid": 5688,
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "safeCallsOk": true,
+      "gracefulRevoke": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 3,
+      "mode": "create4",
+      "serverPid": 12636,
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "safeCallsOk": true,
+      "gracefulRevoke": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 4,
+      "mode": "managed",
+      "serverPid": 64236,
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "safeCallsOk": true,
+      "gracefulRevoke": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 5,
+      "mode": "create4",
+      "serverPid": 56992,
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "safeCallsOk": true,
+      "gracefulRevoke": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    }
+  ],
+  "allCyclesPass": true,
+  "distinctServerPids": 5,
+  "profileChanges": [
+    "CHANGED: com-automation.log"
+  ],
+  "finishedUtc": "2026-11-10T17:03:07.7436891Z"
+}

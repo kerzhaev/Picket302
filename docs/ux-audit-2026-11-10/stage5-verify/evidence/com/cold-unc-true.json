@@ -1,0 +1,78 @@
+{
+ "run": "unc-true",
+ "startedUtc": "2026-11-10T17:09:43.3582371Z",
+ "finishedUtc": "2026-11-10T17:09:59.7066754Z",
+ "pre": {
+  "registrationPresent": false,
+  "serverProcs": null
+ },
+ "registerExit": 0,
+ "localServer32Default": "\"\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe\"",
+ "serverExecutable": "\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe",
+ "coldMode": "create4",
+ "coldProbeOutput": "PROBE pid=64144 x64=True mode=create4 utc=2026-11-10T17:09:53.5018554Z\r\nCoInitializeEx(STA) hr=0x80010106\r\nCLSIDFromProgID hr=0x00000000 clsid={5715286e-f98f-4c1c-ac86-ab943afae004} match=True\r\nHKCR CLSID visible in-process: True\r\n  LocalServer32 default=[\"\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe\"]\r\n  ServerExecutable=[\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe]\r\n  AppID=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]\r\nHKCR ProgID visible in-process: True\r\n  ProgID CLSID value=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]\r\nCLSCTX_LOCAL_SERVER(0x4): hr=0x00000000 in 133ms\r\nCLSCTX_LOCAL_SERVER(0x4): instance created and released\r\nPROBE_DONE\r\n",
+ "postCreate_serverProcs": 90216,
+ "postCreate_logDelta": "[2026-11-10 20:09:52] Запуск: pid=27700, аргументы=[--register], cwd=Z:\\Picket302, пользователь=Nachfin, exe=\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe, архитектура=X64.\r\n[2026-11-10 20:09:53] Запуск: pid=90216, аргументы=[-Embedding], cwd=C:\\WINDOWS\\system32, пользователь=Nachfin, exe=\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe, архитектура=X64.\r\n[2026-11-10 20:09:53] Helper: поток стартован: managedId=4, состояние=Background, pid=90216.\r\n[2026-11-10 20:09:53] Helper: поток запущен: tid=4, pid=90216.\r\n[2026-11-10 20:09:53] Helper: класс зарегистрирован: tid=4.\r\n[2026-11-10 20:09:53] Helper: hwnd=1313640, tid=4, pid=90216, класс=Picket302ComAutomationHelper создан.\r\n[2026-11-10 20:09:53] Helper: ожидание готовности завершено: состояние=Background, hwnd=1313640, ошибка=нет, pid=90216.\r\n[2026-11-10 20:09:53] Хост: exe=\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe, base=\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\, архитектура=X64, pid=90216.\r\n[2026-11-10 20:09:53] Мьютекс: созданНовый=True, полученОжиданием=False, pid=90216.\r\n[2026-11-10 20:09:53] CoRegisterClassObject: hresult=0x00000000, cookie=16, pid=90216.\r\n[2026-11-10 20:09:53] CoResumeClassObjects: hresult=0x00000000, pid=90216.\r\n[2026-11-10 20:09:53] Событие завершения: имя=Local\\Picket302.ComAutomation.Shutdown.90216, pid=90216.\r\n[2026-11-10 20:09:53] Вход в цикл сообщений: pid=90216.\r\n",
+ "postCreate_dcomEvents": null,
+ "dispatchOutput": "PROBE pid=70264 x64=True mode=dispatch utc=2026-11-10T17:09:56.9139584Z\r\nCoInitializeEx(STA) hr=0x80010106\r\nCLSIDFromProgID hr=0x00000000 clsid={5715286e-f98f-4c1c-ac86-ab943afae004} match=True\r\nHKCR CLSID visible in-process: True\r\n  LocalServer32 default=[\"\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe\"]\r\n  ServerExecutable=[\\\\192.168.1.117\\Projets\\p302-stage5-unc-tmp\\p302-stage5-com-e47ebadd34a2401c9ac4aa0034bda803\\Picket302.ComAutomation.exe]\r\n  AppID=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]\r\nHKCR ProgID visible in-process: True\r\n  ProgID CLSID value=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]\r\nCoCreateInstance LOCAL_SERVER hr=0x00000000 in 3ms\r\nGetAPIVersion hr=[0] out=[0]\r\nGetProductVersion hr=[0] out=[]\r\nDatabaseIsLoaded hr=[0] out=[False]\r\nPROBE_DONE\r\n",
+ "coldCreate17": null,
+ "coldManaged": null,
+ "client32": null,
+ "shutdown": [
+  {
+   "pid": 90216,
+   "result": [
+    true,
+    "GRACEFUL_EXIT_0"
+   ]
+  }
+ ],
+ "cleanup": {
+  "unregisterExit": 0,
+  "progIdGone": true,
+  "clsidGone": true,
+  "appIdGone": true,
+  "serverProcsLeft": null,
+  "tmpRemoved": true
+ },
+ "fpBefore": [
+  {
+   "Name": "com-automation.log",
+   "Size": 566135,
+   "Hash": "5E2C0D8BF9C7802878908794C52E76544A1430F3CD2A2B9646739864A5DE3CAB",
+   "MtimeUtc": "2026-11-10T17:06:11.1711719Z"
+  },
+  {
+   "Name": "connection.json",
+   "Size": 225,
+   "Hash": "399006D91EC787C5F4B6185DF7477EB8ABE8D549640E681A1D2B45162D6972D5",
+   "MtimeUtc": "2026-11-08T21:56:04.3626507Z"
+  },
+  {
+   "Name": "print_audit.log",
+   "Size": 48074,
+   "Hash": "215769F4A382BE47F7379D57CAAEC78070A25B0D06A35C3EE13BA2B3D8A46658",
+   "MtimeUtc": "2026-11-07T22:53:29.4979076Z"
+  }
+ ],
+ "fpAfter": [
+  {
+   "Name": "com-automation.log",
+   "Size": 568538,
+   "Hash": "1845A55BBEF98B5EDF293EAC60E784573677C21FFB62798A484D822B613EDBA7",
+   "MtimeUtc": "2026-11-10T17:09:57.4482952Z"
+  },
+  {
+   "Name": "connection.json",
+   "Size": 225,
+   "Hash": "399006D91EC787C5F4B6185DF7477EB8ABE8D549640E681A1D2B45162D6972D5",
+   "MtimeUtc": "2026-11-08T21:56:04.3626507Z"
+  },
+  {
+   "Name": "print_audit.log",
+   "Size": 48074,
+   "Hash": "215769F4A382BE47F7379D57CAAEC78070A25B0D06A35C3EE13BA2B3D8A46658",
+   "MtimeUtc": "2026-11-07T22:53:29.4979076Z"
+  }
+ ]
+}
