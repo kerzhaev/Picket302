@@ -902,53 +902,6 @@ static void ПоказатьДиалог(MainShell окно, AppServices сос�
 }
 
 /// <summary>
-/// Открывает реальное вложенное меню «Вид → Фильтры» для reference-снимка.
-/// Меню удерживается открытым до команды HIDE, как и рабочие формы.
-/// </summary>
-static void ПоказатьМенюФильтров(MainShell окно)
-{
-    try
-    {
-        СнимкиЭкранов.ПоследнееМеню?.Close();
-        СнимкиЭкранов.ПоследнееМеню = null;
-
-        var вид = окно.MainMenuStrip?.Items
-            .OfType<ToolStripMenuItem>()
-            .FirstOrDefault(пункт => пункт.Text == "Вид");
-        var фильтры = вид?.DropDownItems
-            .OfType<ToolStripMenuItem>()
-            .FirstOrDefault(пункт => пункт.Text == "Фильтры");
-
-        if (фильтры is null)
-        {
-            Console.Out.WriteLine("FAIL FILTERMENU: пункт «Вид → Фильтры» не найден");
-            Console.Out.Flush();
-            return;
-        }
-
-        вид!.ShowDropDown();
-        фильтры.ShowDropDown();
-        var меню = фильтры.DropDown;
-
-        if (меню is null || !меню.Visible)
-        {
-            Console.Out.WriteLine("FAIL FILTERMENU: dropdown не виден");
-            Console.Out.Flush();
-            return;
-        }
-
-        СнимкиЭкранов.ПоследнееМеню = меню;
-        Console.Out.WriteLine($"OK FILTERMENU {меню.Handle}");
-    }
-    catch (Exception ошибка)
-    {
-        Console.Out.WriteLine($"FAIL FILTERMENU: {ошибка.Message}");
-    }
-
-    Console.Out.Flush();
-}
-
-/// <summary>
 /// Открывает меню быстрых фильтров с кнопки над таблицей получателей.
 /// Кнопка использует тот же ToolStripDropDown, что и «Вид → Фильтры».
 /// </summary>
@@ -988,46 +941,6 @@ static void ПоказатьМенюБыстрыхФильтров(MainShell о�
     catch (Exception ошибка)
     {
         Console.Out.WriteLine($"FAIL QUICKFILTERMENU: {ошибка.Message}");
-    }
-
-    Console.Out.Flush();
-}
-
-/// <summary>Открывает реальное меню «Печать» для reference-снимка.</summary>
-static void ПоказатьМенюПечати(MainShell окно)
-{
-    try
-    {
-        СнимкиЭкранов.ПоследнееМеню?.Close();
-        СнимкиЭкранов.ПоследнееМеню = null;
-
-        var печать = окно.MainMenuStrip?.Items
-            .OfType<ToolStripMenuItem>()
-            .FirstOrDefault(пункт => пункт.Text == "Печать");
-
-        if (печать is null)
-        {
-            Console.Out.WriteLine("FAIL PRINTMENU: пункт «Печать» не найден");
-            Console.Out.Flush();
-            return;
-        }
-
-        печать.ShowDropDown();
-        var меню = печать.DropDown;
-
-        if (меню is null || !меню.Visible)
-        {
-            Console.Out.WriteLine("FAIL PRINTMENU: dropdown не виден");
-            Console.Out.Flush();
-            return;
-        }
-
-        СнимкиЭкранов.ПоследнееМеню = меню;
-        Console.Out.WriteLine($"OK PRINTMENU {меню.Handle}");
-    }
-    catch (Exception ошибка)
-    {
-        Console.Out.WriteLine($"FAIL PRINTMENU: {ошибка.Message}");
     }
 
     Console.Out.Flush();
