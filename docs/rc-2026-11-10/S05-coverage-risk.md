@@ -60,7 +60,7 @@ SHA-256 `85df2a642e6e6f83…`, путь
 | Picket302.Domain | 73,20 % | 64,41 % |
 | Picket302.Infrastructure | 74,00 % | 60,70 % |
 | Picket302.Printing | 76,92 % | 63,96 % |
-| **TOTAL** | **64,78 %** (33 452/51 644) | **52,51 %** (7 581/14 436) |
+| **TOTAL** | **64,77 %** (33 452/51 644) | **52,51 %** (7 581/14 436) |
 
 Сопоставление с серией stage5-verify (b9e2803: 64,57/52,59) — в пределах
 интеграционной дельты; App 52,02 против 50,34 тогда. Числа посчитаны
@@ -93,7 +93,7 @@ COM/printing/integration-наборы на этом этапе не затрон
 | `App.UI.Forms.FormIntegrationSettings(+Page)` | 360 | страница интеграций | S35/S48 |
 | `App.UI.Forms.FormLegacyUpgradeWizard` | 130 | миграция legacy | S49 |
 | `App.UI.Forms.FormFirstRun` | 113 | первый запуск | S48/S49 |
-| `App.MainShell` async-машины печати (ДополнитьПечатьAsync/ПечатьВыделенные/ПечатьТекущийКонверт/ПоказатьДиалогПечати) | 97+70+55+54 | операторский путь печати вне unit-набора | S16–S17 живой конвейер |
+| `App.MainShell` async-машины печати (ВыполнитьПечатьAsync/ПечатьВыделенные/ПечатьТекущийКонверт/ПоказатьДиалогПечатиAsync) | 97+70+55+54 | операторский путь печати вне unit-набора | S16–S17 живой конвейер |
 | `App.UI.Forms.FormDbServiceDoctor` | 91 | диагностика БД | S35 (№136) |
 | `Infrastructure.Licensing.AssemblyIntegrityChecker` / `VmDetector` | 82/72 | целостность/детекция ВМ | S46/S47 |
 | `Application.Queries.CounterpartyFilterQuery` | 144 | фильтр-запрос: 0 строк при покрытом репозитории — рассогласование, проверить на S07 | S07 |
@@ -116,10 +116,13 @@ COM-холод на текущем SHA (S11–S14), полный COM acceptance 
 (S14), физическая печать (S18/S19, BLOCKED_EXTERNAL без стенда), реальные
 Windows DPI 125/150 (S09/S10, NOT_RUN_ON_HOST), чистая машина/установка
 (S15/S49), общая БД (S41+), скачивание обновлений (S47), probili.ru
-(S48, решение владельца), **SMTP SSL/proxy/envelope end-to-end (№94/95/96/99;
-классы частично покрыты юнитами — SmtpClientFacade ≈40 %, SmtpSession ≈76 %,
-но ни один режим никогда не гонялся на живом сервере; S36–S38, локальные
-стенды)**.
+(S48, решение владельца), **SMTP SSL/proxy/envelope (№94/95/96/99;
+уточнение по ревью Q5-F3: in-process петля `SslMode.None` + HTTP CONNECT +
+envelope уже покрыта `Infrastructure/SmtpFakeServerTests.cs` (5 фактов,
+loopback-фейк); вне покрытия остаются `StartTls`/`ImplicitTls` (в тестах
+StartTls встречен один раз без рукопожатия), реальный приёмник,
+авторизация/timeout прокси; SmtpClientFacade ≈40 %, SmtpSession ≈76 %;
+S36–S38, локальные стенды — стартовать от SmtpFakeServerTests, не с нуля)**.
 
 ### Рекомендации ревью Q5, принятые в регламент S06+
 
@@ -133,7 +136,7 @@ Windows DPI 125/150 (S09/S10, NOT_RUN_ON_HOST), чистая машина/уст
 ## Флаги этапа
 
 ```text
-CODE_COVERAGE_MEASURED=true   (64,78 line / 52,51 branch, Debug non-COM,
+CODE_COVERAGE_MEASURED=true   (64,77 line / 52,51 branch, Debug non-COM,
                                все 6 сборок, после фикса S05-1)
 SOURCE_VERIFIED=true; BUILD_DEBUG/RELEASE_VERIFIED=true (0/0);
 TEST_DEBUG/RELEASE_VERIFIED=true (1384/1384 оба)
