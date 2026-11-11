@@ -140,6 +140,7 @@ CLEAN_MACHINE_INSTALL_VERIFIED=NOT_RUN   (— S15/S49)
 ```text
 REFERENCE_VISUAL_VERIFIED=true           (S04: 8/8 валидных пар оценены; см. S04)
 UI_VISUAL_VERIFIED=true                  (введён S04; владелец значений — S03 harness)
+OVERALL_70_PERCENT_MEASURED=PARTIAL      (S04: 69,9 % на R1–R8, ΣW=16, <70; владелец — S04)
 ```
 
 ## 7. Известные границы baseline (входы в план RC)
