@@ -84,7 +84,8 @@
 | strict Release + trx | **1392/0/0** |
 | strict ×2 + trx (раунд 2, 4b42705) | **1398/0/0** |
 | strict ×2 + trx2 (раунд 3, 9c6cf72) | **1399/0/0** (+тест reload-сброса) |
-| strict ×2 + trx3 (раунды 4+, фикс-фиксы) | **1399/0/0** |
+| strict ×2 + trx3 (раунд 4) | **1399/0/0** |
+| strict ×2 + trx4 (раунд 5, ccc0f36) | **1399/0/0** |
 | coverage-guard | PASS 6/6 |
 | coverage | прогон runtime-s07 (первичный этап): TOTAL 33636/51865 = 64,85 % line, App 52,47 %; прогон runtime-s07b (фикс-коммит, SHA cobertura ea8b3206…): TOTAL 33737/52038 = 64,83 % line |
 
