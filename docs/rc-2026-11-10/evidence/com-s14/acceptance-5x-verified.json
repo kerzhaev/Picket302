@@ -1,0 +1,83 @@
+{
+  "cycles": [
+    {
+      "cycle": 1,
+      "mode": "create4",
+      "serverPid": "45380",
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "gracefulRevoke": true,
+      "safeCallsOk": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 2,
+      "mode": "managed",
+      "serverPid": "13552",
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "gracefulRevoke": true,
+      "safeCallsOk": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 3,
+      "mode": "create4",
+      "serverPid": "25196",
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "gracefulRevoke": true,
+      "safeCallsOk": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 4,
+      "mode": "managed",
+      "serverPid": "22176",
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "gracefulRevoke": true,
+      "safeCallsOk": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    },
+    {
+      "cycle": 5,
+      "mode": "create4",
+      "serverPid": "3056",
+      "coldCreateOk": true,
+      "freshEmbedding": true,
+      "coRegisterSOk": true,
+      "gracefulRevoke": true,
+      "safeCallsOk": true,
+      "gracefulExit": true,
+      "keysRemoved": true,
+      "noProcsLeft": true,
+      "tmpRemoved": true,
+      "allPass": true
+    }
+  ],
+  "allCyclesPass": true,
+  "distinctServerPids": 5,
+  "verificationMethod": "ASCII-only log markers (encoding-independent); Cyrillic mojibake in com-automation.log noted as D-S14-logenc",
+  "profileChanges": "CHANGED: com-automation.log (append-only, expected)"
+}

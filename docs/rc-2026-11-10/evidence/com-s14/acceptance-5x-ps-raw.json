@@ -1,0 +1,85 @@
+﻿{
+    "cycles":  [
+                   {
+                       "cycle":  1,
+                       "mode":  "create4",
+                       "serverPid":  45380,
+                       "coldCreateOk":  true,
+                       "freshEmbedding":  false,
+                       "coRegisterSOk":  true,
+                       "safeCallsOk":  true,
+                       "gracefulRevoke":  false,
+                       "gracefulExit":  true,
+                       "keysRemoved":  true,
+                       "noProcsLeft":  true,
+                       "tmpRemoved":  true,
+                       "allPass":  false
+                   },
+                   {
+                       "cycle":  2,
+                       "mode":  "managed",
+                       "serverPid":  13552,
+                       "coldCreateOk":  true,
+                       "freshEmbedding":  false,
+                       "coRegisterSOk":  true,
+                       "safeCallsOk":  true,
+                       "gracefulRevoke":  false,
+                       "gracefulExit":  true,
+                       "keysRemoved":  true,
+                       "noProcsLeft":  true,
+                       "tmpRemoved":  true,
+                       "allPass":  false
+                   },
+                   {
+                       "cycle":  3,
+                       "mode":  "create4",
+                       "serverPid":  25196,
+                       "coldCreateOk":  true,
+                       "freshEmbedding":  false,
+                       "coRegisterSOk":  true,
+                       "safeCallsOk":  true,
+                       "gracefulRevoke":  false,
+                       "gracefulExit":  true,
+                       "keysRemoved":  true,
+                       "noProcsLeft":  true,
+                       "tmpRemoved":  true,
+                       "allPass":  false
+                   },
+                   {
+                       "cycle":  4,
+                       "mode":  "managed",
+                       "serverPid":  22176,
+                       "coldCreateOk":  true,
+                       "freshEmbedding":  false,
+                       "coRegisterSOk":  true,
+                       "safeCallsOk":  true,
+                       "gracefulRevoke":  false,
+                       "gracefulExit":  true,
+                       "keysRemoved":  true,
+                       "noProcsLeft":  true,
+                       "tmpRemoved":  true,
+                       "allPass":  false
+                   },
+                   {
+                       "cycle":  5,
+                       "mode":  "create4",
+                       "serverPid":  3056,
+                       "coldCreateOk":  true,
+                       "freshEmbedding":  false,
+                       "coRegisterSOk":  true,
+                       "safeCallsOk":  true,
+                       "gracefulRevoke":  false,
+                       "gracefulExit":  true,
+                       "keysRemoved":  true,
+                       "noProcsLeft":  true,
+                       "tmpRemoved":  true,
+                       "allPass":  false
+                   }
+               ],
+    "allCyclesPass":  false,
+    "distinctServerPids":  5,
+    "profileChanges":  [
+                           "CHANGED: com-automation.log"
+                       ],
+    "finishedUtc":  "2026-11-11T22:28:39.3110622Z"
+}
