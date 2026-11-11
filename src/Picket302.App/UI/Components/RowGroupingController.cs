@@ -25,6 +25,7 @@ public sealed class RowGroupingController : IDisposable
     private string? _колонка;
     private readonly HashSet<string> _свёрнутыеКлючи = new();
     private bool _перестройка;
+    private List<long>? _исходныйПорядокИдентификаторов;
 
     /// <summary>Имя колонки группировки; <see langword="null"/> — без группировки.</summary>
     public string? КолонкаГруппировки => _колонка;
@@ -50,6 +51,53 @@ public sealed class RowGroupingController : IDisposable
 
         _таблица = таблица;
         таблица.CellClick += ОбработатьКликПоСтроке;
+        таблица.RowPostPaint += НарисоватьЗаголовокГруппы;
+    }
+
+    /// <summary>
+    /// Списочный индекс записи по строке таблицы: соответствие устанавливается
+    /// через тег-идентификатор, а не позицию строки — корректно при активной
+    /// группировке (заголовки групп и блочный перепорядок не смещают индексы
+    /// поиска; ревью S07 F1).
+    /// </summary>
+    /// <param name="строка">Строка таблицы (может быть строкой-заголовком).</param>
+    /// <param name="идентификаторы">Идентификаторы записей в порядке списка поиска.</param>
+    /// <returns>Индекс в списке либо −1.</returns>
+    public static int СписочныйИндекс(DataGridViewRow? строка, IReadOnlyList<long> идентификаторы)
+    {
+        if (строка?.Tag is not long идентификатор)
+        {
+            return -1;
+        }
+
+        var позиция = 0;
+        foreach (var кандидат in идентификаторы)
+        {
+            if (кандидат == идентификатор)
+            {
+                return позиция;
+            }
+
+            позиция++;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Строка таблицы по идентификатору записи (тег строки) — ревью S07 F1.
+    /// </summary>
+    public static DataGridViewRow? СтрокаПоИдентификатору(DataGridView таблица, long идентификатор)
+    {
+        foreach (DataGridViewRow строка in таблица.Rows)
+        {
+            if (строка.Tag is long тег && тег == идентификатор)
+            {
+                return строка;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -62,6 +110,14 @@ public sealed class RowGroupingController : IDisposable
         _колонка = колонка;
         _свёрнутыеКлючи.Clear();
         Перестроить();
+
+        // Снятие группировки возвращает и физический порядок строк:
+        // блочный перепорядок отменяется по снимку идентификаторов,
+        // сделанному до первой группировки (ревью S07 F5).
+        if (колонка is null)
+        {
+            ВосстановитьИсходныйПорядок();
+        }
     }
 
     /// <summary>
@@ -113,6 +169,11 @@ public sealed class RowGroupingController : IDisposable
                 .Cast<DataGridViewRow>()
                 .Where(строка => строка.Tag is not ЗаголовокГруппы && !строка.IsNewRow)
                 .OrderBy(строка => строка.Index)
+                .ToList();
+
+            _исходныйПорядокИдентификаторов ??= данныеСтроки
+                .Where(строка => строка.Tag is long)
+                .Select(строка => (long)строка.Tag!)
                 .ToList();
 
             // Строки одной группы выстраиваются в непрерывный блок (порядок
@@ -272,12 +333,153 @@ public sealed class RowGroupingController : IDisposable
         строка.Cells[0].Value = Надпись(заголовок.Ключ, число, свёрнута);
     }
 
+    /// <summary>
+    /// Разворачивает группу, если строка скрыта свёрнутой группой —
+    /// используется навигацией поиска перед показом записи (ревью S07 F1).
+    /// </summary>
+    public void РазвернутьПриНеобходимости(DataGridViewRow строка)
+    {
+        if (_таблица is null || _колонка is null || строка.Visible)
+        {
+            return;
+        }
+
+        var колонка = _таблица.Columns[_колонка];
+        if (колонка is null)
+        {
+            return;
+        }
+
+        var ключ = КлючГруппы(строка, колонка.Index);
+        if (!_свёрнутыеКлючи.Remove(ключ))
+        {
+            return;
+        }
+
+        foreach (DataGridViewRow данных in _таблица.Rows)
+        {
+            if (данных.Tag is not ЗаголовокГруппы && КлючГруппы(данных, колонка.Index) == ключ)
+            {
+                данных.Visible = true;
+            }
+        }
+
+        ОбновитьНадписьЗаголовка(ключ, свёрнута: false);
+    }
+
+    private void ОбновитьНадписьЗаголовка(string ключ, bool свёрнута)
+    {
+        if (_таблица is null || _колонка is null)
+        {
+            return;
+        }
+
+        var колонка = _таблица.Columns[_колонка];
+        if (колонка is null)
+        {
+            return;
+        }
+
+        var число = _таблица.Rows
+            .Cast<DataGridViewRow>()
+            .Count(р => р.Tag is not ЗаголовокГруппы && КлючГруппы(р, колонка.Index) == ключ);
+
+        var заголовок = _таблица.Rows
+            .Cast<DataGridViewRow>()
+            .FirstOrDefault(р => р.Tag is ЗаголовокГруппы з && з.Ключ == ключ);
+
+        if (заголовок is not null)
+        {
+            заголовок.Cells[0].Value = Надпись(ключ, число, свёрнута);
+        }
+    }
+
+    private void ВосстановитьИсходныйПорядок()
+    {
+        if (_таблица is null || _исходныйПорядокИдентификаторов is null)
+        {
+            return;
+        }
+
+        var данныеСтроки = _таблица.Rows
+            .Cast<DataGridViewRow>()
+            .Where(строка => строка.Tag is not ЗаголовокГруппы && !строка.IsNewRow)
+            .ToList();
+
+        if (данныеСтроки.Count == 0)
+        {
+            _исходныйПорядокИдентификаторов = null;
+            return;
+        }
+
+        var упорядоченныеСтроки = данныеСтроки
+            .Where(строка => строка.Tag is long)
+            .OrderBy(строка => _исходныйПорядокИдентификаторов.IndexOf((long)строка.Tag!))
+            .ToList();
+
+        foreach (var строка in упорядоченныеСтроки)
+        {
+            _таблица.Rows.Remove(строка);
+        }
+
+        foreach (var строка in упорядоченныеСтроки)
+        {
+            _таблица.Rows.Add(строка);
+        }
+
+        _исходныйПорядокИдентификаторов = null;
+    }
+
+    /// <summary>
+    /// Прорисовка заголовка группы на всю ширину строки: значение в первой
+    /// ячейке остаётся машинным (тесты/harness), но визуально обрезается
+    /// узкой колонкой VIP — текст рисуется поверх строки (ревью S07 F3).
+    /// </summary>
+    private void НарисоватьЗаголовокГруппы(object? отправитель, DataGridViewRowPostPaintEventArgs аргументы)
+    {
+        if (_таблица is null || аргументы.RowIndex < 0
+            || аргументы.RowIndex >= _таблица.Rows.Count)
+        {
+            return;
+        }
+
+        if (_таблица.Rows[аргументы.RowIndex].Tag is not ЗаголовокГруппы)
+        {
+            return;
+        }
+
+        var текст = _таблица.Rows[аргументы.RowIndex].Cells[0].Value?.ToString();
+        if (string.IsNullOrEmpty(текст))
+        {
+            return;
+        }
+
+        var левыйКрай = _таблица.RowHeadersVisible ? _таблица.RowHeadersWidth : 0;
+        var ширина = _таблица.Columns
+            .GetColumnsWidth(DataGridViewElementStates.Visible);
+        var область = new System.Drawing.Rectangle(
+            левыйКрай + 1,
+            аргументы.RowBounds.Top,
+            Math.Max(1, ширина - 2),
+            аргументы.RowBounds.Height - 2);
+
+        using var кистьФона = new System.Drawing.SolidBrush(System.Drawing.SystemColors.ControlLight);
+        аргументы.Graphics.FillRectangle(кистьФона, область);
+        TextRenderer.DrawText(
+            аргументы.Graphics,
+            текст,
+            new System.Drawing.Font(_таблица.Font, System.Drawing.FontStyle.Bold),
+            new System.Drawing.Point(область.Left + 4, область.Top + 1),
+            System.Drawing.SystemColors.WindowText);
+    }
+
     /// <summary>Отключает контроллер от таблицы.</summary>
     public void Dispose()
     {
         if (_таблица is not null)
         {
             _таблица.CellClick -= ОбработатьКликПоСтроке;
+            _таблица.RowPostPaint -= НарисоватьЗаголовокГруппы;
             _таблица = null;
         }
     }
