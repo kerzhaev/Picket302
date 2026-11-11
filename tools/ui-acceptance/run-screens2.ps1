@@ -737,9 +737,18 @@ try {
 
     if ($результатS8) {
         Start-Sleep -Milliseconds 800
-        Захват $h.Hwnd (Join-Path $out '48-blank-editor.png') | Out-Null
-        $размер8 = (Get-Item (Join-Path $out '48-blank-editor.png') -ErrorAction SilentlyContinue).Length
-        Запись "скриншот S8: 48-blank-editor.png ($размер8 байт)"
+        # S03-ревью Q3-2: раньше снималось $h.Hwnd (главное окно), из-за чего
+        # 48-blank-editor.png был байт-идентичен 47-grid-appearance-reset.png.
+        # Кадр должен показывать сам диалог редактора бланка.
+        $окноРедактора = Wait-ОкноСЗаголовком $pid_ 'Редактор бланков' 5
+        if ($окноРедактора -eq [IntPtr]::Zero) {
+            Запись 'FAIL: окно редактора бланков не найдено для снимка'
+            $этапы['S8 редактор-бланка'] = $false
+        } else {
+            Захват $окноРедактора (Join-Path $out '48-blank-editor.png') | Out-Null
+            $размер8 = (Get-Item (Join-Path $out '48-blank-editor.png') -ErrorAction SilentlyContinue).Length
+            Запись "скриншот S8: 48-blank-editor.png ($размер8 байт)"
+        }
         Команда 'HIDE' '^OK HIDE' | Out-Null
         $жив8 = [AccWin]::Responsive($h.Hwnd, 5000)
         Запись "UI отвечает после редактора бланка: $жив8"

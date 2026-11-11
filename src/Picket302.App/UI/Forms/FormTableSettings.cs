@@ -95,7 +95,10 @@ public sealed class FormTableSettings : Form
         _исходноеИзменениеШирины = таблица.AllowUserToResizeColumns;
         _исходнаяЗебра = !таблица.AlternatingRowsDefaultCellStyle.BackColor.IsEmpty;
 
-        Text = "Список доступных столбцов";
+        // Легаси-референс «Настройки свойств таблиц» (ревью S04 Q4-3):
+        // прежний заголовок «Список доступных столбцов» описывал только
+        // первую вкладку и расходился с референсом KonvertProNet.
+        Text = "Настройки свойств таблиц";
         AccessibleName = "Настройка таблицы адресной книги";
         AccessibleDescription = "Настройка состава, названий, ширины и свойств таблицы получателей.";
         Font = new Font("Segoe UI", 8f);
@@ -209,9 +212,12 @@ public sealed class FormTableSettings : Form
         };
         кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28));
-        кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-        кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
-        кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
+        // D-S06-1 (ревью S04 Q4-2): фиксированные 96 px обрезали метку
+        // «По умолчанию» до «По» (кадр 07b, S03). Ширина вычисляется по
+        // фактическому тексту с запасом на хром кнопки и ячейки.
+        кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ШиринаКнопки("По умолчанию")));
+        кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ШиринаКнопки("ОК")));
+        кнопки.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ШиринаКнопки("Отмена")));
 
         var справка = new Button
         {
@@ -252,6 +258,14 @@ public sealed class FormTableSettings : Form
         AcceptButton = _сохранить;
         CancelButton = _отмена;
     }
+
+    /// <summary>
+    /// Ширина колонки кнопки, при которой метка гарантированно не обрезается:
+    /// измеренный текст + запас на рамку/внутренние отступы кнопки и ячейки
+    /// таблицы (D-S06-1). Не уже прежних фиксированных ширин.
+    /// </summary>
+    private int ШиринаКнопки(string текст) =>
+        Math.Max(86, TextRenderer.MeasureText(текст, Font).Width + 24);
 
     private Control ПостроитьВкладкуСтолбцов()
     {

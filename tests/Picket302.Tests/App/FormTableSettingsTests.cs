@@ -50,6 +50,29 @@ public sealed class FormTableSettingsTests
         Assert.Equal("Индекс", таблица.Columns[0].HeaderText);
     }
 
+    /// <summary>
+    /// D-S06-1 (ревью S04 Q4-2/Q4-3): метка кнопки сброса «По умолчанию»
+    /// не должна обрезаться при отрисовке, заголовок окна соответствует
+    /// легаси-референсу «Настройки свойств таблиц».
+    /// </summary>
+    [Fact]
+    public void КнопкаСброса_МеткаНеОбрезаетсяИЗаголовокЛегаси()
+    {
+        using var таблица = СоздатьТаблицу();
+        using var форма = new FormTableSettings(таблица);
+        форма.Show();
+
+        Assert.Equal("Настройки свойств таблиц", форма.Text);
+
+        var сброс = Обойти(форма)
+            .OfType<Button>()
+            .Single(кнопка => кнопка.AccessibleName == "Восстановить настройки таблицы по умолчанию");
+        var желаемаяШирина = TextRenderer.MeasureText(сброс.Text, сброс.Font).Width;
+        Assert.True(
+            сброс.Width >= желаемаяШирина,
+            $"кнопка сброса уже своего текста: {сброс.Width}px < {желаемаяШирина}px («{сброс.Text}»)");
+    }
+
     private static DataGridView СоздатьТаблицу()
     {
         var таблица = new DataGridView
