@@ -141,6 +141,8 @@ CLEAN_MACHINE_INSTALL_VERIFIED=NOT_RUN   (— S15/S49)
 REFERENCE_VISUAL_VERIFIED=true           (S04: 8/8 валидных пар оценены; см. S04)
 UI_VISUAL_VERIFIED=true                  (введён S04; владелец значений — S03 harness)
 OVERALL_70_PERCENT_MEASURED=PARTIAL      (S04: 69,9 % на R1–R8, ΣW=16, <70; владелец — S04)
+DPI_SIMULATION_120_144=true              (S03; повтор на фиксах S06–S08 — S09/S10; историч. имена
+                                           stage3.1 DPI_SIMULATION_125/150_VERIFIED — синонимы)
 ```
 
 ## 7. Известные границы baseline (входы в план RC)

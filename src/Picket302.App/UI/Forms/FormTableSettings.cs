@@ -45,6 +45,7 @@ public sealed class FormTableSettings : Form
     private readonly CheckBox _изменениеШирины = new();
     private readonly CheckBox _зебра = new();
     private readonly CheckBox _жирныйЗаголовок = new();
+    private Font? _применённыйШрифтЗаголовка;
     private readonly RadioButton _сбросТаблицы = new() { Text = "Сбросить настройки таблицы" };
     private readonly RadioButton _сбросГлавнойФормы = new() { Text = "Сбросить настройки главной формы" };
     private readonly Label _предупреждение = new();
@@ -178,11 +179,17 @@ public sealed class FormTableSettings : Form
             _таблица.ColumnHeadersHeight = (int)_высотаЗаголовка.Value;
         }
 
+        // Значения снимаются до Dispose: утилизируем только собственный
+        // ранее применённый шрифт, разделяемый по умолчанию не трогаем.
         var шрифтЗаголовка = _таблица.ColumnHeadersDefaultCellStyle.Font ?? _таблица.Font;
-        _таблица.ColumnHeadersDefaultCellStyle.Font = new Font(
-            шрифтЗаголовка.FontFamily,
-            шрифтЗаголовка.Size,
+        var семейство = шрифтЗаголовка.FontFamily;
+        var размер = шрифтЗаголовка.Size;
+        _применённыйШрифтЗаголовка?.Dispose();
+        _применённыйШрифтЗаголовка = new Font(
+            семейство,
+            размер,
             _жирныйЗаголовок.Checked ? FontStyle.Bold : FontStyle.Regular);
+        _таблица.ColumnHeadersDefaultCellStyle.Font = _применённыйШрифтЗаголовка;
 
         var зафиксировано = (int)Math.Min(_зафиксировано.Value, _таблица.Columns.Count);
         for (var номер = 0; номер < _таблица.Columns.Count; номер++)
