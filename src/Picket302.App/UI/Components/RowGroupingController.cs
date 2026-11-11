@@ -27,6 +27,7 @@ public sealed class RowGroupingController : IDisposable
     private bool _перестройка;
     private List<long>? _исходныйПорядокИдентификаторов;
     private System.Drawing.Font? _шрифтЗаголовка;
+    private System.Drawing.Font? _шрифтИсточникКэша;
 
     /// <summary>Имя колонки группировки; <see langword="null"/> — без группировки.</summary>
     public string? КолонкаГруппировки => _колонка;
@@ -218,9 +219,7 @@ public sealed class RowGroupingController : IDisposable
                 строкаЗаголовок.ReadOnly = true;
                 строкаЗаголовок.DefaultCellStyle.BackColor =
                     System.Drawing.SystemColors.ControlLight;
-                строкаЗаголовок.DefaultCellStyle.Font =
-                    new System.Drawing.Font(_таблица!.Font ?? new System.Drawing.Font("Segoe UI", 8f),
-                        System.Drawing.FontStyle.Bold);
+                строкаЗаголовок.DefaultCellStyle.Font = ШрифтЗаголовка();
                 строкаЗаголовок.Cells[0].Value =
                     Надпись(ключ, блоки[ключ].Count, свёрнута: _свёрнутыеКлючи.Contains(ключ));
 
@@ -246,6 +245,27 @@ public sealed class RowGroupingController : IDisposable
             .Where(строка => строка.Tag is ЗаголовокГруппы)
             .Select(строка => строка.Cells[0].Value?.ToString() ?? string.Empty)
             .ToList() ?? [];
+
+    /// <summary>
+    /// Кэшированный bold-шрифт заголовков: один источник для прорисовки и
+    /// стилей строк (аллокация на каждый paint/перестроение протекала бы —
+    /// ревью S07 F-R2-1/F-R3-4). Инвалидируется при смене Font таблицы
+    /// (например, смена кегля в «Настройке вида таблиц») — ревью S07
+    /// F-R3-2. Заменённый экземпляр не утилизируется немедленно: он может
+    /// числиться в стилях строк до следующего перестроения.
+    /// </summary>
+    private System.Drawing.Font ШрифтЗаголовка()
+    {
+        var текущийШрифт = _таблица!.Font;
+
+        if (_шрифтЗаголовка is null || !ReferenceEquals(_шрифтИсточникКэша, текущийШрифт))
+        {
+            _шрифтИсточникКэша = текущийШрифт;
+            _шрифтЗаголовка = new System.Drawing.Font(текущийШрифт, System.Drawing.FontStyle.Bold);
+        }
+
+        return _шрифтЗаголовка;
+    }
 
     private static string КлючГруппы(DataGridViewRow строка, int номерКолонки)
     {
@@ -481,7 +501,7 @@ public sealed class RowGroupingController : IDisposable
         TextRenderer.DrawText(
             аргументы.Graphics,
             текст,
-            _шрифтЗаголовка,
+            ШрифтЗаголовка(),
             new System.Drawing.Point(область.Left + 4, область.Top + 1),
             System.Drawing.SystemColors.WindowText);
     }
