@@ -1,2 +1,2 @@
 COVERAGE-GUARD PASS: 6/6 packages present (Picket302.App, Picket302.Application, Picket302.ComAutomation, Picket302.Domain, Picket302.Infrastructure, Picket302.Printing)
-COBERTURA_SHA256=ea8b32061651cbc4098c79dda30ef459
+COBERTURA_SHA256=ea8b32061651cbc4098c79dda30ef4594b220079df6460219600c351a4f7b10c

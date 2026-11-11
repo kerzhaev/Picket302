@@ -26,6 +26,7 @@ public sealed class RowGroupingController : IDisposable
     private readonly HashSet<string> _свёрнутыеКлючи = new();
     private bool _перестройка;
     private List<long>? _исходныйПорядокИдентификаторов;
+    private System.Drawing.Font? _шрифтЗаголовка;
 
     /// <summary>Имя колонки группировки; <see langword="null"/> — без группировки.</summary>
     public string? КолонкаГруппировки => _колонка;
@@ -47,12 +48,20 @@ public sealed class RowGroupingController : IDisposable
         if (_таблица is not null)
         {
             _таблица.CellClick -= ОбработатьКликПоСтроке;
+            _таблица.RowPostPaint -= НарисоватьЗаголовокГруппы;
         }
 
         _таблица = таблица;
         таблица.CellClick += ОбработатьКликПоСтроке;
         таблица.RowPostPaint += НарисоватьЗаголовокГруппы;
     }
+
+    /// <summary>
+    /// Сбрасывает снимок исходного порядка строк: вызывается владельцем при
+    /// замене набора строк (перезагрузка после фильтра/поиска), чтобы снятие
+    /// группировки восстанавливало порядок ТЕКУЩЕЙ загрузки (ревью S07 F-R2-2).
+    /// </summary>
+    public void СброситьСнимокПорядка() => _исходныйПорядокИдентификаторов = null;
 
     /// <summary>
     /// Списочный индекс записи по строке таблицы: соответствие устанавливается
@@ -465,10 +474,14 @@ public sealed class RowGroupingController : IDisposable
 
         using var кистьФона = new System.Drawing.SolidBrush(System.Drawing.SystemColors.ControlLight);
         аргументы.Graphics.FillRectangle(кистьФона, область);
+
+        // Bold-шрифт кэшируется: аллокация GDI-шрифта на каждый paint
+        // протекала бы при скролле/выделении (ревью S07 F-R2-1).
+        _шрифтЗаголовка ??= new System.Drawing.Font(_таблица.Font, System.Drawing.FontStyle.Bold);
         TextRenderer.DrawText(
             аргументы.Graphics,
             текст,
-            new System.Drawing.Font(_таблица.Font, System.Drawing.FontStyle.Bold),
+            _шрифтЗаголовка,
             new System.Drawing.Point(область.Left + 4, область.Top + 1),
             System.Drawing.SystemColors.WindowText);
     }
@@ -482,5 +495,8 @@ public sealed class RowGroupingController : IDisposable
             _таблица.RowPostPaint -= НарисоватьЗаголовокГруппы;
             _таблица = null;
         }
+
+        _шрифтЗаголовка?.Dispose();
+        _шрифтЗаголовка = null;
     }
 }

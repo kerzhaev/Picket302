@@ -83,7 +83,7 @@
 | strict Debug + coverage + trx | **1392/0/0** (+7 тестов группировки) |
 | strict Release + trx | **1392/0/0** |
 | coverage-guard | PASS 6/6 |
-| coverage | TOTAL 33636/51865 = 64,85 % line / 52,5 % branch; **App 52,47 %** (было 52,02) |
+| coverage | прогон runtime-s07 (первичный этап): TOTAL 33636/51865 = 64,85 % line, App 52,47 %; прогон runtime-s07b (фикс-коммит, SHA cobertura ea8b3206…): TOTAL 33737/52038 = 64,83 % line |
 
 Артефакты: `evidence/runtime-s07/trx-*/…trx.gz` (коммичатся сжатыми),
 cobertura — по SHA вне git (конвенция e047147), 49-grouping-by-index.png +

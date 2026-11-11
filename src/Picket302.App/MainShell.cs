@@ -2758,6 +2758,10 @@ public sealed class MainShell : Form
         _таблицаПолучателей.Rows.Clear();
         _текущиеПолучатели.Clear();
 
+        // Набор строк заменяется: снимок порядка для снятия группировки
+        // должен быть переснят по новой загрузке (ревью S07 F-R2-2).
+        _группировкаПолучателей.СброситьСнимокПорядка();
+
         var группы = await состав.Группы.GetAllAsync(cancellationToken).ConfigureAwait(true);
 
         foreach (var получатель in страница.Items)
