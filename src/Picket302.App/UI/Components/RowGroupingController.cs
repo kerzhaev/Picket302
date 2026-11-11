@@ -495,9 +495,8 @@ public sealed class RowGroupingController : IDisposable
         using var кистьФона = new System.Drawing.SolidBrush(System.Drawing.SystemColors.ControlLight);
         аргументы.Graphics.FillRectangle(кистьФона, область);
 
-        // Bold-шрифт кэшируется: аллокация GDI-шрифта на каждый paint
-        // протекала бы при скролле/выделении (ревью S07 F-R2-1).
-        _шрифтЗаголовка ??= new System.Drawing.Font(_таблица.Font, System.Drawing.FontStyle.Bold);
+        // Шрифт — только из кэша ШрифтЗаголовка(): единственная точка
+        // аллокации (ревью S07 F-R2-1/F-R4-1).
         TextRenderer.DrawText(
             аргументы.Graphics,
             текст,
