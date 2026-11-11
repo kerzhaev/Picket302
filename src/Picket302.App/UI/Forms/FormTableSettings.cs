@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 
 namespace Picket302.App.UI.Forms;
@@ -34,6 +34,8 @@ public sealed class FormTableSettings : Form
     private readonly NumericUpDown _ширина = new() { Minimum = 24, Maximum = 1200 };
     private readonly NumericUpDown _кегль = new() { Minimum = 6, Maximum = 14, DecimalPlaces = 1 };
     private readonly NumericUpDown _высотаСтроки = new() { Minimum = 12, Maximum = 48, DecimalPlaces = 0 };
+    private readonly NumericUpDown _высотаЗаголовка = new() { Minimum = 16, Maximum = 64, DecimalPlaces = 0 };
+    private readonly NumericUpDown _зафиксировано = new() { Minimum = 0, Maximum = 8, DecimalPlaces = 0 };
     private readonly Button _цветСтолбца = new();
     private readonly CheckBox _плоскийВид = new();
     private readonly CheckBox _нумерацияСтрок = new();
@@ -42,6 +44,7 @@ public sealed class FormTableSettings : Form
     private readonly CheckBox _перемещениеСтолбцов = new();
     private readonly CheckBox _изменениеШирины = new();
     private readonly CheckBox _зебра = new();
+    private readonly CheckBox _жирныйЗаголовок = new();
     private readonly RadioButton _сбросТаблицы = new() { Text = "Сбросить настройки таблицы" };
     private readonly RadioButton _сбросГлавнойФормы = new() { Text = "Сбросить настройки главной формы" };
     private readonly Label _предупреждение = new();
@@ -58,6 +61,9 @@ public sealed class FormTableSettings : Form
     private readonly bool _исходноеПеремещение;
     private readonly bool _исходноеИзменениеШирины;
     private readonly bool _исходнаяЗебра;
+    private readonly int _исходнаяВысотаЗаголовка;
+    private readonly bool _исходныйЖирныйЗаголовок;
+    private readonly int _исходныеЗафиксированные;
 
     /// <summary>
     /// Создаёт редактор настроек конкретной таблицы.
@@ -94,6 +100,11 @@ public sealed class FormTableSettings : Form
         _исходноеПеремещение = таблица.AllowUserToOrderColumns;
         _исходноеИзменениеШирины = таблица.AllowUserToResizeColumns;
         _исходнаяЗебра = !таблица.AlternatingRowsDefaultCellStyle.BackColor.IsEmpty;
+        _исходнаяВысотаЗаголовка = таблица.ColumnHeadersHeight;
+        _исходныйЖирныйЗаголовок = таблица.ColumnHeadersDefaultCellStyle.Font?.Bold ?? false;
+        _исходныеЗафиксированные = таблица.Columns
+            .Cast<DataGridViewColumn>()
+            .Count(столбец => столбец.Frozen);
 
         // Легаси-референс «Настройки свойств таблиц» (ревью S04 Q4-3):
         // прежний заголовок «Список доступных столбцов» описывал только
@@ -160,6 +171,24 @@ public sealed class FormTableSettings : Form
         _таблица.AlternatingRowsDefaultCellStyle.BackColor = _зебра.Checked
             ? Color.FromArgb(248, 249, 250)
             : Color.Empty;
+
+        if (_высотаЗаголовка.Value != _таблица.ColumnHeadersHeight)
+        {
+            _таблица.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.EnableResizing;
+            _таблица.ColumnHeadersHeight = (int)_высотаЗаголовка.Value;
+        }
+
+        var шрифтЗаголовка = _таблица.ColumnHeadersDefaultCellStyle.Font ?? _таблица.Font;
+        _таблица.ColumnHeadersDefaultCellStyle.Font = new Font(
+            шрифтЗаголовка.FontFamily,
+            шрифтЗаголовка.Size,
+            _жирныйЗаголовок.Checked ? FontStyle.Bold : FontStyle.Regular);
+
+        var зафиксировано = (int)Math.Min(_зафиксировано.Value, _таблица.Columns.Count);
+        for (var номер = 0; номер < _таблица.Columns.Count; номер++)
+        {
+            _таблица.Columns[номер].Frozen = номер < зафиксировано;
+        }
     }
 
     /// <summary>Сбрасывает редактор к состоянию, с которым он был открыт.</summary>
@@ -182,6 +211,9 @@ public sealed class FormTableSettings : Form
         _перемещениеСтолбцов.Checked = _исходноеПеремещение;
         _изменениеШирины.Checked = _исходноеИзменениеШирины;
         _зебра.Checked = _исходнаяЗебра;
+        _высотаЗаголовка.Value = Math.Clamp(_исходнаяВысотаЗаголовка, (int)_высотаЗаголовка.Minimum, (int)_высотаЗаголовка.Maximum);
+        _жирныйЗаголовок.Checked = _исходныйЖирныйЗаголовок;
+        _зафиксировано.Value = Math.Clamp(_исходныеЗафиксированные, (int)_зафиксировано.Minimum, (int)_зафиксировано.Maximum);
         ЗаполнитьСписок();
         ВыбратьСтолбец(_выбранныйИндекс);
         _предупреждение.Text = string.Empty;
@@ -465,11 +497,11 @@ public sealed class FormTableSettings : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(8),
             ColumnCount = 2,
-            RowCount = 10,
+            RowCount = 13,
         };
         корень.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         корень.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-        for (var индекс = 0; индекс < 10; индекс++)
+        for (var индекс = 0; индекс < 13; индекс++)
         {
             корень.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         }
@@ -484,6 +516,13 @@ public sealed class FormTableSettings : Form
         ДобавитьФлажок(корень, 7, _изменениеШирины, "Изменение ширины столбцов таблицы");
         ДобавитьФлажок(корень, 8, _зебра, "Полосатая таблица");
 
+        // Легаси-опции референса «Настройки свойств таблиц» (S08): высота
+        // заголовка, жирный шрифт заголовка, закреплённые столбцы; «3D вид»
+        // легаси покрывается инверсией «Плоского вида таблицы».
+        ДобавитьЧисловуюСтроку(корень, 9, "Высота заголовка:", _высотаЗаголовка, 16, 64, 1);
+        ДобавитьФлажок(корень, 10, _жирныйЗаголовок, "Жирный шрифт заголовка таблицы");
+        ДобавитьЧисловуюСтроку(корень, 11, "Зафиксированных столбцов:", _зафиксировано, 0, 8, 1);
+
         var пояснение = new Label
         {
             Text = "Свойства применяются к выбранной таблице и сохраняются вместе с её видом.",
@@ -491,7 +530,7 @@ public sealed class FormTableSettings : Form
             AutoSize = false,
             TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
         };
-        корень.Controls.Add(пояснение, 0, 9);
+        корень.Controls.Add(пояснение, 0, 12);
         корень.SetColumnSpan(пояснение, 2);
         return корень;
     }
@@ -635,6 +674,9 @@ public sealed class FormTableSettings : Form
         _перемещениеСтолбцов.Checked = _исходноеПеремещение;
         _изменениеШирины.Checked = _исходноеИзменениеШирины;
         _зебра.Checked = _исходнаяЗебра;
+        _высотаЗаголовка.Value = Math.Clamp(_исходнаяВысотаЗаголовка, (int)_высотаЗаголовка.Minimum, (int)_высотаЗаголовка.Maximum);
+        _жирныйЗаголовок.Checked = _исходныйЖирныйЗаголовок;
+        _зафиксировано.Value = Math.Clamp(_исходныеЗафиксированные, (int)_зафиксировано.Minimum, (int)_зафиксировано.Maximum);
     }
 
     private void ВыбратьСтолбец(int индекс)

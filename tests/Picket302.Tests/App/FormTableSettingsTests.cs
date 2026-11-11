@@ -73,6 +73,59 @@ public sealed class FormTableSettingsTests
             $"кнопка сброса уже своего текста: {сброс.Width}px < {желаемаяШирина}px («{сброс.Text}»)");
     }
 
+    /// <summary>
+    /// Легаси-опции референса «Настройки свойств таблиц» (S08): высота
+    /// заголовка, жирный шрифт заголовка, закреплённые столбцы.
+    /// </summary>
+    [Fact]
+    public void ЛегасиОпцииЗаголовка_ПрименяютсяКТаблице()
+    {
+        using var таблица = СоздатьТаблицу();
+        using var форма = new FormTableSettings(таблица);
+        форма.Show();
+
+        var высота = Обойти(форма).OfType<NumericUpDown>()
+            .Single(поле => поле.AccessibleName == "Высота заголовка");
+        высота.Value = 36;
+
+        var жирный = Обойти(форма).OfType<CheckBox>()
+            .Single(флажок => флажок.AccessibleName == "Жирный шрифт заголовка таблицы");
+        жирный.Checked = true;
+
+        var закреплено = Обойти(форма).OfType<NumericUpDown>()
+            .Single(поле => поле.AccessibleName == "Зафиксированных столбцов");
+        закреплено.Value = 2;
+
+        форма.Применить();
+
+        Assert.Equal(36, таблица.ColumnHeadersHeight);
+        Assert.True(таблица.ColumnHeadersDefaultCellStyle.Font.Bold);
+        Assert.True(таблица.Columns[0].Frozen);
+        Assert.True(таблица.Columns[1].Frozen);
+        Assert.False(таблица.Columns[2].Frozen);
+    }
+
+    /// <summary>
+    /// Сброс к умолчаниям возвращает и легаси-опции заголовка (S08).
+    /// </summary>
+    [Fact]
+    public void ЛегасиОпцииЗаголовка_СбрасываютсяКУмолчаниям()
+    {
+        using var таблица = СоздатьТаблицу();
+        using var форма = new FormTableSettings(таблица);
+        форма.Show();
+
+        var исходнаяВысота = таблица.ColumnHeadersHeight;
+        var высота = Обойти(форма).OfType<NumericUpDown>()
+            .Single(поле => поле.AccessibleName == "Высота заголовка");
+        высота.Value = 48;
+        высота.Value = 36;
+
+        форма.СброситьКУмолчаниям();
+
+        Assert.Equal(исходнаяВысота, (int)высота.Value);
+    }
+
     private static DataGridView СоздатьТаблицу()
     {
         var таблица = new DataGridView
