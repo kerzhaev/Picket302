@@ -143,7 +143,8 @@ UI_VISUAL_VERIFIED=true                  (введён S04; владелец з�
 OVERALL_70_PERCENT_MEASURED=PARTIAL      (S04: 69,9 % на R1–R8, ΣW=16, <70; владелец — S04)
 DPI_SIMULATION_120_144=true              (S03; повтор на фиксах S06–S08 — S09/S10; историч. имена
                                            stage3.1 DPI_SIMULATION_125/150_VERIFIED — синонимы)
-OVERALL_70_PERCENT_MEASURED=true          (S06: 70,31 %; S08-рескор по ревью F2: R7=87 → 1125/16=70,31 %;
+OVERALL_70_PERCENT_MEASURED=true-under-erratum  (S02 §5: R9 вне базы; РАТИФИКАЦИЯ ВЛАДЕЛЬЦА — чекпойнт Волны 2;
+                                           S06: 70,31 %; S08-рескор по ревью F2: R7=87 → 1125/16=70,31 %;
                                            владелец значения — S08; R9 NOT_SCORED — материал владельца)
 ```
 

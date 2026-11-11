@@ -56,7 +56,7 @@ R7: K1 5, K2 4, K3 5, K4 4, K5 3, K6 4 → S = 4,35·20 = **87**, W·S = 174.
 OVERALL(R1–R8) = (355+168+89+90+57+106+174+86)/16 = 1125/16 = 70,31 % ≥ 70
 ```
 
-Флаги без изменений: OVERALL_70_PERCENT_MEASURED=true (R9 NOT_SCORED —
+Флаги: OVERALL_70_PERCENT_MEASURED=true-under-erratum (S02 §5, ратификация владельцем — чекпойнт Волны 2; R9 NOT_SCORED —
 материал от владельца), REFERENCE_VISUAL_VERIFIED=true.
 
 ## 4. Поверхности без пиксельного референса (отдельно, вне процента)
