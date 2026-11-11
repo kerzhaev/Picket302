@@ -106,7 +106,8 @@ public sealed class FormTableSettingsTests
     }
 
     /// <summary>
-    /// Сброс к умолчаниям возвращает и легаси-опции заголовка (S08).
+    /// Сброс к умолчаниям возвращает все легаси-опции заголовка (S08,
+    /// расширено по ревью: высота, жирный шрифт и закрепление).
     /// </summary>
     [Fact]
     public void ЛегасиОпцииЗаголовка_СбрасываютсяКУмолчаниям()
@@ -116,14 +117,45 @@ public sealed class FormTableSettingsTests
         форма.Show();
 
         var исходнаяВысота = таблица.ColumnHeadersHeight;
+        var исходныйЖирный = таблица.ColumnHeadersDefaultCellStyle.Font.Bold;
+        var исходныеЗакреплены = таблица.Columns.Cast<DataGridViewColumn>()
+            .Count(столбец => столбец.Frozen);
+
         var высота = Обойти(форма).OfType<NumericUpDown>()
             .Single(поле => поле.AccessibleName == "Высота заголовка");
-        высота.Value = 48;
         высота.Value = 36;
+        var жирный = Обойти(форма).OfType<CheckBox>()
+            .Single(флажок => флажок.AccessibleName == "Жирный шрифт заголовка таблицы");
+        жирный.Checked = true;
+        var закреплено = Обойти(форма).OfType<NumericUpDown>()
+            .Single(поле => поле.AccessibleName == "Зафиксированных столбцов");
+        закреплено.Value = 2;
 
         форма.СброситьКУмолчаниям();
 
         Assert.Equal(исходнаяВысота, (int)высота.Value);
+        Assert.Equal(исходныйЖирный, жирный.Checked);
+        Assert.Equal(исходныеЗакреплены, (int)закреплено.Value);
+    }
+
+    /// <summary>
+    /// Пояснение вкладки «Другие свойства» не обрезается после добавления
+    /// легаси-полей (P2 ревью S08: ClientSize увеличен под 13 строк).
+    /// </summary>
+    [Fact]
+    public void ПояснениеВкладкиСвойств_ПолностьюВидимо()
+    {
+        using var таблица = СоздатьТаблицу();
+        using var форма = new FormTableSettings(таблица);
+        форма.Show();
+
+        var пояснение = Обойти(форма).OfType<Label>()
+            .Single(метка => метка.AccessibleName == "Пояснение свойств таблицы");
+        var родитель = (Control)пояснение.Parent!;
+
+        Assert.True(
+            пояснение.Bottom <= родитель.ClientSize.Height,
+            $"пояснение обрезано: bottom={пояснение.Bottom} > {родитель.ClientSize.Height}");
     }
 
     private static DataGridView СоздатьТаблицу()
