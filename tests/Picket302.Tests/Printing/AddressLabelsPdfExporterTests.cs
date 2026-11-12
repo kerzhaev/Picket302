@@ -67,7 +67,7 @@ public sealed class AddressLabelsPdfExporterTests
         var раскладка = new SheetLayoutImposition().LayoutGridOnSheet(
             контекст, 1, 2, new Margins(5m, 5m, 5m, 5m), SheetSize.A4);
 
-        Assert.NotEmpty(раскладка.Ошибка);
+        Assert.NotEmpty(раскладка.Ошибка ?? string.Empty);
         Assert.Equal(0, раскладка.НаклеекНаЛисте);
 
         // Ландшафт A4: доступно 287×197 → C6 (162×114) помещается 1×1,
