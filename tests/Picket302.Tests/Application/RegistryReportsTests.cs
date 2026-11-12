@@ -5,6 +5,7 @@ using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure.Queries;
+using Picket302.Infrastructure.Repositories;
 using Picket302.Printing.Reports;
 using Picket302.Tests.Infrastructure;
 using Xunit;
@@ -362,6 +363,96 @@ public sealed class RegistryReportsTests : IAsyncLifetime
             Array.Empty<long>(), "Реестр", "Принтер");
 
         Assert.Equal(SilentPrintErrorCode.EmptySelection, результат.ErrorCode);
+    }
+
+    /// <summary>
+    /// S28 (ТЗ §8.4, функция 58): при включённой опции строки запроса реестра
+    /// сбрасываются во временный XML до отправки в спулер.
+    /// </summary>
+    [Fact]
+    public async Task ТихаяПечать_ДампВключён_ПромежуточныйXmlСозданДоСпулинга()
+    {
+        var параметры = new ParameterRepository(_база.UnitOfWork);
+        await параметры.AddAsync(new Parameter { Name = ReportDataDumper.OptionKey, Value = "1" });
+
+        var дампер = new ReportDataDumper(параметры);
+        var канал = new ФейковыйКанал(ошибка: null);
+        var служба = new SilentPrintService(_поставщик, канал, дампер);
+
+        var результат = await служба.PrintRegistrySilently(
+            new[] { 1L, 2L }, "Реестр ф.103", "HP LaserJet Pro M402dn");
+
+        Assert.True(результат.Success);
+        Assert.True(дампер.LastDumpSucceeded);
+        Assert.NotNull(дампер.LastDumpPath);
+        Assert.True(File.Exists(дампер.LastDumpPath));
+
+        try
+        {
+            var текст = File.ReadAllText(дампер.LastDumpPath!);
+
+            // Датасет — строки запроса реестра с точными псевдонимами колонок
+            // (qrReport_F103: mail_id/out_num/recipient_name/…).
+            Assert.Contains("report=\"Реестр ф.103\"", текст);
+            Assert.Contains("Table name=\"" + Form103Report.QueryId + "\"", текст);
+            Assert.Contains("mail_id", текст);
+            Assert.Contains("recipient_name", текст);
+        }
+        finally
+        {
+            File.Delete(дампер.LastDumpPath!);
+        }
+    }
+
+    [Fact]
+    public async Task ТихаяПечать_ДампВыключен_ФайлНеСоздаётся()
+    {
+        var параметры = new ParameterRepository(_база.UnitOfWork);
+        await параметры.AddAsync(new Parameter { Name = ReportDataDumper.OptionKey, Value = "0" });
+
+        var дампер = new ReportDataDumper(параметры);
+        var служба = new SilentPrintService(_поставщик, new ФейковыйКанал(null), дампер);
+
+        var результат = await служба.PrintRegistrySilently(
+            new[] { 1L }, "Реестр", "Принтер");
+
+        Assert.True(результат.Success);
+        Assert.False(дампер.LastDumpSucceeded);
+        Assert.Null(дампер.LastDumpPath);
+    }
+
+    /// <summary>
+    /// Ошибка записи дампа не прерывает печать реестра (ТЗ §8.4, функция 58:
+    /// переход на генерацию в памяти).
+    /// </summary>
+    [Fact]
+    public async Task ТихаяПечать_ОшибкаДампа_ПечатьПродолжается()
+    {
+        var параметры = new ParameterRepository(_база.UnitOfWork);
+        await параметры.AddAsync(new Parameter { Name = ReportDataDumper.OptionKey, Value = "1" });
+
+        var канал = new ФейковыйКанал(ошибка: null);
+        var дампер = new ПадающийДампер(параметры);
+        var служба = new SilentPrintService(_поставщик, канал, дампер);
+
+        var результат = await служба.PrintRegistrySilently(
+            new[] { 1L }, "Реестр", "Принтер");
+
+        Assert.True(результат.Success);
+        Assert.Equal(1, канал.Вызовов);
+        Assert.False(дампер.LastDumpSucceeded);
+    }
+
+    /// <summary>Дампер с недоступной записью: опция включена, дамп падает.</summary>
+    private sealed class ПадающийДампер : ReportDataDumper
+    {
+        public ПадающийДампер(ParameterRepository параметры)
+            : base(параметры)
+        {
+        }
+
+        public override string? DumpReportDataToTempXml(object reportDataSet, string reportName) =>
+            throw new IOException("имитация недоступности временной папки");
     }
 
     private static decimal Число(object? значение) => значение switch

@@ -70,4 +70,35 @@ public sealed class MainShellMenuTests
         Assert.Contains("Настройка вида таблиц…", пункты);
         Assert.Contains("Настройка таблицы…", пункты);
     }
+
+    /// <summary>
+    /// S27/S28: меню «Печать» содержит вход в пользовательские отчёты
+    /// (ТЗ §8.4, функция 56) и галку дампа промежуточных данных реестров
+    /// (ТЗ §8.4, функция 58).
+    /// </summary>
+    [Fact]
+    public void MainShell_ПунктПечать_СодержитПользовательскиеОтчётыИДампДанных()
+    {
+        using var окно = new MainShell();
+
+        var печать = окно.MainMenuStrip!.Items
+            .Cast<ToolStripMenuItem>()
+            .Single(пункт => пункт.Text == "Печать");
+
+        var пункты = печать.DropDownItems
+            .Cast<ToolStripItem>()
+            .Select(пункт => пункт.Text)
+            .ToArray();
+
+        Assert.Contains("Пользовательские отчёты…", пункты);
+
+        var дамп = печать.DropDownItems
+            .Cast<ToolStripItem>()
+            .OfType<ToolStripMenuItem>()
+            .Single(пункт => пункт.Text == "Сохранять промежуточный XML данных реестров");
+
+        // Опция дампа выключена по умолчанию и включается галкой.
+        Assert.False(дамп.Checked);
+        Assert.True(дамп.CheckOnClick);
+    }
 }

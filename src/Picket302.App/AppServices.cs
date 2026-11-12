@@ -221,6 +221,10 @@ public sealed class AppServices : IAsyncDisposable
         // текущей сессии (штатный валидатор и StrictParametric).
         МенеджерПользовательскихОтчётов = new CustomReportManager(_профиль.DataDirectory);
         ПоставщикДанныхОтчётов = new SqliteReportDataProvider(сессия.Connection);
+
+        // Промежуточные данные реестров (ТЗ §8.4, функция 58): опция чекбокса
+        // и дамп датасета во временный XML до отправки в спулер.
+        ДамперДанныхОтчётов = new ReportDataDumper(Параметры);
     }
 
     /// <summary>
@@ -413,6 +417,13 @@ public sealed class AppServices : IAsyncDisposable
     /// определению, значения — только привязанными параметрами.
     /// </summary>
     public SqliteReportDataProvider ПоставщикДанныхОтчётов { get; }
+
+    /// <summary>
+    /// Дампер промежуточных данных реестров (ТЗ §8.4, функция 58): опция
+    /// «Сохранять промежуточный XML данных» и сброс датасета во временный XML
+    /// до спулинга; ошибка записи переводит на генерацию в памяти.
+    /// </summary>
+    public ReportDataDumper ДамперДанныхОтчётов { get; }
 
     /// <summary>
     /// Вычислитель идентификатора оборудования (ТЗ §8.10, функция 120).

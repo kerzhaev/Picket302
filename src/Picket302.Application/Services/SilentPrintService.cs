@@ -66,6 +66,7 @@ public sealed class SilentPrintService
 {
     private readonly IReportDataProvider _данные;
     private readonly ISilentPrintChannel _канал;
+    private readonly ReportDataDumper? _дампер;
 
     /// <summary>Текст последней ошибки; пуст при успешной печати.</summary>
     public string LastError { get; private set; } = string.Empty;
@@ -73,13 +74,22 @@ public sealed class SilentPrintService
     /// <summary>Создаёт службу тихой печати.</summary>
     /// <param name="dataProvider">Поставщик данных запросов слоя данных.</param>
     /// <param name="channel">Канал отправки в спулер.</param>
-    public SilentPrintService(IReportDataProvider dataProvider, ISilentPrintChannel channel)
+    /// <param name="дамперДанных">
+    /// Необязательный дампер промежуточных данных (ТЗ §8.4, функция 58):
+    /// при включённой опции строки запроса реестра сбрасываются во временный
+    /// XML до отправки в спулер; ошибка записи не прерывает печать.
+    /// </param>
+    public SilentPrintService(
+        IReportDataProvider dataProvider,
+        ISilentPrintChannel channel,
+        ReportDataDumper? дамперДанных = null)
     {
         ArgumentNullException.ThrowIfNull(dataProvider);
         ArgumentNullException.ThrowIfNull(channel);
 
         _данные = dataProvider;
         _канал = channel;
+        _дампер = дамперДанных;
     }
 
     /// <summary>
@@ -112,7 +122,26 @@ public sealed class SilentPrintService
 
         try
         {
-            var идентификаторОтправителя = await ResolveSenderId(mailIds, cancellationToken).ConfigureAwait(false);
+            var (идентификаторОтправителя, строкиРеестра) =
+                await ЗагрузитьДанныеРеестраAsync(mailIds, cancellationToken).ConfigureAwait(false);
+
+            // Промежуточные данные реестра во временный XML (ТЗ §8.4, ф.58):
+            // до отправки в спулер, при включённой опции; ошибка записи
+            // переводит на генерацию в памяти — печать продолжается.
+            if (_дампер is not null
+                && await _дампер.GetEnabledAsync(cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    _дампер.DumpReportDataToTempXml(ДатасетРеестра(строкиРеестра), templateName);
+                }
+                catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+                {
+                    // Дамп необязателен для печати: падение записи означает
+                    // переход на генерацию в памяти (LastDumpSucceeded=false).
+                }
+            }
+
             var реестр = new Form103Report(_данные);
             документ = await реестр.GenerateF103(mailIds, идентификаторОтправителя, cancellationToken).ConfigureAwait(false);
             документ = СПереносомЗаголовка(документ, templateName);
@@ -159,10 +188,16 @@ public sealed class SilentPrintService
         return документ;
     }
 
-    private async Task<long> ResolveSenderId(long[] mailIds, CancellationToken cancellationToken)
+    /// <summary>
+    /// Загружает строки запроса реестра и определяет отправителя (из первой
+    /// строки: слой данных фильтрует выборку по отправителю и список
+    /// идентификаторов). Строки возвращаются вместе с идентификатором —
+    /// они же образуют промежуточный датасет дампа (ТЗ §8.4, функция 58).
+    /// </summary>
+    private async Task<(long ИдОтправителя, IReadOnlyList<IReportRow> Строки)> ЗагрузитьДанныеРеестраAsync(
+        long[] mailIds,
+        CancellationToken cancellationToken)
     {
-        // Отправитель берётся из первой строки запроса реестра: слой данных
-        // фильтрует выборку по отправителю и список идентификаторов.
         var значения = new QueryParameterValues();
         значения.Set("SelectedMailIds", mailIds.ToList());
 
@@ -174,14 +209,42 @@ public sealed class SilentPrintService
         }
 
         var значение = строки[0].GetValue("sender_id");
-
-        return значение switch
+        var идОтправителя = значение switch
         {
             long число => число,
             int число => число,
             decimal число => (long)число,
             string текст when long.TryParse(текст, out var разобрано) => разобрано,
             _ => throw new ReportValidationException("Запрос реестра не содержит отправителя."),
+        };
+
+        return (идОтправителя, строки);
+    }
+
+    /// <summary>
+    /// Датасет дампа: одна таблица с идентификатором запроса реестра; строки
+    /// переносятся с точными псевдонимами колонок слоя данных.
+    /// </summary>
+    private static IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, object?>>> ДатасетРеестра(
+        IReadOnlyList<IReportRow> строки)
+    {
+        var перенос = new List<IReadOnlyDictionary<string, object?>>(строки.Count);
+
+        foreach (var строка in строки)
+        {
+            var значения = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+            foreach (var колонка in строка.ColumnNames)
+            {
+                значения[колонка] = строка.GetValue(колонка);
+            }
+
+            перенос.Add(значения);
+        }
+
+        return new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, object?>>>
+        {
+            [Form103Report.QueryId] = перенос,
         };
     }
 

@@ -14,7 +14,7 @@ namespace Picket302.Application.Services;
 /// приводит к переходу на генерацию в памяти (метод возвращает
 /// <see langword="null"/>).
 /// </remarks>
-public sealed class ReportDataDumper
+public class ReportDataDumper
 {
     /// <summary>Ключ параметра «Сохранять промежуточный XML данных».</summary>
     public const string OptionKey = "DumpReportDataToTempXml";
@@ -23,6 +23,12 @@ public sealed class ReportDataDumper
 
     /// <summary>Признак последнего успешного сохранения во временный XML.</summary>
     public bool LastDumpSucceeded { get; private set; }
+
+    /// <summary>
+    /// Путь последнего созданного файла дампа; <see langword="null"/>, если
+    /// дамп ещё не выполнялся или последняя запись не удалась.
+    /// </summary>
+    public string? LastDumpPath { get; private set; }
 
     /// <summary>Создаёт дампер данных отчётов.</summary>
     /// <param name="parameters">Хранилище параметров настройки (чекбокс).</param>
@@ -80,7 +86,7 @@ public sealed class ReportDataDumper
     /// </param>
     /// <param name="reportName">Наименование отчёта.</param>
     /// <returns>Путь к созданному файлу либо <see langword="null"/> при ошибке записи.</returns>
-    public string? DumpReportDataToTempXml(object reportDataSet, string reportName)
+    public virtual string? DumpReportDataToTempXml(object reportDataSet, string reportName)
     {
         ArgumentNullException.ThrowIfNull(reportDataSet);
 
@@ -100,6 +106,7 @@ public sealed class ReportDataDumper
 
             документ.Save(путь);
             LastDumpSucceeded = true;
+            LastDumpPath = путь;
 
             return путь;
         }
@@ -108,12 +115,14 @@ public sealed class ReportDataDumper
             // Ошибка записи во временную папку приводит к переходу на
             // генерацию в памяти (ТЗ §8.4, ф.58).
             LastDumpSucceeded = false;
+            LastDumpPath = null;
 
             return null;
         }
         catch (UnauthorizedAccessException)
         {
             LastDumpSucceeded = false;
+            LastDumpPath = null;
 
             return null;
         }
