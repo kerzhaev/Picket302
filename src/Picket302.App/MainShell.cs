@@ -867,6 +867,24 @@ public sealed class MainShell : Form
             "Редактор бланков (F8)",
             EnvelopeUiTheme.СоздатьЗначок("edit"),
             (_, _) => ОткрытьРедакторБланков()));
+
+        // Специальные бланки (ТЗ §8.3, функция 49): доверенность на почту
+        // и заявление о включении в реестр кредиторов — подстановка
+        // реквизитов выбранного отправителя, предпросмотр и печать/сохранение.
+        var специальные = new ToolStripMenuItem(
+            "Специальные бланки",
+            EnvelopeUiTheme.СоздатьЗначок("form"));
+        специальные.DropDownItems.Add(new ToolStripMenuItem(
+            "Доверенность на получение почты",
+            null,
+            (_, _) => ПоказатьСпециальныйБланк(
+                Picket302.Infrastructure.Templates.SpecialFormType.PowerOfAttorney)));
+        специальные.DropDownItems.Add(new ToolStripMenuItem(
+            "Заявление о включении в реестр кредиторов",
+            null,
+            (_, _) => ПоказатьСпециальныйБланк(
+                Picket302.Infrastructure.Templates.SpecialFormType.CreditorApplication)));
+        печать.DropDownItems.Add(специальные);
         печать.DropDownItems.Add(new ToolStripSeparator());
         печать.DropDownItems.Add(new ToolStripMenuItem(
             "Настройки принтера…",
@@ -5656,6 +5674,67 @@ public sealed class MainShell : Form
         // редактор открывает эталонный бланк библиотеки (ТЗ §7.5).
         var бланк = new Infrastructure.Templates.BuiltinTemplatesCatalog()
             .GetBuiltinTemplate(Infrastructure.Templates.BuiltinFormType.Form112ep);
+
+        using var редактор = new UI.Forms.FormBlankEditor(бланк);
+        редактор.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Строит специальный бланк (ТЗ §8.3, функция 49) с подстановкой
+    /// реквизитов текущего отправителя и открывает редактор бланков в
+    /// режиме предпросмотра/печати. Отмена/закрытие не создают заданий и
+    /// не пишут в базу; формат бланка подтверждается сериализацией в тестах.
+    /// </summary>
+    /// <param name="тип">Вид специального бланка.</param>
+    private async void ПоказатьСпециальныйБланк(
+        Infrastructure.Templates.SpecialFormType тип)
+    {
+        var состав = _состав;
+        if (состав is null)
+        {
+            return;
+        }
+
+        var идОтправителя = состав.ТекущийОтправитель.CurrentSenderId;
+        var отправитель = идОтправителя is null
+            ? null
+            : await состав.Контрагенты
+                .GetByIdAsync(идОтправителя.Value)
+                .ConfigureAwait(true);
+
+        var бланк = new Infrastructure.Templates.SpecialFormsBuilder()
+            .BuildSpecialForm(тип);
+
+        // Подстановка реквизитов текущего отправителя в поля бланка:
+        // значения подставляются в поля с совпадающими именами.
+        if (отправитель is not null)
+        {
+            var реквизиты = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Наименование отправителя"] = отправитель.Name,
+            };
+
+            var адрес = отправитель.GetAddress(отправитель.AddressMainType);
+            if (адрес is not null)
+            {
+                реквизиты["Адрес отправителя"] = string.Join(
+                    ", ",
+                    адрес.Lines.Where(строка => !string.IsNullOrWhiteSpace(строка)));
+            }
+
+            foreach (var поле in бланк.AllFields())
+            {
+                if (реквизиты.TryGetValue(поле.Name, out var значение)
+                    && !string.IsNullOrWhiteSpace(значение))
+                {
+                    // CustomBlank-поля не хранят свободного текста значения:
+                    // содержимое задаётся скриптом onBeforePrint (присваивание
+                    // конкретного значения реквизита отправителя).
+                    поле.OnBeforePrint =
+                        $"{поле.Name}.text := '@\" + значение.Replace(\"'\", \"''\") + \"';";
+                }
+            }
+        }
 
         using var редактор = new UI.Forms.FormBlankEditor(бланк);
         редактор.ShowDialog(this);
