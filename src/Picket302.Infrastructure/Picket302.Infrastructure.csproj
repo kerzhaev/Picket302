@@ -54,6 +54,13 @@
     <EmbeddedResource Include="Templates\Queries\*.xml" />
   </ItemGroup>
 
+  <!-- Поставляемые XSLT-стили документов (ТЗ §8.4, функция 67): 16 стилей
+       для конвейера WordprocessingML (функция 68), исполняются штатным
+       XslCompiledTransform без MS Office. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\Documents\*.xslt" />
+  </ItemGroup>
+
   <!-- Словари суммы прописью (.lng) — расширяемый набор файлов локализации
        (ТЗ §8.11, функции 150–151). -->
   <ItemGroup>
