@@ -1,0 +1,62 @@
+﻿{
+    "run":  "dbguard",
+    "startedUtc":  "2026-11-12T05:12:43.5919254Z",
+    "fpBefore":  [
+                     {
+                         "Name":  "com-automation.log",
+                         "Size":  587902,
+                         "Hash":  "AB51B6F90C38A61F3B0E4716DAD7A3BFD13F2F0166382BFCCD3A97CC848FA0DC"
+                     },
+                     {
+                         "Name":  "connection.json",
+                         "Size":  225,
+                         "Hash":  "399006D91EC787C5F4B6185DF7477EB8ABE8D549640E681A1D2B45162D6972D5"
+                     },
+                     {
+                         "Name":  "print_audit.log",
+                         "Size":  48074,
+                         "Hash":  "215769F4A382BE47F7379D57CAAEC78070A25B0D06A35C3EE13BA2B3D8A46658"
+                     }
+                 ],
+    "productionDbBefore":  false,
+    "registerExit":  0,
+    "probeExit":  null,
+    "probeOutput":  "PROBE pid=90120 x64=True mode=dbguard utc=2026-11-12T05:12:45.2084103Z\r\nCoInitializeEx(STA) hr=0x80010106\r\nCLSIDFromProgID hr=0x00000000 clsid={5715286e-f98f-4c1c-ac86-ab943afae004} match=True\r\nHKCR CLSID visible in-process: True\r\n  LocalServer32 default=[\"C:\\Users\\Nachfin\\AppData\\Local\\Temp\\p302-rc-com-c408de4f76144227a93a7b2c9060dc35\\Picket302.ComAutomation.exe\"]\r\n  ServerExecutable=[C:\\Users\\Nachfin\\AppData\\Local\\Temp\\p302-rc-com-c408de4f76144227a93a7b2c9060dc35\\Picket302.ComAutomation.exe]\r\n  AppID=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]\r\nHKCR ProgID visible in-process: True\r\n  ProgID CLSID value=[{5715286E-F98F-4C1C-AC86-AB943AFAE004}]\r\nCoCreateInstance LOCAL_SERVER hr=0x00000000\r\nDatabaseIsLoaded hr=[0] out=[False]\r\nSafeLoadDatabase hr=[0] out=[False]\r\nDatabaseIsLoaded(after) hr=[0] out=[False]\r\nPrintEnvelope hr=[0]\r\nGetWarningType hr=[0] out=[0]\r\nPROBE_DONE\r\n",
+    "serverProcs":  28216,
+    "shutdown":  {
+                     "pid":  28216,
+                     "result":  [
+                                    true,
+                                    "GRACEFUL_EXIT"
+                                ]
+                 },
+    "cleanup":  {
+                    "unregisterExit":  0,
+                    "progIdGone":  true,
+                    "clsidGone":  true,
+                    "serverProcsLeft":  null,
+                    "tmpRemoved":  true
+                },
+    "fpAfter":  [
+                    {
+                        "Name":  "com-automation.log",
+                        "Size":  590517,
+                        "Hash":  "9BF4C00791D028E4E23983B9177B44DE171C9086C054C22B7870EB0B8C326FB8"
+                    },
+                    {
+                        "Name":  "connection.json",
+                        "Size":  225,
+                        "Hash":  "399006D91EC787C5F4B6185DF7477EB8ABE8D549640E681A1D2B45162D6972D5"
+                    },
+                    {
+                        "Name":  "print_audit.log",
+                        "Size":  48074,
+                        "Hash":  "215769F4A382BE47F7379D57CAAEC78070A25B0D06A35C3EE13BA2B3D8A46658"
+                    }
+                ],
+    "productionDbAfter":  false,
+    "profileChanges":  [
+                           "CHANGED: com-automation.log"
+                       ],
+    "finishedUtc":  "2026-11-12T05:12:49.5384418Z"
+}
