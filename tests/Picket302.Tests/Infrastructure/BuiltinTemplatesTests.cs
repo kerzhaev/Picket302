@@ -136,7 +136,8 @@ public sealed class BuiltinTemplatesTests
     {
         var библиотека = _каталог.BuildLibrary();
 
-        Assert.True(библиотека.Count >= 20);
+        Assert.True(библиотека.Count > 50, $"библиотека должна содержать более 50 реальных макетов (функция 144); фактически {библиотека.Count}");
+        Assert.Equal(библиотека.Count, библиотека.Select(запись => запись.Blank.Name).Distinct().Count());
         Assert.All(библиотека, запись => Assert.False(string.IsNullOrWhiteSpace(запись.PackageName)));
         Assert.All(библиотека, запись => Assert.True(запись.Blank.Pages.Count > 0));
     }
