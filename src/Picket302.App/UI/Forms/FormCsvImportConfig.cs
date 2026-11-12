@@ -102,6 +102,12 @@ public sealed class FormCsvImportConfig : Form
     /// </summary>
     public CsvProfile? Profile { get; private set; }
 
+    /// <summary>Текст строки сведений предпросмотра (точка автопроверок).</summary>
+    internal string СведенияПредпросмотраДляПроверок => _сведения.Text;
+
+    /// <summary>Текст сообщения об ошибке предпросмотра (точка автопроверок).</summary>
+    internal string ОшибкаПредпросмотраДляПроверок => _ошибка.Text;
+
     /// <summary>
     /// Текст предпросмотра файла: при изменении живой предпросмотр
     /// перестраивается по текущим параметрам разбора.

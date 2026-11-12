@@ -205,6 +205,62 @@ public sealed class UserReportProviderTests : IAsyncLifetime
         Assert.Single(строки);
     }
 
+    /// <summary>
+    /// S27R3-01 (ре-ревью): комментарий маскирует DML для наивной проверки —
+    /// сканер отклоняет UPDATE безо всякой внутренней точки с запятой.
+    /// </summary>
+    [Fact]
+    public async Task КомментарийМаскируетDml_ОтклоняетсяСканером()
+    {
+        var текст = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <ReportQueryDefinition id="qrUser_CommentUpdate" version="1.0">
+              <Name>Комментарий скрывает UPDATE</Name>
+              <Parameters />
+              <ValidationRules>
+                <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+              </ValidationRules>
+              <Command dialect="Sqlite">
+                <![CDATA[SELECT name FROM groups /* затем обновим
+                */ — а здесь UPDATE groups SET name = 1]]>
+              </Command>
+            </ReportQueryDefinition>
+            """;
+
+        var определение = new ReportQueryXmlSerializer().Deserialize(текст);
+
+        await Assert.ThrowsAsync<QueryValidationException>(() =>
+            _поставщик.RunDefinitionAsync(определение, new QueryParameterValues()));
+    }
+
+    /// <summary>
+    /// S27R3-01 (ре-ревью): REPLACE(…) как функция в выборке допустима —
+    /// исключение для одноимённого оператора не ломает текстовые выборки.
+    /// </summary>
+    [Fact]
+    public async Task ReplaceФункция_ДопустимаВВыборке()
+    {
+        var текст = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <ReportQueryDefinition id="qrUser_ReplaceFn" version="1.0">
+              <Name>Замена подстроки в выборке</Name>
+              <Parameters />
+              <ValidationRules>
+                <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+              </ValidationRules>
+              <Command dialect="Sqlite">
+                <![CDATA[SELECT REPLACE(name, 'Кл', 'Гр') AS renamed FROM groups;]]>
+              </Command>
+            </ReportQueryDefinition>
+            """;
+
+        var определение = new ReportQueryXmlSerializer().Deserialize(текст);
+
+        var строки = await _поставщик.RunDefinitionAsync(определение, new QueryParameterValues());
+
+        Assert.NotEmpty(строки);
+    }
+
     /// <summary>Валидный пользовательский запрос перечня групп.</summary>
     private static string ТекстЗапросаГрупп() => """
         <?xml version="1.0" encoding="utf-8"?>
