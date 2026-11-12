@@ -146,6 +146,14 @@ DPI_SIMULATION_120_144=true              (S03; повтор на фиксах S0
 OVERALL_70_PERCENT_MEASURED=true-under-erratum  (S02 §5: R9 вне базы; РАТИФИКАЦИЯ ВЛАДЕЛЬЦА — чекпойнт Волны 2;
                                            S06: 70,31 %; S08-рескор по ревью F2: R7=87 → 1125/16=70,31 %;
                                            владелец значения — S08; R9 NOT_SCORED — материал владельца)
+COM_DIRECT_VERIFIED=true                 (Волна 3, RC: S11 живой прогон; перекрывает HIST@8aef10d)
+COM_COLD_VERIFIED=true                   (Волна 3, RC: S11 + S14 5/5 + UNC; перекрывает HIST@8aef10d)
+COM_FULL_ACCEPTANCE_VERIFIED=PARTIAL     (Волна 3, S14: CreateInstance/SafeLoadDatabase/PrintEnvelope-guard/
+                                           CoRevoke/очистка доказаны через COM; print happy-path NOT_RUN_EXTERNAL
+                                           (интерактивный виртуальный принтер → печатная волна S16–S20);
+                                           открыта находка D-S14-warncode)
+COM_DELIVERY_REGISTRATION_CLEAN=true     (Волна 3, S15: register/unregister, 0 ключей/0 процессов, без админа)
+COM_HKCU_HKLM_DECISION=OWNER_DECISION_REQUIRED  (Волна 3, S15: машинная HKLM-установка не реализована)
 ```
 
 ## 7. Известные границы baseline (входы в план RC)

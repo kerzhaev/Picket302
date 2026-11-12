@@ -1,0 +1,65 @@
+# RC Волна 3 — контрольная точка (S11–S15, COM)
+
+Дата закрытия: 2026-11-12. BASE — `46794c1` (чекпойнт Волны 2). Ветка
+`piscine/picket302-rc`, worktree `rc-20261110`, не пушится. Продуктовый код
+в волне НЕ менялся (COM-фикс не потребовался); все коммиты — docs + evidence.
+
+## 1. Этапы и вердикты Qwen
+
+| Этап | Коммиты | Суть | Ревью | Итог |
+|---|---|---|---|---|
+| S11 COM baseline | `881f077` | реестр чист; холодная create4 PASS (hr=0 158мс, PID 93176, -Embedding, CoRegister S_OK, graceful revoke, очистка) | PASS (в составе S11–S14) | ЗАКРЫТ |
+| S12 SCM-диагностика | `b1847c7` | симптом Stage4 0x80040154 НЕ воспроизводится из чистого состояния (6/6); категория B′ загрязнение SCM; ProcMon не требовался (условие «при воспроизведённом» не наступило) | PASS | ЗАКРЫТ |
+| S13 решение по фиксу | `b1847c7` | код-фикс не нужен (per-PID shutdown + graceful revoke уже есть); HKCU→HKLM не требуется, не выполнялся самовольно | PASS | ЗАКРЫТ |
+| S14 COM acceptance | `b1847c7`→`416e998`→`b78c97b` | 5/5 холодных + UNC (hr=0 125мс, PID 90632) + dbguard (SafeLoadDatabase/PrintEnvelope guard, без записи в production); print happy-path NOT_RUN_EXTERNAL | PASS (S11–S14); S14-dbguard/UNC — на ревью | ЗАКРЫТ (частично, честно) |
+| S15 поставочная модель | `d2693de` | HKCU per-user register/unregister чисто (5 ключей создаются/удаляются, 0 процессов, без админа); инструкции восстановления; HKLM — решение владельца | на ревью | ЗАКРЫТ (HKCU) |
+
+Цепочка: `881f077 → b1847c7 → 416e998 → b78c97b → d2693de → (этот коммит)`.
+Ревью S11–S14 (base 46794c1, candidate b1847c7) — **PASS** с 4×P3
+(F-W3-1..4), все закрыты: F-W3-1 (перенацелен logenc→PS BOM), F-W3-2
+(baseline wording), F-W3-3 (инструментальные ярлыки), F-W3-4 (консолидация
+флагов — этот чекпойнт).
+
+## 2. Ключевые результаты
+
+1. **Холодная COM-активация работает на RC** (6 холодных + UNC): hr=0,
+   -Embedding, CoRegister S_OK, graceful CoRevoke, полная очистка. Симптом
+   Stage4 не воспроизводится — приложение не требует изменений.
+2. **Безопасность COM-методов доказана**: SafeLoadDatabase/PrintEnvelope
+   через COM корректно guarded по отсутствующей БД; **production-БД не
+   создаётся, записи в production-профиль нет** (dbguard before/after).
+3. **Поставочная модель HKCU per-user** соответствует portable-поставке,
+   работает без админ-прав, register/unregister не оставляют ключей/процессов.
+4. **Честные границы**: print happy-path через COM NOT_RUN_EXTERNAL
+   (единственный принтер по умолчанию «Microsoft Print to PDF»
+   интерактивный; неконфигурируемого виртуального принтера/PrintToFile-хука
+   через COM нет) → печатная волна S16–S20.
+
+## 3. Флаги после Волны 3 (консолидированы в S01 §6)
+
+```text
+COM_DIRECT_VERIFIED=true (RC, S11)
+COM_COLD_VERIFIED=true (RC, S11 + S14 5/5 + UNC)
+COM_FULL_ACCEPTANCE_VERIFIED=PARTIAL (print happy-path NOT_RUN_EXTERNAL; D-S14-warncode открыта)
+COM_DELIVERY_REGISTRATION_CLEAN=true (S15)
+COM_HKCU_HKLM_DECISION=OWNER_DECISION_REQUIRED (S15)
+```
+
+## 4. Открытые пункты (перенос в Волну 4+)
+
+| # | Пункт | Владелец/этап |
+|---|---|---|
+| 1 | D-S14-warncode: GetWarningType возвращает 0 вместо DatabaseNotLoaded=1 после PrintEnvelope (вероятно, предупреждение пишется в экземпляр helper-потока) | расследовать в COM/печатной волне |
+| 2 | PrintEnvelope print happy-path через COM (изолир. БД + неинтерактивный виртуальный принтер) | печатная волна S16–S20 |
+| 3 | HKCU vs HKLM / машинный установщик | решение владельца (S15) |
+| 4 | D-S14-psenc: PS-драйверы приёмки сохранять с BOM или ASCII-маркеры | бэклог harness |
+| 5 | Ратификация эрратума OVERALL-флага (из Волны 2) | владелец |
+
+## 5. Вердикт контрольной точки
+
+**ПРОЙДЕНА (с честными границами).** S11/S12/S13 закрыты PASS; S14 закрыт
+настолько, насколько безопасно возможно (холодная активация + guard-методы
+доказаны, print happy-path честно NOT_RUN_EXTERNAL); S15 закрыт для
+HKCU-модели. Продуктовый код не менялся, production-профиль не тронут,
+COM-состояние среды чистое. Открытые пункты перенесены (§4). Волна 4
+(S16–S20, печать и геометрия) может стартовать.
