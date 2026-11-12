@@ -310,6 +310,11 @@ public sealed class PrintSessionController
             // отправление («Вн») — шестизначный индекс, международное («Мн») —
             // трёхзначный индекс «555».
             контекст = ПрименитьТерриторию(контекст, шаблон);
+
+            // Порядок адресных строк формата (ТЗ §8.4, функция 33):
+            // «от частного к общему» для форматов с AddressOrderSmallToLarge.
+            элементы = ApplyAddressOrder(элементы, контекст.AddressOrderSmallToLarge);
+            контекст = контекст with { Items = элементы };
             // Калибровочные смещения принтера для пары «принтер + формат»
             // (ТЗ §8.6, функция 45): применяются, если задание не содержит
             // явных смещений.
@@ -710,6 +715,75 @@ public sealed class PrintSessionController
     /// <param name="request">Параметры печати.</param>
     /// <param name="шаблон">Макет бланка.</param>
     /// <returns>Сведения о принтере.</returns>
+    /// <summary>
+    /// Применяет порядок адресных строк формата конверта (ТЗ §8.4,
+    /// функция 33): при smallToLarge = true печатный порядок строк —
+    /// «от частного к общему» (дом → город → страна): непустые строки
+    /// адреса перенумеровываются в обратном порядке относительно хранения.
+    /// Пустые строки не создаются; перенос по словам/буквам не меняется
+    /// (меняется только порядок готовых строк).
+    /// </summary>
+    /// <param name="items">Элементы печати со значениями полей бланка.</param>
+    /// <param name="smallToLarge">Признак порядка «от частного к общему».</param>
+    /// <returns>Элементы с переписанными to_strN/from_strN при необходимости.</returns>
+    public static IReadOnlyList<PrintableItem> ApplyAddressOrder(
+        IReadOnlyList<PrintableItem> items,
+        bool smallToLarge)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+
+        if (!smallToLarge)
+        {
+            return items;
+        }
+
+        static IReadOnlyDictionary<string, string> Переписать(
+            IReadOnlyDictionary<string, string> значения,
+            string префикс)
+        {
+            var результат = new Dictionary<string, string>(значения, StringComparer.OrdinalIgnoreCase);
+            const int строк = 6;
+            var непустые = new List<string>();
+
+            for (var номер = 1; номер <= строк; номер++)
+            {
+                if (результат.TryGetValue(префикс + номер, out var значение)
+                    && !string.IsNullOrWhiteSpace(значение))
+                {
+                    непустые.Add(значение);
+                }
+            }
+
+            if (непустые.Count < 2)
+            {
+                return значения;
+            }
+
+            непустые.Reverse();
+
+            for (var номер = 1; номер <= строк; номер++)
+            {
+                результат[префикс + номер] = номер <= непустые.Count
+                    ? непустые[номер - 1]
+                    : string.Empty;
+            }
+
+            return результат;
+        }
+
+        var изменённые = new List<PrintableItem>(items.Count);
+
+        foreach (var элемент in items)
+        {
+            var значения = элемент.Values;
+            значения = Переписать(значения, "to_str");
+            значения = Переписать(значения, "from_str");
+            изменённые.Add(элемент with { Values = значения });
+        }
+
+        return изменённые;
+    }
+
     private PrinterDeviceInfo ПолучитьСведенияОПринтере(PrintRequest request, PrintTemplate шаблон)
     {
         var кодФормата = PrinterDeviceInfo.PaperSizeCodeByFormat(шаблон.Format);
