@@ -200,6 +200,12 @@ public sealed class PrintOptions
     /// <summary>Ключ параметра с идентификатором последнего использованного шаблона.</summary>
     public const string LastTemplateKey = "LastUsedPrintTemplateId";
 
+    /// <summary>Ключ параметра с числом копий последней печати конверта (ТЗ §8.5, функция 35).</summary>
+    public const string LastCopiesKey = "LastPrintCopies";
+
+    /// <summary>Ключ параметра с именем принтера последней печати конверта (ТЗ §8.5, функция 35).</summary>
+    public const string LastPrinterKey = "LastPrintPrinterName";
+
     private readonly IParameterRepository _параметры;
 
     /// <summary>
@@ -229,6 +235,12 @@ public sealed class PrintOptions
     /// не выбирался).
     /// </summary>
     public long? ПоследнийШаблонId { get; private set; }
+
+    /// <summary>Число копий последней печати конверта (1 — по умолчанию).</summary>
+    public int ПоследниеКопии { get; private set; } = 1;
+
+    /// <summary>Имя принтера последней печати конверта (null — не выбирался).</summary>
+    public string? ПоследнийПринтер { get; private set; }
 
     /// <summary>
     /// Возвращает признак показа списка шаблонов перед печатью.
@@ -292,6 +304,43 @@ public sealed class PrintOptions
         await СохранитьAsync(LastTemplateKey, значение, cancellationToken).ConfigureAwait(false);
 
         ПоследнийШаблонId = templateId;
+    }
+
+    /// <summary>
+    /// Возвращает число копий последней печати конверта (ТЗ §8.5, функция 35);
+    /// повреждённое или отсутствующее значение — безопасно 1.
+    /// </summary>
+    public async Task<int> GetLastCopiesAsync(CancellationToken cancellationToken = default)
+    {
+        var значение = await _параметры.GetValueAsync(LastCopiesKey, cancellationToken).ConfigureAwait(false);
+        ПоследниеКопии = int.TryParse(значение, out var копии) && копии > 0 ? копии : 1;
+        return ПоследниеКопии;
+    }
+
+    /// <summary>Сохраняет число копий последней печати конверта.</summary>
+    public async Task SetLastCopiesAsync(int copies, CancellationToken cancellationToken = default)
+    {
+        var нормализовано = Math.Max(1, copies);
+        await СохранитьAsync(
+            LastCopiesKey,
+            нормализовано.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            cancellationToken).ConfigureAwait(false);
+        ПоследниеКопии = нормализовано;
+    }
+
+    /// <summary>Возвращает имя принтера последней печати конверта; отсутствующее — null.</summary>
+    public async Task<string?> GetLastPrinterAsync(CancellationToken cancellationToken = default)
+    {
+        var значение = await _параметры.GetValueAsync(LastPrinterKey, cancellationToken).ConfigureAwait(false);
+        ПоследнийПринтер = string.IsNullOrWhiteSpace(значение) ? null : значение;
+        return ПоследнийПринтер;
+    }
+
+    /// <summary>Сохраняет имя принтера последней печати конверта (null/пусто — сброс).</summary>
+    public async Task SetLastPrinterAsync(string? printerName, CancellationToken cancellationToken = default)
+    {
+        await СохранитьAsync(LastPrinterKey, printerName ?? string.Empty, cancellationToken).ConfigureAwait(false);
+        ПоследнийПринтер = string.IsNullOrWhiteSpace(printerName) ? null : printerName;
     }
 
     private async Task СохранитьAsync(string имя, string значение, CancellationToken cancellationToken)

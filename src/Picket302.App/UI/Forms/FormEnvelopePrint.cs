@@ -118,7 +118,8 @@ public sealed class FormEnvelopePrint : Form
         PrintTemplate? последнийШаблон = null,
         PrinterManager? службаПринтеров = null,
         bool показыватьПредупреждениеРазлиновки = true,
-        PrinterOffsetProfile? профильКалибровки = null)
+        PrinterOffsetProfile? профильКалибровки = null,
+        string? последнийПринтер = null)
     {
         Text = "Печать";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -164,6 +165,30 @@ public sealed class FormEnvelopePrint : Form
         _паритет.SelectedIndex = 0;
 
         _копии.Value = Math.Max(1, Math.Min(копий, 9999));
+
+        // ТЗ §8.5, функция 35: последний принтер восстанавливается, если он
+        // ещё доступен в системе (пропавший принтер — безопасный откат к
+        // принтеру по умолчанию).
+        if (!string.IsNullOrWhiteSpace(последнийПринтер))
+        {
+            var индекс = -1;
+            for (var позиция = 0; позиция < _принтеры.Items.Count; позиция++)
+            {
+                if (string.Equals(
+                        _принтеры.Items[позиция]?.ToString(),
+                        последнийПринтер,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    индекс = позиция;
+                    break;
+                }
+            }
+
+            if (индекс >= 0)
+            {
+                _принтеры.SelectedIndex = индекс;
+            }
+        }
 
         ВыбратьШаблон(последнийШаблон);
 
