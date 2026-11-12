@@ -76,7 +76,9 @@ public sealed class AddressLabelsPdfExporterTests
             контекст with { Orientation = TemplateOrientation.Landscape },
             1, 2, new Margins(5m, 5m, 5m, 5m), SheetSize.A4);
 
-        Assert.True(раскладкаЛандшафт.НаклеекНаЛисте > 0
+        Assert.NotEmpty(раскладкаЛандшафт.Ошибка ?? string.Empty);
+        Assert.True(
+            раскладкаЛандшафт.НаклеекНаЛисте > 0
             || раскладкаЛандшафт.Ошибка.Length > 0); // обе сетки честны
     }
 
