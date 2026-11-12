@@ -70,4 +70,10 @@ public sealed class BlankField
     /// <c>InfoZone</c>.
     /// </summary>
     public string? ZoneRole { get; set; }
+
+    /// <summary>
+    /// Идентификатор клипарта; только для вида <c>picture</c> (S26,
+    /// функция 158). NULL/пусто — поле ведёт себя как прежний логотип.
+    /// </summary>
+    public string? ClipartId { get; set; }
 }

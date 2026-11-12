@@ -16,6 +16,7 @@ using Picket302.Infrastructure.Persistence;
 using Picket302.Infrastructure.Registry;
 using Picket302.Infrastructure.Repositories;
 using Picket302.Infrastructure.Storage;
+using Picket302.Infrastructure.Templates;
 using Picket302.Infrastructure.Text;
 using Picket302.Printing;
 using Picket302.Printing.Audit;
@@ -166,7 +167,8 @@ public sealed class AppServices : IAsyncDisposable
 
         var контрольШрифта = new ZipcodeFontGuard();
         var измеритель = new GdiTextMeasurer();
-        var рендерер = new EnvelopeRenderer(измеритель);
+        КлипартБиблиотека = new ClipartLibrary();
+        var рендерер = new EnvelopeRenderer(измеритель, id => { КлипартБиблиотека!.TryGet(id, out var png); return png; });
 
         // Кэш сгенерированных QR-кодов хранится в таблице qr_cache: без
         // репозитория сформированные коды оставались бы только в памяти
@@ -337,6 +339,10 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>Управление печатными сессиями (F5 / F6 / F7).</summary>
     public PrintSessionController СлужбаПечати { get; }
+
+    /// <summary>Библиотека клипарта (S26, функция 158): редактор бланков
+    /// выбирает элементы, рендерер получает PNG через резолвер.</summary>
+    public ClipartLibrary КлипартБиблиотека { get; }
 
     /// <summary>
     /// Калибровочные смещения пар «принтер + формат» (ТЗ §8.4, функция 45):

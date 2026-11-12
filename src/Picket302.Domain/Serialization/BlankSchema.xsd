@@ -115,6 +115,9 @@
     <xs:attribute name="printable" type="xs:boolean" use="optional" default="true" />
     <xs:attribute name="maxChars" type="xs:int" use="optional" default="255" />
     <xs:attribute name="italic" type="xs:boolean" use="optional" default="false" />
+    <!-- S26 (функция 158): клипарт в произвольном макете — только для
+         kind="picture"; идентификатор элемента библиотеки клипарта. -->
+    <xs:attribute name="clipartId" type="xs:string" use="optional" />
   </xs:complexType>
 
   <xs:complexType name="BoundsType">

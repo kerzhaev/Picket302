@@ -198,6 +198,14 @@ public sealed class BlankFieldSpec
     public BlankPostIndexSpec? PostIndex { get; set; }
 
     /// <summary>
+    /// Идентификатор элемента клипарта; только для вида <c>picture</c>
+    /// (ТЗ §8.3, функция 158, остаток S26: «вставка клипарта в
+    /// произвольный макет»). NULL — старые blank.xml (совместимость:
+    /// такие поля рисуют логотип отправителя как раньше).
+    /// </summary>
+    public string? ClipartId { get; set; }
+
+    /// <summary>
     /// Скрипт <c>onBeforePrint</c> (ТЗ §7.5, вкладка «События»; например
     /// <c>ZipCode_to.text := &lt;edtIndeks_to&gt;;</c>).
     /// </summary>

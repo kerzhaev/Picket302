@@ -18,11 +18,15 @@ public sealed class EnvelopeRenderer
     /// Создаёт генератор изображения бланка.
     /// </summary>
     /// <param name="measurer">Измеритель текста для автоподбора кегля.</param>
-    public EnvelopeRenderer(ITextMeasurer measurer)
+    /// <summary>Резолвер клипарта: id → PNG-байты (S26, функция 158).</summary>
+    private readonly Func<string, byte[]?>? _резолверКлипарта;
+
+    public EnvelopeRenderer(ITextMeasurer measurer, Func<string, byte[]?>? клипартРезолвер = null)
     {
         ArgumentNullException.ThrowIfNull(measurer);
 
         _измеритель = measurer;
+        _резолверКлипарта = клипартРезолвер;
     }
 
     /// <summary>
@@ -121,6 +125,32 @@ public sealed class EnvelopeRenderer
                     break;
 
                 case BlankFieldKind.Picture:
+                    // S26 (функция 158): picture-поле с ClipartId рисует
+                    // клипарт из библиотеки; без ClipartId — прежний логотип.
+                    if (поле.ClipartId is not null)
+                    {
+                        var клипартБайты = _резолверКлипарта?.Invoke(поле.ClipartId);
+                        if (клипартБайты is { Length: > 0 })
+                        {
+                            using var клипартИзображение = Image.FromStream(
+                                new MemoryStream(клипартБайты));
+
+                            context.DrawImageMm(
+                                клипартИзображение,
+                                (float)(поле.XMm + job.OffsetXMm),
+                                (float)(поле.YMm + job.OffsetYMm),
+                                (float)поле.LengthMm,
+                                (float)поле.HeightMm);
+                        }
+                        else
+                        {
+                            предупреждения.Add(
+                                $"Клипарт «{поле.ClipartId}» не найден в библиотеке");
+                        }
+
+                        break;
+                    }
+
                     if (!job.WithLogo)
                     {
                         break;

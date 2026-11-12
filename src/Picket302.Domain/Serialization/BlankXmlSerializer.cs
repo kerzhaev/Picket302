@@ -260,6 +260,14 @@ public sealed class BlankXmlSerializer
                     new XAttribute("showGrid", индекс.ShowGrid ? "true" : "false")));
         }
 
+        // S26 (функция 158): клипарт в произвольном макете — атрибут
+        // только у picture-полей; старые blank.xml совместимы (атрибут
+        // отсутствует → null).
+        if (поле.Kind == BlankFieldKinds.Picture && поле.ClipartId is not null)
+        {
+            элемент.Add(new XAttribute("clipartId", поле.ClipartId));
+        }
+
         if (поле.Kind != BlankFieldKinds.PostIndex && поле.Kind != BlankFieldKinds.Zone)
         {
             var шрифт = new XElement(
@@ -411,6 +419,9 @@ public sealed class BlankXmlSerializer
             Printable = РазобратьФлаг((string?)элемент.Attribute("printable"), true),
             MaxChars = int.Parse((string?)элемент.Attribute("maxChars") ?? "255", System.Globalization.CultureInfo.InvariantCulture),
         };
+
+        // S26 (функция 158): клипарт читается при наличии атрибута.
+        поле.ClipartId = (string?)элемент.Attribute("clipartId");
 
         if (поле.Kind == BlankFieldKinds.PostIndex)
         {

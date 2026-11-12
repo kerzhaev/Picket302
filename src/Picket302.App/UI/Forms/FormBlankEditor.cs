@@ -4,6 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using Picket302.Domain.Postal;
 using Picket302.Domain.Serialization;
+using Picket302.Infrastructure.Templates;
 using Picket302.Printing.Editor;
 using Picket302.Printing.Templates;
 
@@ -54,8 +55,16 @@ public sealed class FormBlankEditor : Form
     /// копированием существующего, а не с нуля).</summary>
     /// <param name="blank">Бланк; <see langword="null"/> — состояние «Макет не загружен».</param>
     /// <param name="zipcodeFontAvailable">Контроль шрифта ZIPcode; <see langword="null"/> — без контроля.</param>
-    public FormBlankEditor(CustomBlank? blank = null, Func<bool>? zipcodeFontAvailable = null)
+    /// <summary>Библиотека клипарта (S26, функция 158); null — инструмент
+    /// «картинка» создаёт picture-поле без клипарта.</summary>
+    private readonly ClipartLibrary? _клипарт;
+
+    public FormBlankEditor(
+        CustomBlank? blank = null,
+        Func<bool>? zipcodeFontAvailable = null,
+        ClipartLibrary? клипарт = null)
     {
+        _клипарт = клипарт;
         Text = "Редактор бланков";
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(1180, 760);
@@ -407,6 +416,18 @@ public sealed class FormBlankEditor : Form
             if (поле is not null)
             {
                 имя = поле.Name;
+
+                // S26 (функция 158): инструмент «картинка» открывает выбор
+                // клипарта; выбранная графика привязывается к полю и
+                // воспроизводится в предпросмотре и печати.
+                if (ПалитраИнструмент() == BlankTool.Picture && _клипарт is not null)
+                {
+                    using var пикер = new FormClipartPicker(_клипарт);
+                    if (пикер.ShowDialog(this) == DialogResult.OK && пикер.ВыбранныйId is not null)
+                    {
+                        поле.ClipartId = пикер.ВыбранныйId;
+                    }
+                }
             }
         }
 
