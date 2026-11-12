@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using Picket302.Application.Services;
 using Picket302.Application.Templating;
 
 namespace Picket302.App.UI.Forms;
@@ -268,6 +269,23 @@ public sealed class DocTemplateWizardController
             Directory.CreateDirectory(каталог);
         }
 
+        ЗаписатьТекущийТекст(цель);
+
+        _templatePath = цель;
+        IsDirty = false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Записывает текущий текст редактируемой части в указанный файл БЕЗ
+    /// изменения состояния контроллера (общий хвост <see cref="Save"/> и
+    /// предпросмотра результата: предпросмотр = то, что будет сохранено,
+    /// но не сбрасывает признак несохранённых правок и не переносит путь).
+    /// </summary>
+    /// <param name="цель">Полный путь записи.</param>
+    private void ЗаписатьТекущийТекст(string цель)
+    {
         if (_kind == DocumentTemplateKind.OpenXml)
         {
             if (!string.Equals(цель, _templatePath, StringComparison.OrdinalIgnoreCase))
@@ -281,11 +299,6 @@ public sealed class DocTemplateWizardController
         {
             File.WriteAllText(цель, TemplateText, Utf8WithoutBom);
         }
-
-        _templatePath = цель;
-        IsDirty = false;
-
-        return true;
     }
 
     /// <summary>
@@ -361,4 +374,100 @@ public sealed class DocTemplateWizardController
 
         Markers = _analyzer.AnalyzeParts(new[] { часть }, _parameters);
     }
+
+    /// <summary>
+    /// Предпросмотр результата документа (ТЗ §8.5, функция 66): генерация из
+    /// ТЕКУЩЕГО текста редактора через тот же конвейер, что и сохранение
+    /// («предпросмотр = то, что будет сохранено»). Ошибка генерации
+    /// возвращается как неуспешный результат — ложный документ не показывается
+    /// и ничего не сохраняется; исходный шаблон не изменяется.
+    /// </summary>
+    /// <returns>Результат предпросмотра.</returns>
+    public DocumentResultPreview ПостроитьПредпросмотрРезультата()
+    {
+        if (!HasTemplate)
+        {
+            return new DocumentResultPreview(
+                false,
+                "Шаблон не выбран: предпросмотр результата недоступен.",
+                Array.Empty<string>(),
+                "нет шаблона");
+        }
+
+        // Временный файл строится тем же Save, что и реальное сохранение,
+        // поэтому предпросмотр показывает ровно то, что окажется на диске.
+        var временный = Path.Combine(
+            Path.GetTempPath(),
+            "Picket302_wizard_preview_" + Guid.NewGuid().ToString("N") + Path.GetExtension(_templatePath));
+
+        try
+        {
+            // Запись БЕЗ Save(): предпросмотр не сбрасывает признак
+            // несохранённых правок и не переносит путь шаблона на временный
+            // файл — состояние контроллера остаётся нетронутым.
+            ЗаписатьТекущийТекст(временный);
+
+            var движок = new ArbitraryDocumentEngine(_catalog);
+            var параметры = _parameters ?? new Dictionary<string, object>();
+            var результат = движок.Render(временный, параметры);
+
+            var описание = _kind == DocumentTemplateKind.OpenXml
+                ? $"OpenXML-пакет: {результат.Content.Length} байт (содержимое пакета не отображается)"
+                : $"Документ: {результат.Content.Length} байт";
+
+            var содержимое = _kind == DocumentTemplateKind.OpenXml
+                ? описание
+                : DocumentTemplateAnalyzer.DecodeText(результат.Content);
+
+            return new DocumentResultPreview(
+                true,
+                содержимое,
+                результат.Warnings,
+                описание);
+        }
+        catch (Exception ошибка) when (ошибка is InvalidOperationException
+            or System.Xml.XmlException
+            or System.Xml.Xsl.XsltException
+            or IOException
+            or ArgumentException)
+        {
+            // Ошибка генерации не превращается в «ложный результат»:
+            // возвращается текст ошибки, дисплей показывает её оператору.
+            return new DocumentResultPreview(
+                false,
+                $"Ошибка генерации: {ошибка.Message}",
+                Array.Empty<string>(),
+                "ошибка");
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(временный))
+                {
+                    File.Delete(временный);
+                }
+            }
+            catch (IOException)
+            {
+                // Временный файл предпросмотра не критичен для работы.
+            }
+        }
+    }
 }
+
+/// <summary>
+/// Результат предпросмотра документа мастера шаблонов (ТЗ §8.5, функция 66).
+/// </summary>
+/// <param name="Success">Признак успешной генерации.</param>
+/// <param name="Content">
+/// Содержимое документа (текст для текстовых/XSLT; описание пакета для OpenXML)
+/// либо текст ошибки генерации.
+/// </param>
+/// <param name="Warnings">Предупреждения генерации (неразрешённые маркеры).</param>
+/// <param name="Description">Короткое описание результата для строки состояния.</param>
+public sealed record DocumentResultPreview(
+    bool Success,
+    string Content,
+    IReadOnlyList<string> Warnings,
+    string Description);

@@ -355,6 +355,156 @@ public sealed class DocTemplateWizardControllerTests
     /// Создаёт временный каталог для шаблонов.
     /// </summary>
     /// <returns>Путь к созданному каталогу.</returns>
+    /// <summary>
+    /// S29 (ТЗ §8.5, функция 66): предпросмотр результата — генерация из
+    /// текущего текста редактора; подстановка значений маркеров.
+    /// </summary>
+    [Fact]
+    public void ПредпросмотрРезультата_ПодставляетЗначенияМаркеров()
+    {
+        var каталог = СоздатьКаталог();
+
+        try
+        {
+            var путь = НаписатьШаблон(каталог, "template.txt", "Уважаемый #Counterparty_Name#!");
+
+            var значения = new Dictionary<string, object> { ["Counterparty_Name"] = "ООО Ромашка" };
+            var контроллер = new DocTemplateWizardController(parameters: значения);
+            контроллер.OpenTemplate(путь);
+
+            var результат = контроллер.ПостроитьПредпросмотрРезультата();
+
+            Assert.True(результат.Success);
+            Assert.Contains("Уважаемый ООО Ромашка!", результат.Content);
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
+
+    /// <summary>
+    /// S29, критерий приёмки «preview = то, что будет сохранено»: предпросмотр
+    /// строится из ТЕКСТА РЕДАКТОРА, а не с диска — правка без сохранения
+    /// меняет предпросмотр.
+    /// </summary>
+    [Fact]
+    public void ПредпросмотрРезультата_СтроитсяИзТекстаРедактораНеСДиска()
+    {
+        var каталог = СоздатьКаталог();
+
+        try
+        {
+            var путь = НаписатьШаблон(каталог, "template.txt", "Старый текст без маркеров");
+
+            var значения = new Dictionary<string, object> { ["Counterparty_Name"] = "ООО Ромашка" };
+            var контроллер = new DocTemplateWizardController(parameters: значения);
+            контроллер.OpenTemplate(путь);
+
+            var доПравки = контроллер.ПостроитьПредпросмотрРезультата();
+            Assert.True(доПравки.Success, доПравки.Content);
+            Assert.Contains("Старый текст", доПравки.Content);
+
+            контроллер.SetTemplateText("Новый документ для #Counterparty_Name#");
+
+            var послеПравки = контроллер.ПостроитьПредпросмотрРезультата();
+
+            // На диске по-прежнему старый текст — предпросмотр взял правку.
+            Assert.Contains("Новый документ для ООО Ромашка", послеПравки.Content);
+            Assert.DoesNotContain("Старый текст", послеПравки.Content);
+            Assert.Equal("Старый текст без маркеров", File.ReadAllText(путь));
+            Assert.True(контроллер.IsDirty);
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
+
+    /// <summary>
+    /// S29, критерий «ошибка генерации не сохраняет ложный результат»:
+    /// испорченный XSLT возвращает ошибку, а не изображает документ.
+    /// </summary>
+    [Fact]
+    public void ПредпросмотрРезультата_ОшибкаXslt_ЛожныйРезультатНеПоказывается()
+    {
+        var каталог = СоздатьКаталог();
+
+        try
+        {
+            var путь = НаписатьШаблон(каталог, "broken.xslt", БитыйШаблон);
+
+            var контроллер = new DocTemplateWizardController();
+            контроллер.OpenTemplate(путь);
+
+            var результат = контроллер.ПостроитьПредпросмотрРезультата();
+
+            Assert.False(результат.Success);
+            Assert.Contains("Ошибка генерации", результат.Content);
+            Assert.Empty(результат.Warnings);
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
+
+    /// <summary>
+    /// S29: предпросмотр не изменяет исходный шаблон и не оставляет
+    /// временных файлов.
+    /// </summary>
+    [Fact]
+    public void ПредпросмотрРезультата_ИсходныйШаблонНеМеняетсяВременныхФайловНет()
+    {
+        var каталог = СоздатьКаталог();
+
+        try
+        {
+            var путь = НаписатьШаблон(каталог, "template.txt", "Текст шаблона #Counterparty_Name#");
+            var доБайт = File.ReadAllBytes(путь);
+
+            var контроллер = new DocTemplateWizardController();
+            контроллер.OpenTemplate(путь);
+
+            var результат = контроллер.ПостроитьПредпросмотрРезультата();
+
+            Assert.True(результат.Success);
+            Assert.Equal(доБайт, File.ReadAllBytes(путь));
+
+            // Временные файлы предпросмотра удалены.
+            Assert.Empty(Directory.GetFiles(Path.GetTempPath(), "Picket302_wizard_preview_*"));
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
+
+    /// <summary>
+    /// S29: предпросмотр результата на уровне формы — без модальных окон.
+    /// </summary>
+    [Fact]
+    public void ФормаМастера_ПредпросмотрРезультатаБезДиалогов()
+    {
+        var каталог = СоздатьКаталог();
+
+        try
+        {
+            var путь = НаписатьШаблон(каталог, "template.txt", "Документ #Counterparty_Name#");
+
+            using var форма = new FormDocTemplateWizard(путь);
+
+            var результат = форма.ПостроитьПредпросмотрРезультата();
+
+            Assert.True(результат.Success);
+            Assert.Contains("Документ", результат.Content);
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
+
     private static string СоздатьКаталог()
     {
         var путь = Path.Combine(Path.GetTempPath(), $"picket302_шаблоны_{Guid.NewGuid():N}");

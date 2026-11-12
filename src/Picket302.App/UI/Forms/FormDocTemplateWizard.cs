@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using Picket302.App.UI.Components;
 using Picket302.Application.Templating;
 
 namespace Picket302.App.UI.Forms;
@@ -54,6 +55,9 @@ public sealed class FormDocTemplateWizard : Form
     private readonly ListBox _структура = new();
     private readonly ListBox _проблемы = new();
     private readonly Button _проверить = new();
+
+    /// <summary>Кнопка предпросмотра результата (ТЗ §8.5, функция 66).</summary>
+    private readonly Button _предпросмотрРезультата = new();
     private readonly Label _подсказка = new();
 
     private readonly Button _готово = new();
@@ -343,13 +347,46 @@ public sealed class FormDocTemplateWizard : Form
         _проверить.Size = new Size(150, 24);
         _проверить.Click += (_, _) => ПроверитьСтруктуру();
 
+        // Предпросмотр результата (ТЗ §8.5, функция 66): генерация из текущего
+        // текста редактора, без сохранения шаблона.
+        _предпросмотрРезультата.Text = "Предпросмотр...";
+        _предпросмотрРезультата.Location = new Point(170, 22);
+        _предпросмотрРезультата.Size = new Size(106, 24);
+        _предпросмотрРезультата.AccessibleName = "Предпросмотр результата документа";
+        _предпросмотрРезультата.Click += (_, _) => ПоказатьПредпросмотрРезультата();
+
         _проблемы.Location = new Point(12, 54);
         _проблемы.Size = new Size(264, 168);
 
         группа.Controls.Add(_проверить);
+        группа.Controls.Add(_предпросмотрРезультата);
         группа.Controls.Add(_проблемы);
 
         Controls.Add(группа);
+    }
+
+    /// <summary>
+    /// Строит предпросмотр результата документа: генерация из текущего текста
+    /// редактора через штатный конвейер сохранения; ошибка генерации
+    /// возвращается как ошибка, «ложный результат» не изображается
+    /// (ТЗ §8.5, функция 66). Модальных окон не открывает — точка для
+    /// автоматических проверок.
+    /// </summary>
+    /// <returns>Результат предпросмотра контроллера.</returns>
+    public DocumentResultPreview ПостроитьПредпросмотрРезультата()
+        => _контроллер.ПостроитьПредпросмотрРезультата();
+
+    /// <summary>Обработчик кнопки «Предпросмотр...»: построение и диалог.</summary>
+    private void ПоказатьПредпросмотрРезультата()
+    {
+        var результат = _контроллер.ПостроитьПредпросмотрРезультата();
+
+        _подсказка.Text = результат.Success
+            ? $"Предпросмотр построен: {результат.Description}"
+            : результат.Content;
+
+        using var диалог = new ФормаПредпросмотраРезультата(результат);
+        диалог.ShowDialog(this);
     }
 
     /// <summary>
@@ -584,5 +621,81 @@ public sealed class FormDocTemplateWizard : Form
         }
 
         _структура.EndUpdate();
+    }
+
+
+}
+/// <summary>
+/// Диалог предпросмотра результата документа: содержимое генерации,
+/// предупреждения о неразрешённых маркерах и заголовок «предпросмотр = то,
+/// что будет сохранено». Ошибка генерации показывается без изображения
+/// ложного результата (ТЗ §8.5, функция 66).
+/// </summary>
+internal sealed class ФормаПредпросмотраРезультата : Form
+{
+    /// <summary>Создаёт диалог предпросмотра результата.</summary>
+    /// <param name="результат">Результат генерации контроллера.</param>
+    public ФормаПредпросмотраРезультата(DocumentResultPreview результат)
+    {
+        Text = результат.Success
+            ? "Предпросмотр результата (текущий текст редактора)"
+            : "Предпросмотр результата — ошибка генерации";
+        StartPosition = FormStartPosition.CenterParent;
+        MinimizeBox = false;
+        MaximizeBox = false;
+        ClientSize = new Size(720, 520);
+        MinimumSize = new Size(560, 420);
+
+        var содержимое = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Both,
+            WordWrap = false,
+            Font = new Font(FontFamily.GenericMonospace, 9f),
+            Text = результат.Content,
+            AccessibleName = "Содержимое предпросмотра документа",
+        };
+
+        var строкаПредупреждений = new TextBox
+        {
+            Dock = DockStyle.Bottom,
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Height = 64,
+            Text = результат.Warnings.Count == 0
+                ? (результат.Success ? "Предупреждений нет." : результат.Content)
+                : string.Join(Environment.NewLine, результат.Warnings),
+            AccessibleName = "Предупреждения предпросмотра",
+        };
+
+        var закрыть = new Button
+        {
+            Text = "Закрыть",
+            AutoSize = true,
+            DialogResult = DialogResult.Cancel,
+            AccessibleName = "Закрыть предпросмотр результата",
+        };
+
+        var низ = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 44,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(8, 8, 8, 0),
+        };
+
+        низ.Controls.Add(закрыть);
+
+        Controls.Add(содержимое);
+        Controls.Add(строкаПредупреждений);
+        Controls.Add(низ);
+
+        CancelButton = закрыть;
+
+        EnvelopeUiTheme.ОформитьОкно(this);
+        EnvelopeUiTheme.ОформитьОсновнуюКнопку(закрыть);
     }
 }
