@@ -1,0 +1,83 @@
+﻿{
+    "run":  "regclean",
+    "startedUtc":  "2026-11-12T05:16:24.5531974Z",
+    "preKeys":  [
+                    {
+                        "Key":  "HKCU:\\Software\\Classes\\PEPro.Application",
+                        "Present":  false
+                    },
+                    {
+                        "Key":  "HKCU:\\Software\\Classes\\CLSID\\{5715286E-F98F-4C1C-AC86-AB943AFAE004}",
+                        "Present":  false
+                    },
+                    {
+                        "Key":  "HKCU:\\Software\\Classes\\AppID\\{5715286E-F98F-4C1C-AC86-AB943AFAE004}",
+                        "Present":  false
+                    },
+                    {
+                        "Key":  "HKCU:\\Software\\Classes\\Interface\\{3A98FA89-27EE-4DDF-8F5D-ABC47EA942E6}",
+                        "Present":  false
+                    },
+                    {
+                        "Key":  "HKCU:\\Software\\Classes\\TypeLib\\{22BC298D-DF0E-3C29-B589-7A50D3A8B871}",
+                        "Present":  false
+                    }
+                ],
+    "preProcs":  null,
+    "registerExit":  0,
+    "afterRegisterKeys":  [
+                              {
+                                  "Key":  "HKCU:\\Software\\Classes\\PEPro.Application",
+                                  "Present":  true
+                              },
+                              {
+                                  "Key":  "HKCU:\\Software\\Classes\\CLSID\\{5715286E-F98F-4C1C-AC86-AB943AFAE004}",
+                                  "Present":  true
+                              },
+                              {
+                                  "Key":  "HKCU:\\Software\\Classes\\AppID\\{5715286E-F98F-4C1C-AC86-AB943AFAE004}",
+                                  "Present":  true
+                              },
+                              {
+                                  "Key":  "HKCU:\\Software\\Classes\\Interface\\{3A98FA89-27EE-4DDF-8F5D-ABC47EA942E6}",
+                                  "Present":  true
+                              },
+                              {
+                                  "Key":  "HKCU:\\Software\\Classes\\TypeLib\\{22BC298D-DF0E-3C29-B589-7A50D3A8B871}",
+                                  "Present":  true
+                              }
+                          ],
+    "localServer32":  "\"C:\\Users\\Nachfin\\AppData\\Local\\Temp\\p302-rc-com-e6841b6ba2cd4348886e00383a5ef893\\Picket302.ComAutomation.exe\"",
+    "serverExeSha":  "C54D303B01E2B9243159E79D30F7112E6802DF2FB30420CA51462B75E0220DBF",
+    "procArch":  "AMD64",
+    "user":  "Nachfin",
+    "isAdmin":  false,
+    "unregisterExit":  0,
+    "afterUnregisterKeys":  [
+                                {
+                                    "Key":  "HKCU:\\Software\\Classes\\PEPro.Application",
+                                    "Present":  false
+                                },
+                                {
+                                    "Key":  "HKCU:\\Software\\Classes\\CLSID\\{5715286E-F98F-4C1C-AC86-AB943AFAE004}",
+                                    "Present":  false
+                                },
+                                {
+                                    "Key":  "HKCU:\\Software\\Classes\\AppID\\{5715286E-F98F-4C1C-AC86-AB943AFAE004}",
+                                    "Present":  false
+                                },
+                                {
+                                    "Key":  "HKCU:\\Software\\Classes\\Interface\\{3A98FA89-27EE-4DDF-8F5D-ABC47EA942E6}",
+                                    "Present":  false
+                                },
+                                {
+                                    "Key":  "HKCU:\\Software\\Classes\\TypeLib\\{22BC298D-DF0E-3C29-B589-7A50D3A8B871}",
+                                    "Present":  false
+                                }
+                            ],
+    "postProcs":  null,
+    "allKeysRemoved":  true,
+    "noProcsLeft":  true,
+    "tmpRemoved":  true,
+    "finishedUtc":  "2026-11-12T05:16:27.7017422Z"
+}
