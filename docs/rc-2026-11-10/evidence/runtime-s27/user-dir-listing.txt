@@ -1,0 +1,4 @@
+Битый отчёт/query.xml
+Битый отчёт/registry.lbk
+Приёмочный реестр/query.xml
+Приёмочный реестр/registry.lbk

@@ -1,0 +1,10 @@
+PROFILE C:\Users\Nachfin\AppData\Local\Temp\p302-s27-accept\profile2\Picket302
+GUARD PASS pid=92952 root=C:\Users\Nachfin\AppData\Local\Temp\p302-s27-accept\profile2\Picket302 process=C:\Users\Nachfin\p302-worktrees\rc-20261110\tools\ui-acceptance\bin\x64\Release\net8.0-windows\UiAcceptance.exe
+OK USERREPORTS count=1 names=Приёмочный реестр
+FAIL UNKNOWN 
+OK ADDUSERREPORT name=Битый отчёт valid=False errors=1 count=2 уведомлений=1
+OK ADDUSERREPORT name=Приёмочный реестр valid=True errors=0 count=2 уведомлений=1
+DONE
+PROFILE-KEPT C:\Users\Nachfin\AppData\Local\Temp\p302-s27-accept\profile2\Picket302
+CLEANUP: intentionally kept
+EXIT 0
