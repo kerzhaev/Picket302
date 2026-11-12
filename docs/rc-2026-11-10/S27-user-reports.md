@@ -90,3 +90,16 @@ RegisterUserReport`) доведена до оператора: менеджер 
 Изменённые файлы: `ReportQueryXmlSerializer.cs` (корень D-S27-02),
 `SqliteReportDataProvider.cs` (guard), `FormUserReports.cs` (изоляция),
 `FormUserReportsTests.cs` (+6 тестов).
+
+## 7. Эрратум по ре-ревью S27-R2 (2026-11-13, qwen-reviewer, 8598ae7)
+
+Вердикт: CHANGES_REQUIRED (1×P1, 2×P3). Закрытия:
+
+| ID | Закрытие |
+|---|---|
+| S27R2-01 (P1, обход guard: «WITH c AS (SELECT 1) DELETE FROM groups;» — ведущий WITH пропускал DML) | guard заменён сканером токенов верхнего уровня: строковые литералы (с ''-escape), комментарии (-- и /* */) и скобочные подвыражения исключаются; после ведущего SELECT/WITH запрещён ЛЮБОЙ запрещённый оператор верхнего уровня (INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/REPLACE-оператор/ATTACH/DETACH/PRAGMA/VACUUM/REINDEX/GRANT/REVOKE/TRUNCATE); REPLACE(…) как функция в выборке допустим. Пин-тесты: `DmlПослеОпределенийСтcte_Отклоняется`, `КомментарийСDml_ОтклоняетсяЛитералСDml_Проходит` (комментарий не маскирует; литерал не ложно-срабатывает) |
+| S27R2-02 (P3: UnauthorizedAccessException в чтении правки; ОбновитьСписок вне изоляции) | фильтр чтения query.xml дополнен; перечитание каталога под собственной изоляцией |
+| S27R2-03 (P3: счётчик «+6 тестов») | фактически +5 новых [Fact], 1 усилен — исправлено |
+
+Примечание ревьюера учтено: builtin-файлов 12 (не 9); все 12 проверены
+guard-ом (SELECT, одна хвостовая «;»).

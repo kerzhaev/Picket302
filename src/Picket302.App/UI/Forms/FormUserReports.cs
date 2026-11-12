@@ -150,7 +150,17 @@ public sealed class FormUserReports : Form
                 [ошибка.Message]);
         }
 
-        ОбновитьСписок();
+        // Перечитание каталога под той же изоляцией: структура каталогов
+        // пользователя может быть недоступна даже после успешной/неуспешной
+        // регистрации (S27R2-02).
+        try
+        {
+            ОбновитьСписок();
+        }
+        catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
+        {
+        }
+
         ПоказатьВалидацию(результат);
 
         return результат;
@@ -545,7 +555,7 @@ public sealed class FormUserReports : Form
 
             текущий = File.Exists(путь) ? await File.ReadAllTextAsync(путь).ConfigureAwait(true) : string.Empty;
         }
-        catch (IOException ошибка)
+        catch (Exception ошибка) when (ошибка is IOException or UnauthorizedAccessException)
         {
             Сообщить(ошибка.Message, "Изменение запроса");
 

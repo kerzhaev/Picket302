@@ -130,6 +130,81 @@ public sealed class UserReportProviderTests : IAsyncLifetime
             _поставщик.RunDefinitionAsync(определение, значения));
     }
 
+    /// <summary>
+    /// S27R2-01 (ревью S27-R2): обход «WITH … DELETE …» — DML после
+    /// определений CTE отклоняется (ключевые слова верхнего уровня сканируются
+    /// за пределами строк и комментариев).
+    /// </summary>
+    [Fact]
+    public async Task DmlПослеОпределенийСтcte_Отклоняется()
+    {
+        var текст = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <ReportQueryDefinition id="qrUser_WithDelete" version="1.0">
+              <Name>Обход через CTE</Name>
+              <Parameters />
+              <ValidationRules>
+                <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+              </ValidationRules>
+              <Command dialect="Sqlite">
+                <![CDATA[WITH c AS (SELECT 1) DELETE FROM groups;]]>
+              </Command>
+            </ReportQueryDefinition>
+            """;
+
+        var определение = new ReportQueryXmlSerializer().Deserialize(текст);
+
+        await Assert.ThrowsAsync<QueryValidationException>(() =>
+            _поставщик.RunDefinitionAsync(определение, new QueryParameterValues()));
+    }
+
+    /// <summary>
+    /// Комментарии не маскируют DML; строковые литералы с ключевыми словами
+    /// не дают ложного срабатывания; REPLACE-функция в выборке допустима.
+    /// </summary>
+    [Fact]
+    public async Task КомментарийСDml_ОтклоняетсяЛитералСDml_Проходит()
+    {
+        var сериализатор = new ReportQueryXmlSerializer();
+
+        // 1) комментарий со словом DELETE не отменяет запрета на DELETE-оператор.
+        var скомментарием = сериализатор.Deserialize("""
+            <?xml version="1.0" encoding="utf-8"?>
+            <ReportQueryDefinition id="qrUser_CommentDml" version="1.0">
+              <Name>Комментарий с DML</Name>
+              <Parameters />
+              <ValidationRules>
+                <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+              </ValidationRules>
+              <Command dialect="Sqlite">
+                <![CDATA[SELECT name FROM groups /* затем -- удалить
+                */; DELETE FROM groups;]]>
+              </Command>
+            </ReportQueryDefinition>
+            """);
+
+        await Assert.ThrowsAsync<QueryValidationException>(() =>
+            _поставщик.RunDefinitionAsync(скомментарием, new QueryParameterValues()));
+
+        // 2) литерал 'DELETE FROM groups' в выборке — не DML, проходит.
+        var слитералом = сериализатор.Deserialize("""
+            <?xml version="1.0" encoding="utf-8"?>
+            <ReportQueryDefinition id="qrUser_Literal" version="1.0">
+              <Name>Литерал с ключевым словом</Name>
+              <Parameters />
+              <ValidationRules>
+                <Rule type="SqlInjectionGuard" mode="StrictParametric" />
+              </ValidationRules>
+              <Command dialect="Sqlite">
+                <![CDATA[SELECT 'DELETE FROM groups' AS подсказка;]]>
+              </Command>
+            </ReportQueryDefinition>
+            """);
+
+        var строки = await _поставщик.RunDefinitionAsync(слитералом, new QueryParameterValues());
+        Assert.Single(строки);
+    }
+
     /// <summary>Валидный пользовательский запрос перечня групп.</summary>
     private static string ТекстЗапросаГрупп() => """
         <?xml version="1.0" encoding="utf-8"?>
