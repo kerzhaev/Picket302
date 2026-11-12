@@ -29,10 +29,10 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
             """
             INSERT INTO blank_fields (template_id, name, kind, page, x_mm, y_mm, length_mm, height_mm,
                 font_name, font_height_pt, font_height_min_pt, font_height_max_pt, is_bold, is_italic,
-                color_rgb, align, max_chars, is_visible, is_printable, zone_role)
+                color_rgb, align, max_chars, is_visible, is_printable, zone_role, clipart_id)
             VALUES (@TemplateId, @Name, @Kind, @Page, @XMm, @YMm, @LengthMm, @HeightMm,
                 @FontName, @FontHeightPt, @FontHeightMinPt, @FontHeightMaxPt, @IsBold, @IsItalic,
-                @ColorRgb, @Align, @MaxChars, @IsVisible, @IsPrintable, @ZoneRole);
+                @ColorRgb, @Align, @MaxChars, @IsVisible, @IsPrintable, @ZoneRole, @ClipartId);
             SELECT last_insert_rowid();
             """,
             new
@@ -57,6 +57,7 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
                 field.IsVisible,
                 field.IsPrintable,
                 field.ZoneRole,
+                field.ClipartId,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -89,7 +90,7 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
                 font_height_pt = @FontHeightPt, font_height_min_pt = @FontHeightMinPt,
                 font_height_max_pt = @FontHeightMaxPt, is_bold = @IsBold, is_italic = @IsItalic,
                 color_rgb = @ColorRgb, align = @Align, max_chars = @MaxChars, is_visible = @IsVisible,
-                is_printable = @IsPrintable, zone_role = @ZoneRole
+                is_printable = @IsPrintable, zone_role = @ZoneRole, clipart_id = @ClipartId
             WHERE id = @Id;
             """,
             new
@@ -113,6 +114,7 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
                 field.IsVisible,
                 field.IsPrintable,
                 field.ZoneRole,
+                field.ClipartId,
                 field.Id,
             },
             cancellationToken).ConfigureAwait(false);
