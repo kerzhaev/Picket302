@@ -27,34 +27,50 @@ PS-regex дали ложные False, содержательная провер�
 реестр чист (HKCU/HKLM/HKCR — все ключи отсутствуют), процессов нет,
 orphan temp-каталогов нет.
 
+## UNC-путь (выполнен, evidence/com-s14/cold-unc-true.json)
+
+Холодная активация с LocalServer32 на сетевом шаре
+`\\192.168.1.117\Projets\p302-rc-unc-tmp\p302-rc-com-<guid>\…exe`:
+
+| Шаг | Результат |
+|---|---|
+| Cold `CoCreateInstance` CLSCTX_LOCAL_SERVER(0x4) | **hr=0x00000000 за 125 мс** |
+| PID сервера | 90632 |
+| `-Embedding` / CoRegister / CoRevoke (ASCII-маркеры) | 1 / 1 / 1, exe=UNC, cwd=system32 |
+| Остановка | GRACEFUL_EXIT_0 |
+| Очистка | --unregister 0, ключи сняты, процессов 0, temp удалён; корневой каталог `p302-rc-unc-tmp` на шаре удалён (проверено absence) |
+
 ## Статус флагов
 
 ```text
-COM_COLD_VERIFIED=true (5/5 приёмочных + 1 baseline S11, RC 881f077)
+COM_COLD_VERIFIED=true (5/5 приёмочных + 1 baseline S11 + 1 UNC, RC)
 COM_FULL_ACCEPTANCE_VERIFIED=PARTIAL
 ```
 
-`COM_FULL_ACCEPTANCE_VERIFIED` остаётся PARTIAL до выполнения двух
-оставшихся подпунктов S14 (перенесены на завтра, чтобы не оставлять
-грязного состояния на сетевом шаре в конце сессии):
+`COM_FULL_ACCEPTANCE_VERIFIED` остаётся PARTIAL до выполнения оставшегося
+подпункта S14:
 
-1. **UNC-путь**: холодная активация с LocalServer32 на
-   `\\192.168.1.117\Projets\…` (скрипт `unc-cycle.ps1`, адаптация под RC;
-   в stage5-verify подтверждён — `cold-unc-true.json`). Требует создания
-   временного каталога на сетевом шаре и его гарантированного удаления.
+1. ~~UNC-путь~~ — **выполнен** (см. выше).
 2. **PrintEnvelope через COM на безопасном виртуальном/тестовом пути** с
    записью ожидаемых данных в изолированную БД (не production). В stage5
    не выполнялся (AcceptanceScenarioTests перемещает production-БД —
    запрещено без переработки изоляции). Нужен изолированный профиль +
    виртуальный принтер; спроектировать безопасный сценарий.
 
-## Точка возобновления (завтра)
+## Инструментальные уточнения (ревью F-W3-3)
+
+`Stop-ServerGraceful` возвращает `GRACEFUL_EXIT_0` по факту `WaitForExit`,
+не проверяя код выхода процесса (имя подразумевает 0); компенсировано
+строкой `CoRevokeClassObject` в журнале (в коде выполняется после выхода
+из цикла сообщений перед return 0). В dispatch-пробе `hr=[0]` —
+возвращаемое значение метода, а не HRESULT (успех = отсутствие «Dispatch
+call FAILED»). Доказательства валидны; точные имена — в будущих драйверах.
+
+## Точка возобновления
 
 - Скрипты готовы: `Temp\p302-rc-com-20261112\{com-cold-run.ps1,
-  acceptance-5x.ps1, baseline.ps1, comprobe\out\P302ComProbe.exe}`;
-  `unc-cycle.ps1` адаптировать (заменить `p302-stage5-unc-tmp` →
-  `p302-rc-unc-tmp`, путь ком-cold-run — RC).
-- После UNC + PrintEnvelope: `COM_FULL_ACCEPTANCE_VERIFIED=true`, затем S15
+  acceptance-5x.ps1, baseline.ps1, unc-cycle.ps1, comprobe\out\P302ComProbe.exe}`.
+- После PrintEnvelope: `COM_FULL_ACCEPTANCE_VERIFIED=true`, затем S15
   (поставочная COM-модель: регистрация/удаление на чистой среде, инструкции
   восстановления, выбор HKCU/HKLM под установщик).
 

@@ -47,14 +47,24 @@ COM_CODE_FIX_REQUIRED=false (per-PID shutdown + graceful revoke already present)
 HKCU_TO_HKLM_MIGRATION=not required; owner decision deferred to S15
 ```
 
-## Замечание D-S14-logenc (P3, косметическое)
+## Замечание D-S14-psenc (P3, косметическое; перенацелено по ревью F-W3-1)
 
-`com-automation.log` пишется с двойной кодировкой кириллицы («Запуск» →
-«╟ряєёъ», «выполнен» → «т√яюыэхэ»): ASCII-маркеры (pid, -Embedding,
-CoRegisterClassObject, CoRevokeClassObject, hresult) целы, кириллические
-слова искажены. Из-за этого PowerShell-критерии приёмки, матчившие
-кириллицу (`Запуск:`, `выполнен:`), дали ложные `freshEmbedding=False` /
-`gracefulRevoke=False`; содержательная проверка по ASCII-маркерам
+Первоначально дефект был ошибочно приписан кодировке журнала
+(D-S14-logenc). Ревью F-W3-1 установило истинную причину: **канонический
+`com-automation.log` — корректный UTF-8** (`AutomationServerLog` пишет
+`new UTF8Encoding(false)`; байты слова «Запуск» = `d0 97 d0 b0 d0 bf d1 83
+d1 81 d0 ba`, проверено по всем PID; хеш-цепочка журнала непрерывна).
+Визуальный «╟ряєёъ» — лишь CP866-рендер консоли при выводе корректно
+декодированной UTF-8-строки, а не порча байтов.
+
+Истинная причина ложных `freshEmbedding=False`/`gracefulRevoke=False`:
+`acceptance-5x.ps1` сохранён в UTF-8 **без BOM** (первые байты `23 20`),
+PowerShell 5.1 декодирует скрипт как ANSI → кириллические regex-литералы
+(`Запуск:`, `выполнен:`) ломаются. ASCII-критерий `coRegisterSOk` при этом
+остался true. Содержательная проверка по ASCII-маркерам
 (encoding-independent, `acceptance-5x-verified.json`) подтвердила все
-5 циклов. Дефект кодировки журнала — предсуществующий, на функцию COM не
-влияет; кандидат в бэклог (исправление кодировки AutomationServerLog).
+5 циклов; сырой PS-результат сохранён (`acceptance-5x-ps-raw.json`).
+
+Бэклог: PS-драйверы приёмки сохранять в UTF-8 **с BOM** либо использовать
+ASCII-маркеры (иначе ложные FAIL повторятся). Кодировку
+`AutomationServerLog` НЕ менять (она корректна). На функцию COM не влияет.

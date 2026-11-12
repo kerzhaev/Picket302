@@ -15,7 +15,10 @@ Release x64 сборка ComAutomation 0/0. Тихое окно подтверж
 Состояние ЧИСТОЕ (проверено `reg query` — однозначные пути; ранний
 PowerShell-замер `Test-Path` дал ложноположительный результат из-за
 экранирования `$clsid` в bash-heredoc — отброшен, baseline перезаписан
-корректным reg.exe-замером). Пользователь `Nachfin`, OS AMD64, .NET 8.0.420.
+корректным reg.exe-замером). Уточнение по ревью F-W3-2: `capturedUtc`
+файла — момент повторного reg.exe-замера (после отбраковки Test-Path);
+фактическое ПРЕДсостояние прогона независимо доказано полем
+`pre.registrationPresent=false` в `cold-s11-cold1.json`. Пользователь `Nachfin`, OS AMD64, .NET 8.0.420.
 Модель регистрации — per-user `HKCU\Software\Classes` (ComRegistration.cs,
 ТЗ §9.3 функция 114), прав администратора не требует.
 
