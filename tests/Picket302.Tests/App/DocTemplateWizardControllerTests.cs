@@ -352,10 +352,6 @@ public sealed class DocTemplateWizardControllerTests
     };
 
     /// <summary>
-    /// Создаёт временный каталог для шаблонов.
-    /// </summary>
-    /// <returns>Путь к созданному каталогу.</returns>
-    /// <summary>
     /// S29 (ТЗ §8.5, функция 66): предпросмотр результата — генерация из
     /// текущего текста редактора; подстановка значений маркеров.
     /// </summary>
@@ -414,6 +410,10 @@ public sealed class DocTemplateWizardControllerTests
             Assert.DoesNotContain("Старый текст", послеПравки.Content);
             Assert.Equal("Старый текст без маркеров", File.ReadAllText(путь));
             Assert.True(контроллер.IsDirty);
+
+            // Путь шаблона не перенесён на временный файл предпросмотра
+            // (вторая половина пойманного дефекта Save-внутри-preview).
+            Assert.Equal(Path.GetFullPath(путь), контроллер.TemplatePath);
         }
         finally
         {
@@ -505,6 +505,8 @@ public sealed class DocTemplateWizardControllerTests
         }
     }
 
+    /// <summary>Создаёт временный каталог для шаблонов.</summary>
+    /// <returns>Путь к созданному каталогу.</returns>
     private static string СоздатьКаталог()
     {
         var путь = Path.Combine(Path.GetTempPath(), $"picket302_шаблоны_{Guid.NewGuid():N}");

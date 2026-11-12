@@ -150,6 +150,16 @@ public sealed class DialogAccessibilityContractTests
                 new Picket302.Infrastructure.Queries.SqliteReportDataProvider(
                     new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:"))),
         };
+        yield return new object[]
+        {
+            "Предпросмотр результата документа",
+            new ФормаПредпросмотраРезультата(
+                new DocumentResultPreview(
+                    true,
+                    "Образец содержимого предпросмотра",
+                    Array.Empty<string>(),
+                    "Документ: 36 байт")),
+        };
     }
 
     private static FormCsvImportConfig СоздатьДиалогCsv()

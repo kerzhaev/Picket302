@@ -429,6 +429,8 @@ public sealed class DocTemplateWizardController
             or System.Xml.XmlException
             or System.Xml.Xsl.XsltException
             or IOException
+            or UnauthorizedAccessException
+            or System.IO.InvalidDataException
             or ArgumentException)
         {
             // Ошибка генерации не превращается в «ложный результат»:
