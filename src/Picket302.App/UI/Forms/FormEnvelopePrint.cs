@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Picket302.App.UI.Components;
 using Picket302.Domain.Entities;
+using Picket302.Domain.Postal;
 using Picket302.Printing;
 using Picket302.Printing.Devices;
 using Picket302.Printing.Engine;
@@ -75,6 +76,15 @@ public sealed class FormEnvelopePrint : Form
     private readonly bool _показыватьПредупреждениеРазлиновки;
     private readonly Button _кнопкаНастройкиПринтера = new() { Text = "Настройки принтера", AutoSize = true };
 
+    /// <summary>
+    /// Калибровка пары «принтер + формат» (ТЗ §8.4, функция 45):
+    /// смещение с шагом 0,1 мм, применяется в предпросмотре и печати.
+    /// </summary>
+    private readonly Button _кнопкаКалибровки = new() { Text = "Калибровка…", AutoSize = true };
+
+    /// <summary>Профиль калибровочных смещений (NULL — калибровка недоступна).</summary>
+    private readonly PrinterOffsetProfile? _профильКалибровки;
+
     /// <summary>Признак показа перечня шаблонов в диалоге.</summary>
     private bool _переченьШаблоновПоказывается;
 
@@ -107,7 +117,8 @@ public sealed class FormEnvelopePrint : Form
         int копий = 1,
         PrintTemplate? последнийШаблон = null,
         PrinterManager? службаПринтеров = null,
-        bool показыватьПредупреждениеРазлиновки = true)
+        bool показыватьПредупреждениеРазлиновки = true,
+        PrinterOffsetProfile? профильКалибровки = null)
     {
         Text = "Печать";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -120,6 +131,7 @@ public sealed class FormEnvelopePrint : Form
         MinimumSize = new Size(560, 240);
 
         _службаПринтеров = службаПринтеров;
+        _профильКалибровки = профильКалибровки;
         _показыватьПредупреждениеРазлиновки = показыватьПредупреждениеРазлиновки;
 
         foreach (var шаблон in шаблоны.Where(шаблон => шаблон.Kind == PrintTemplateKind.Envelope))
@@ -309,6 +321,13 @@ public sealed class FormEnvelopePrint : Form
             "Открыть системные свойства выбранного принтера (ТЗ §8.6, функция 78)");
         _кнопкаНастройкиПринтера.Click += (_, _) => ОткрытьНастройкиПринтера();
 
+        _кнопкаКалибровки.AccessibleName = "Калибровка принтера";
+        _подсказки.SetToolTip(
+            _кнопкаКалибровки,
+            "Калибровочное смещение пары «принтер + формат» с шагом 0,1 мм (ТЗ §8.4, функция 45)");
+        _кнопкаКалибровки.Enabled = _профильКалибровки is not null;
+        _кнопкаКалибровки.Click += (_, _) => ОткрытьКалибровку();
+
         var блокШаблонаИПринтера = Секция("Шаблон и принтер", сетка =>
         {
             сетка.RowCount = 3;
@@ -317,6 +336,7 @@ public sealed class FormEnvelopePrint : Form
             сетка.Controls.Add(Метка("Принтер:"), 0, 1);
             сетка.Controls.Add(_принтеры, 1, 1);
             сетка.Controls.Add(_кнопкаНастройкиПринтера, 2, 1);
+            сетка.Controls.Add(_кнопкаКалибровки, 3, 1);
             _принтеры.MinimumSize = new Size(240, 0);
         });
 
@@ -557,5 +577,48 @@ public sealed class FormEnvelopePrint : Form
         }
 
         _службаПринтеров.ShowPrinterProperties(принтер.Name);
+    }
+
+    /// <summary>
+    /// Открывает калибровку выбранной пары «принтер + формат конверта»
+    /// (ТЗ §8.4, функция 45). Смещение применяется в предпросмотре и
+    /// печати независимо для каждой пары.
+    /// </summary>
+    private void ОткрытьКалибровку()
+    {
+        if (_профильКалибровки is null)
+        {
+            return;
+        }
+
+        var принтер = ВыбранныйПринтер;
+        var шаблон = ВыбранныйШаблон;
+
+        if (принтер is null || шаблон is null)
+        {
+            MessageBox.Show(
+                this,
+                "Выберите принтер и шаблон конверта для калибровки.",
+                "Калибровка принтера",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        if (!System.Enum.TryParse<EnvelopeFormat>(шаблон.Format, true, out var формат))
+        {
+            MessageBox.Show(
+                this,
+                $"Формат «{шаблон.Format}» не распознан как формат конверта.",
+                "Калибровка принтера",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        using var диалог = new FormPrinterCalibration(_профильКалибровки, принтер.Name, формат);
+        диалог.ShowDialog(this);
     }
 }

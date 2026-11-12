@@ -1,6 +1,7 @@
 using Picket302.Application.Services;
 using Picket302.Application.Setup;
 using Picket302.Domain.Common;
+using Picket302.Domain.Entities;
 using Picket302.Domain.Licensing;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.Services;
@@ -185,8 +186,11 @@ public sealed class AppServices : IAsyncDisposable
             new PostIndexRenderer(контрольШрифта),
             выводКодов,
             new LogoRenderer(),
+            printerProfiles: new PrinterProfileRepository(сессия),
             printHistory: new PrintHistoryRecorder(СлужбаПисем),
             licenseGate: ВоротаЛицензии);
+
+        ПрофильКалибровки = new PrinterOffsetProfile(new PrinterProfileRepository(сессия));
 
         СлужбаПредпросмотра = new PrintPreviewEngine(
             рендерер,
@@ -333,6 +337,12 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>Управление печатными сессиями (F5 / F6 / F7).</summary>
     public PrintSessionController СлужбаПечати { get; }
+
+    /// <summary>
+    /// Калибровочные смещения пар «принтер + формат» (ТЗ §8.4, функция 45):
+    /// UI-точка входа диалога печати; хранится в printer_profiles.
+    /// </summary>
+    public PrinterOffsetProfile ПрофильКалибровки { get; }
 
     /// <summary>Движок предпросмотра печати.</summary>
     public PrintPreviewEngine СлужбаПредпросмотра { get; }
