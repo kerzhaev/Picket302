@@ -60,6 +60,13 @@ public sealed class SqliteReportDataProvider : IReportDataProvider
         _валидатор.ValidateValues(definition, values, CurrentDialect);
 
         var команда = definition.GetCommand(CurrentDialect);
+
+        // Слой запросов — только чтение (D-S27-03): пользовательский query.xml
+        // исполняется на живом соединении сессии, поэтому операторы изменения
+        // данных (INSERT/UPDATE/DELETE/DROP/…) и составные команды запрещены
+        // независимо от валидности синтаксиса.
+        ТребоватьТолькоЧтение(definition, команда.Sql);
+
         var (текст, параметры) = Подготовить(команда.Sql, values);
 
         using var sqliteКоманда = _соединение.CreateCommand();
@@ -86,6 +93,40 @@ public sealed class SqliteReportDataProvider : IReportDataProvider
         }
 
         return строки;
+    }
+
+    /// <summary>
+    /// Слой запросов — только чтение: текст команды обязан быть единственным
+    /// оператором SELECT или WITH (рекурсивные CTE для перечней). Операторы
+    /// изменения схемы/данных запрещены независимо от валидности синтаксиса,
+    /// поскольку запросы исполняются на живом соединении сессии
+    /// (D-S27-03: пользовательский query.xml → предпросмотр данных).
+    /// </summary>
+    /// <param name="definition">Определение запроса (для текста нарушения).</param>
+    /// <param name="sql">Текст команды диалекта SQLite.</param>
+    /// <exception cref="QueryValidationException">Команда не только для чтения.</exception>
+    private static void ТребоватьТолькоЧтение(ReportQueryDefinition definition, string sql)
+    {
+        var текст = sql.Trim();
+
+        // Хвостовая точка с запятой допустима (встроенные запросы записаны с
+        // ней); внутренние точки с запятой означают составную команду.
+        текст = текст.TrimEnd(';').TrimEnd();
+
+        if (текст.Contains(';', StringComparison.Ordinal))
+        {
+            throw new QueryValidationException(
+                $"Запрос «{definition.Id}» содержит несколько операторов — слой данных исполняет только одиночную команду чтения.");
+        }
+
+        var верхний = текст.ToUpperInvariant();
+
+        if (!верхний.StartsWith("SELECT", StringComparison.Ordinal)
+            && !верхний.StartsWith("WITH", StringComparison.Ordinal))
+        {
+            throw new QueryValidationException(
+                $"Запрос «{definition.Id}» не является командой чтения (ожидается SELECT или WITH) — слой данных исполняет только выборки.");
+        }
     }
 
     /// <summary>

@@ -86,12 +86,35 @@ public sealed class ReportQueryXmlSerializer
         {
             var maxDays = (string?)правило.Attribute("maxDays");
 
+            // Синтаксическая ошибка в атрибутах правила — это ошибка разбора
+            // query.xml (ReportQueryXmlException), а не FormatException,
+            // прорывающийся наружу: потребители изолируют по типу ошибки
+            // разбора (ТЗ §8.4, функция 56; D-S27-02).
+            int? разобранныеДни = null;
+
+            if (maxDays is not null)
+            {
+                if (!int.TryParse(
+                        maxDays,
+                        System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var дни)
+                    || дни < 0)
+                {
+                    throw new ReportQueryXmlException(
+                        $"Правило «{(string?)правило.Attribute("type")}» содержит некорректный атрибут maxDays «{maxDays}» (ожидается целое неотрицательное число).",
+                        Строка(правило));
+                }
+
+                разобранныеДни = дни;
+            }
+
             определение.ValidationRules.Add(new QueryRule
             {
                 Type = (string?)правило.Attribute("type") ?? string.Empty,
                 Start = (string?)правило.Attribute("start"),
                 End = (string?)правило.Attribute("end"),
-                MaxDays = maxDays is null ? null : int.Parse(maxDays, System.Globalization.CultureInfo.InvariantCulture),
+                MaxDays = разобранныеДни,
                 Mode = (string?)правило.Attribute("mode"),
             });
         }

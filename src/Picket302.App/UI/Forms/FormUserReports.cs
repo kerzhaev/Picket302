@@ -140,7 +140,9 @@ public sealed class FormUserReports : Form
         }
         catch (Exception ошибка) when (ошибка is ArgumentException
             or FileNotFoundException
-            or InvalidOperationException)
+            or InvalidOperationException
+            or IOException
+            or UnauthorizedAccessException)
         {
             результат = new UserReportValidationResult(
                 false,
@@ -156,16 +158,34 @@ public sealed class FormUserReports : Form
 
     /// <summary>
     /// Проверяет и сохраняет новый текст query.xml отчёта (правка запроса,
-    /// ТЗ §4.1). Невалидный текст не сохраняется — данные отчёта не повреждаются.
+    /// ТЗ §4.1). Невалидный текст не сохраняется — данные отчёта не
+    /// повреждаются; любые ошибки (включая пустой текст и блокировки файлов)
+    /// изолируются в результате валидации, наружу не бросаются
+    /// (D-S27-01, D-S27-04).
     /// </summary>
     /// <param name="имя">Наименование отчёта.</param>
     /// <param name="текстЗапроса">Новый текст query.xml.</param>
     /// <returns>Результат валидации.</returns>
     internal async Task<UserReportValidationResult> СохранитьЗапросAsync(string имя, string текстЗапроса)
     {
-        var результат = await _менеджер
-            .EditUserQueryAsync(имя, текстЗапроса)
-            .ConfigureAwait(true);
+        UserReportValidationResult результат;
+
+        try
+        {
+            результат = await _менеджер
+                .EditUserQueryAsync(имя, текстЗапроса)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ошибка) when (ошибка is ArgumentException
+            or InvalidOperationException
+            or IOException
+            or UnauthorizedAccessException)
+        {
+            результат = new UserReportValidationResult(
+                false,
+                имя,
+                [ошибка.Message]);
+        }
 
         ПоказатьВалидацию(результат);
 
@@ -195,6 +215,8 @@ public sealed class FormUserReports : Form
             or QueryValidationException
             or System.Xml.XmlException
             or FileNotFoundException
+            or IOException
+            or UnauthorizedAccessException
             or InvalidOperationException)
         {
             return $"Отчёт «{имя}»: ошибка валидации — {ошибка.Message}";
@@ -246,6 +268,8 @@ public sealed class FormUserReports : Form
             or QueryValidationException
             or System.Xml.XmlException
             or FileNotFoundException
+            or IOException
+            or UnauthorizedAccessException
             or InvalidOperationException
             or KeyNotFoundException
             or Microsoft.Data.Sqlite.SqliteException)
