@@ -27,20 +27,39 @@ public sealed class SqliteReportDataProvider : IReportDataProvider
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<IReportRow>> RunQueryAsync(
+    public Task<IReadOnlyList<IReportRow>> RunQueryAsync(
         string queryId,
         QueryParameterValues values,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(queryId);
+
+        return RunDefinitionAsync(BuiltinReportQueryCatalog.Get(queryId), values, cancellationToken);
+    }
+
+    /// <summary>
+    /// Исполняет произвольное определение запроса (ТЗ §8.4, функция 56:
+    /// пользовательские отчёты из <c>Templates/Reports/User</c>). Определение
+    /// и значения валидируются штатным <see cref="QueryValidator"/>; исполняется
+    /// только команда диалекта SQLite текущей поставки.
+    /// </summary>
+    /// <param name="definition">Определение запроса (встроенное или пользовательское).</param>
+    /// <param name="values">Значения параметров; передаются в СУБД только привязкой.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Строки результата с точными псевдонимами колонок.</returns>
+    public async Task<IReadOnlyList<IReportRow>> RunDefinitionAsync(
+        ReportQueryDefinition definition,
+        QueryParameterValues values,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(values);
 
-        var определение = BuiltinReportQueryCatalog.Get(queryId);
-        определение.ApplyDefaults(values, DateTime.UtcNow);
-        _валидатор.ValidateDefinition(определение);
-        _валидатор.ValidateValues(определение, values, CurrentDialect);
+        definition.ApplyDefaults(values, DateTime.UtcNow);
+        _валидатор.ValidateDefinition(definition);
+        _валидатор.ValidateValues(definition, values, CurrentDialect);
 
-        var команда = определение.GetCommand(CurrentDialect);
+        var команда = definition.GetCommand(CurrentDialect);
         var (текст, параметры) = Подготовить(команда.Sql, values);
 
         using var sqliteКоманда = _соединение.CreateCommand();

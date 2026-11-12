@@ -141,6 +141,15 @@ public sealed class DialogAccessibilityContractTests
             "Отчёт об ошибке",
             new FormExceptionReport(new InvalidOperationException("Тестовое исключение")),
         };
+        yield return new object[]
+        {
+            "Пользовательские отчёты",
+            new FormUserReports(
+                new Picket302.Application.Services.CustomReportManager(
+                    Path.Combine(Path.GetTempPath(), "Picket302Accessibility", "user-reports")),
+                new Picket302.Infrastructure.Queries.SqliteReportDataProvider(
+                    new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:"))),
+        };
     }
 
     private static FormCsvImportConfig СоздатьДиалогCsv()

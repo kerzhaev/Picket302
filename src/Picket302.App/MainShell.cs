@@ -885,6 +885,15 @@ public sealed class MainShell : Form
             (_, _) => ПоказатьСпециальныйБланк(
                 Picket302.Infrastructure.Templates.SpecialFormType.CreditorApplication)));
         печать.DropDownItems.Add(специальные);
+
+        // Пользовательские отчёты (ТЗ §8.4, функция 56): реестр пакетов
+        // «макет .lbk + query.xml», регистрация, правка запроса и предпросмотр
+        // данных поверх текущей базы.
+        печать.DropDownItems.Add(new ToolStripMenuItem(
+            "Пользовательские отчёты…",
+            EnvelopeUiTheme.СоздатьЗначок("form"),
+            (_, _) => ОткрытьПользовательскиеОтчёты()));
+
         печать.DropDownItems.Add(new ToolStripSeparator());
         печать.DropDownItems.Add(new ToolStripMenuItem(
             "Настройки принтера…",
@@ -5677,6 +5686,25 @@ public sealed class MainShell : Form
 
         using var редактор = new UI.Forms.FormBlankEditor(бланк);
         редактор.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает диалог пользовательских отчётов (ТЗ §8.4, функция 56):
+    /// регистрация пакетов «макет .lbk + query.xml», правка запроса с
+    /// валидацией и предпросмотр данных поверх текущей базы.
+    /// </summary>
+    private void ОткрытьПользовательскиеОтчёты()
+    {
+        var состав = _состав;
+        if (состав is null)
+        {
+            return;
+        }
+
+        using var форма = new UI.Forms.FormUserReports(
+            состав.МенеджерПользовательскихОтчётов,
+            состав.ПоставщикДанныхОтчётов);
+        форма.ShowDialog(this);
     }
 
     /// <summary>

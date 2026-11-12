@@ -1,5 +1,7 @@
 ﻿using System.Drawing;
 using Picket302.App;
+using Picket302.App.UI.Forms;
+using Picket302.Application.Services;
 using Picket302.Domain.Entities;
 using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure;
@@ -76,7 +78,7 @@ static bool НеактивирующийРежим()
         "1",
         StringComparison.Ordinal);
 
-if (режим is not ("emptybook" or "printflow" or "noaddress" or "screens" or "screens2" or "noprinter"))
+if (режим is not ("emptybook" or "printflow" or "noaddress" or "screens" or "screens2" or "noprinter" or "userreports"))
 {
     Console.Error.WriteLine($"Неизвестный режим: {режим}");
     return 2;
@@ -742,6 +744,70 @@ static void Выполнить(MainShell окно, string команда, AppSer
             else
             {
                 Console.Out.WriteLine("FAIL F7: пункт меню не найден");
+            }
+
+            break;
+
+        case "ADDUSERREPORT":
+            // Пользовательские отчёты (S27, ТЗ §8.4, функция 56): регистрация
+            // пакета «макет .lbk + query.xml» через реальный диалог на составе
+            // приложения. Аргумент: имя|пакет|запрос. Ответ содержит число
+            // отчётов в списке и итог валидации — доказательство изоляции
+            // ошибок и попадания в реестр Templates/Reports/User.
+            {
+                var части = аргумент.Split('|', 3);
+
+                if (части.Length < 3)
+                {
+                    Console.Out.WriteLine("FAIL ADDUSERREPORT: нужен аргумент имя|пакет|запрос");
+                    break;
+                }
+
+                using var форма = new FormUserReports(
+                    состав.МенеджерПользовательскихОтчётов,
+                    состав.ПоставщикДанныхОтчётов);
+
+                var сообщения = new List<string>();
+                typeof(FormUserReports).GetProperty(
+                    "УведомитьДляПроверок",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                    .SetValue(форма, new Action<string, string>((текст, _) => сообщения.Add(текст)));
+
+                var метод = typeof(FormUserReports).GetMethod(
+                    "ЗарегистрироватьAsync",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+                var задача = (Task<UserReportValidationResult>)метод.Invoke(
+                    форма, new object[] { части[0], части[1], части[2] })!;
+
+                // Команда исполняется в BeginInvoke обработчике — цикл сообщений
+                // не качается; ждём завершения с прокачкой DoEvents, иначе
+                // продолжение await (ConfigureAwait(true)) не выполнится.
+                while (!задача.IsCompleted)
+                {
+                    Application.DoEvents();
+                    Thread.Sleep(10);
+                }
+
+                var результат = задача.Result;
+                var число = (int)(typeof(FormUserReports).GetProperty(
+                    "ЧислоОтчётов",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                    .GetValue(форма) ?? 0);
+                Console.Out.WriteLine(
+                    $"OK ADDUSERREPORT name={части[0]} valid={результат.IsValid} "
+                    + $"errors={результат.Errors.Count} count={число} "
+                    + $"уведомлений={сообщения.Count}");
+            }
+
+            break;
+
+        case "USERREPORTS":
+            // Перечень пользовательских отчётов реального профиля: число
+            // записей и наименования — состояние каталога Templates/Reports/User.
+            {
+                var перечень = состав.МенеджерПользовательскихОтчётов.ListUserReports();
+                var имена = string.Join(",", перечень.Select(запись => запись.Name));
+                Console.Out.WriteLine($"OK USERREPORTS count={перечень.Count} names={имена}");
             }
 
             break;

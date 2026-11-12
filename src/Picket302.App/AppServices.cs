@@ -13,6 +13,7 @@ using System.Drawing.Printing;
 using Picket302.Infrastructure.Localization;
 using Picket302.Infrastructure.Logging;
 using Picket302.Infrastructure.Persistence;
+using Picket302.Infrastructure.Queries;
 using Picket302.Infrastructure.Registry;
 using Picket302.Infrastructure.Repositories;
 using Picket302.Infrastructure.Storage;
@@ -213,6 +214,13 @@ public sealed class AppServices : IAsyncDisposable
         МенеджерЯзыка = new LanguageManager(
             null,
             сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+
+        // Пользовательские отчёты (ТЗ §8.4, функция 56): реестр пакетов
+        // «макет + query.xml» в каталоге профиля Templates/Reports/User;
+        // исполнение пользовательских запросов — поверх открытого соединения
+        // текущей сессии (штатный валидатор и StrictParametric).
+        МенеджерПользовательскихОтчётов = new CustomReportManager(_профиль.DataDirectory);
+        ПоставщикДанныхОтчётов = new SqliteReportDataProvider(сессия.Connection);
     }
 
     /// <summary>
@@ -392,6 +400,19 @@ public sealed class AppServices : IAsyncDisposable
     /// Менеджер локализации интерфейса (ТЗ §8.11, функция 112).
     /// </summary>
     public LanguageManager МенеджерЯзыка { get; }
+
+    /// <summary>
+    /// Менеджер пользовательских отчётов (ТЗ §8.4, функция 56): регистрация
+    /// пакетов «макет .lbk + query.xml», перечень, правка запроса с валидацией.
+    /// </summary>
+    public CustomReportManager МенеджерПользовательскихОтчётов { get; }
+
+    /// <summary>
+    /// Исполнитель запросов слоя данных поверх текущей базы (ТЗ §8.4,
+    /// функция 56): встроенные по идентификатору и пользовательские по
+    /// определению, значения — только привязанными параметрами.
+    /// </summary>
+    public SqliteReportDataProvider ПоставщикДанныхОтчётов { get; }
 
     /// <summary>
     /// Вычислитель идентификатора оборудования (ТЗ §8.10, функция 120).
