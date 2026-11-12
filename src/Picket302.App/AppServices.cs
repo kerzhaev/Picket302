@@ -8,6 +8,7 @@ using Picket302.Infrastructure;
 using Picket302.Infrastructure.Data;
 using Picket302.Infrastructure.Fonts;
 using Picket302.Infrastructure.Licensing;
+using System.Drawing.Printing;
 using Picket302.Infrastructure.Localization;
 using Picket302.Infrastructure.Logging;
 using Picket302.Infrastructure.Persistence;
@@ -45,6 +46,25 @@ public sealed class AppServices : IAsyncDisposable
 
     private readonly SqliteUnitOfWork _сессия;
     private readonly Picket302ProfilePaths _профиль;
+
+    /// <summary>
+    /// Спулер печати: экземпляр удерживается для проброса точки
+    /// автоматических проверок (PrintToFile приёмочных драйверов) —
+    /// в работе хук не задаётся.
+    /// </summary>
+    private readonly SystemDrawingPrintSpooler СпулерПечати = new();
+
+    /// <summary>
+    /// Точка автоматических проверок печати (S17, приёмка UI→спулер):
+    /// пробрасывает штатный хук <see cref="SystemDrawingPrintSpooler.
+    /// НастройкаДокументаДляПроверок"/> — включает PrintToFile штатного
+    /// драйвера без интерактивного порта. Только для драйверов приёмки;
+    /// в работе не задаётся.
+    /// </summary>
+    public Action<PrintDocument>? НастройкаДокументаПечатиДляПроверок
+    {
+        set => СпулерПечати.НастройкаДокументаДляПроверок = value;
+    }
 
     private AppServices(
         SqliteUnitOfWork сессия,
@@ -159,7 +179,7 @@ public sealed class AppServices : IAsyncDisposable
             ЖурналПечати,
             ДанныеПечати,
             new PrintAuditWriter(каталогАудита),
-            new SystemDrawingPrintSpooler(),
+            СпулерПечати,
             рендерер,
             new PaperSizeValidator(),
             new PostIndexRenderer(контрольШрифта),

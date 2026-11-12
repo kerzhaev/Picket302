@@ -1,5 +1,6 @@
 using Picket302.Domain.Entities;
 using Picket302.Printing.Devices;
+using Picket302.Printing.Metrics;
 
 namespace Picket302.Printing.Engine;
 
@@ -110,6 +111,36 @@ public sealed class FixA4Mode
             FixA4 = true,
             Warnings = предупреждения,
             CroppedFieldNames = обрезанныеПоля,
+        };
+    }
+
+    /// <summary>
+    /// Переводит сведения о принтере под лист A4 (D-S17-01): сведения
+    /// запрашиваются у драйвера под код формата бланка (например, конверт
+    /// C6); на драйверах без конвертных форматов печатная область
+    /// приходит меньше бланка, и повторная валидация после
+    /// «Зафиксировать A4» зацикливалась на блокировке. После перевода
+    /// задания в A4 сведения принтера обязаны соответствовать A4.
+    /// </summary>
+    /// <param name="printer">Сведения принтера, полученные для формата бланка.</param>
+    /// <param name="orientation">Ориентация листа A4.</param>
+    /// <returns>Сведения принтера с габаритами и печатной областью A4.</returns>
+    public static PrinterDeviceInfo ОбновитьПринтерПодФорматA4(
+        PrinterDeviceInfo printer,
+        TemplateOrientation orientation)
+    {
+        ArgumentNullException.ThrowIfNull(printer);
+
+        var (ширина, высота) = РазмерыA4(orientation);
+
+        return printer with
+        {
+            PaperSizeName = "A4",
+            PaperWidthMm = ширина,
+            PaperHeightMm = высота,
+            PrintableWidthMm = ширина,
+            PrintableHeightMm = высота,
+            DmPaperSize = DevModeConstants.DMPAPER_A4,
         };
     }
 

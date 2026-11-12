@@ -586,6 +586,26 @@ static void Выполнить(MainShell окно, string команда, AppSer
 
             break;
 
+        case "PRINTTOFILE":
+            // Приёмочный хук (S17 UI→спулер): направить печать UI в файл
+            // через PrintToFile штатного драйвера — контролируемое задание
+            // без интерактивного порта (PORTPROMPT). Аргумент — полный путь
+            // файла; пустой аргумент или "off" — снять хук.
+            {
+                состав.НастройкаДокументаПечатиДляПроверок =
+                    string.IsNullOrWhiteSpace(аргумент) || аргумент == "off"
+                        ? null
+                        : документ =>
+                        {
+                            документ.PrinterSettings.PrintToFile = true;
+                            документ.PrinterSettings.PrintFileName = аргумент;
+                        };
+                Console.Out.WriteLine(
+                    $"OK PRINTTOFILE {(string.IsNullOrWhiteSpace(аргумент) || аргумент == "off" ? "off" : аргумент)}");
+            }
+
+            break;
+
         case "SENTINFO":
             // Вкладка «Отправленные»: число строк таблицы, признак подсказки
             // пустого дерева и выделение — доказательства состояний 7.1/7.2.
@@ -621,6 +641,37 @@ static void Выполнить(MainShell окно, string команда, AppSer
                 Console.Out.WriteLine(
                     $"SENTINFO строк={строк} подсказка={окно.ПоказанаПодсказкаПустыхПапок} "
                     + $"выделено={таблицаПисем.SelectedRows.Count} первая={первое ?? "-"}");
+            }
+
+            break;
+
+        case "SEEDTEMPLATEPRINT":
+            // S17: шаблон реального размера C6 (162x114 мм) для УСПЕШНОЙ
+            // печати. Штатный SEEDTEMPLATE сеет лист 324x229 (фикстура
+            // теста блокировки размера, F-S03F-3) — он никогда не пройдёт
+            // валидацию A4/Letter и нужен только сценарию блокировки.
+            {
+                var шаблоныПечати = состав.ШаблоныПечати.GetAllAsync().GetAwaiter().GetResult();
+
+                if (шаблоныПечати.Any(элемент => элемент.Name == "Конверт C6 (печать, S17)"))
+                {
+                    Console.Out.WriteLine("OK SEEDTEMPLATEPRINT (уже задан)");
+                }
+                else
+                {
+                    var идентификатор = состав.ШаблоныПечати.AddAsync(new Picket302.Domain.Entities.PrintTemplate
+                    {
+                        Name = "Конверт C6 (печать, S17)",
+                        Kind = Picket302.Domain.Entities.PrintTemplateKind.Envelope,
+                        Format = "C6",
+                        WidthMm = 162m,
+                        HeightMm = 114m,
+                    }).GetAwaiter().GetResult();
+
+                    Console.Out.WriteLine($"OK SEEDTEMPLATEPRINT шаблон={идентификатор}");
+                }
+
+                Console.Out.Flush();
             }
 
             break;

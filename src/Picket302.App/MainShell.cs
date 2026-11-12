@@ -5088,6 +5088,19 @@ public sealed class MainShell : Form
             // прервана оператором.») ошибкой не считается.
             if (string.Equals(итог.Status, PrintJobStatus.BlockedSize, StringComparison.Ordinal))
             {
+                // D-S17-02: блокировка кодового штампа (отсутствие шрифта
+                // ZIPcode) приходит со статусом BlockedSize, но причиной ей
+                // НЕ размер бумаги — диалог «Конверт слишком большой» с
+                // «Зафиксировать A4» вводил в бесконечный повтор, который
+                // шрифт не устраняет никогда. Бумажный диалог не показывается:
+                // итог уходит в единый маппинг (сообщение оператору — там,
+                // без повторных попыток).
+                if (итог.ErrorMessage is not null
+                    && итог.ErrorMessage.Contains("ZIPcode", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Printing.ПечатьИтог.ИзРезультатаКонвейера(итог);
+                }
+
                 var решение = await ПоказатьДиалогРазмераAsync(запрос).ConfigureAwait(true);
 
                 if (решение == PaperSizeBlockedDecision.Отмена)
