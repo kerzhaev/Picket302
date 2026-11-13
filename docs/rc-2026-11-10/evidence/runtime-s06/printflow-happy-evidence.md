@@ -35,7 +35,7 @@
 [2026-11-11T18:02:19Z][pid=18332] OK: окно предпросмотра исчезло
 [2026-11-11T18:02:19Z][pid=18332] UI отвечает после F6 (WM_NULL): True
 [2026-11-11T18:02:19Z][pid=18332] FLOW F6 PASS: True
-[2026-11-11T18:02:20Z][pid=18332] остановка: graceful=True killed=False pid=18332 TreeOk=True TreeConfirmed=True остатки=[] неподтверждённые=[] taskkill= ошибка: 
+[2026-11-11T18:02:20Z][pid=18332] остановка: graceful=True killed=False pid=18332 TreeOk=True TreeConfirmed=True остатки=[] неподтверждённые=[] taskkill= ошибка:
 [2026-11-11T18:02:20Z][pid=18332] harness exit code: 0; killed: False; HarnessNotExited: False
 [2026-11-11T18:02:20Z][pid=18332] stdout: OK SELECT=True OK F5=False OK F6=False FAIL-строк=0
 [2026-11-11T18:02:20Z][pid=18332] temp profile cleaned: True

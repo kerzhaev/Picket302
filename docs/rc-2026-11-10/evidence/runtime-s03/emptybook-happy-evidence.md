@@ -7,7 +7,7 @@
 [2026-11-10T20:47:42Z] temp profile: C:\Users\Nachfin\AppData\Local\Temp\Picket302Acceptance\32e27619cbff4c0fa376159185be163a
 [2026-11-10T20:47:43Z] harness READY: READY 11144574 100856
 [2026-11-10T20:47:46Z] скриншот: C:\Users\Nachfin\p302-worktrees\rc-20261110\docs\rc-2026-11-10\evidence\runtime-s03\01-адресная-книга-пустая-1280x720.png (38827 байт)
-[2026-11-10T20:47:47Z] остановка: graceful=True killed=False pid=100856 TreeOk=True TreeConfirmed=True остатки=[] неподтверждённые=[] taskkill= ошибка: 
+[2026-11-10T20:47:47Z] остановка: graceful=True killed=False pid=100856 TreeOk=True TreeConfirmed=True остатки=[] неподтверждённые=[] taskkill= ошибка:
 [2026-11-10T20:47:47Z] harness exit code: 0; killed: False; HarnessNotExited: False
 [2026-11-10T20:47:47Z] пустое состояние (stdout): всего=0 отправителей=0 получателей=0
 [2026-11-10T20:47:47Z] точный текст COUNTS: 'COUNTS всего=0 отправителей=0 получателей=0' — совпадение: True

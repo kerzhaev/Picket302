@@ -31,7 +31,7 @@
 [2026-11-11T18:02:02Z][pid=67768] OK: окно предпросмотра исчезло после Закрыть
 [2026-11-11T18:02:02Z][pid=67768] UI отвечает после закрытия предпросмотра (WM_NULL): True
 [2026-11-11T18:02:02Z][pid=67768] заданий в спулере после: 0 (ошибка: '')
-[2026-11-11T18:02:03Z][pid=67768] остановка: graceful=True killed=False pid=67768 TreeOk=True TreeConfirmed=True остатки=[] неподтверждённые=[] taskkill= ошибка: 
+[2026-11-11T18:02:03Z][pid=67768] остановка: graceful=True killed=False pid=67768 TreeOk=True TreeConfirmed=True остатки=[] неподтверждённые=[] taskkill= ошибка:
 [2026-11-11T18:02:03Z][pid=67768] harness exit code: 0; killed: False; HarnessNotExited: False
 [2026-11-11T18:02:03Z][pid=67768] temp profile cleaned: True
 [2026-11-11T18:02:03Z][pid=67768] stdout: FAIL-строк=0
