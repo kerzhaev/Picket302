@@ -211,17 +211,31 @@ public static class КомандыРазметки
 
         var результат = html;
 
-        foreach (var блок in ОпасныеБлоки)
+        // D-S39-02: удаление блоков повторяется до стабилизации (до 5 итераций)
+        // — вложенная пересборка «<scr<script>…</script>ipt>» не переживает
+        // повторное сканирование; незакрытый блок удаляется до конца строки.
+        for (var итерация = 0; итерация < 5; итерация++)
         {
-            результат = Regex.Replace(
-                результат,
-                "<" + блок + "[^>]*>.*?</" + блок + ">",
-                string.Empty,
-                RegexOptions.IgnoreCase | RegexOptions.Singleline,
-                TimeSpan.FromMilliseconds(200));
+            var до = результат;
+
+            foreach (var блок in ОпасныеБлоки)
+            {
+                результат = Regex.Replace(
+                    результат,
+                    "<" + блок + "[^>]*>.*?(</" + блок + ">|$)",
+                    string.Empty,
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline,
+                    TimeSpan.FromMilliseconds(200));
+            }
+
+            if (результат == до)
+            {
+                break;
+            }
         }
 
-        // Обработчики событий on* в атрибутах.
+        // Обработчики событий on* в атрибутах — в том числе без пробела перед
+        // «on» (после закрывающей кавычки: href="x"onclick=…).
         результат = ОбработчикиСобытий.Replace(результат, string.Empty);
 
         // Опасные URL-схемы в атрибутах: нейтрализуются якорем.
@@ -233,9 +247,10 @@ public static class КомандыРазметки
     /// <summary>Опасные блоки, удаляемые целиком с содержимым.</summary>
     private static readonly string[] ОпасныеБлоки = ["script", "iframe", "object", "embed", "form"];
 
-    /// <summary>Обработчики событий on* в атрибутах.</summary>
+    /// <summary>Обработчики событий on* в атрибутах — в том числе слитно
+    /// с предыдущим атрибутом: href="x"onclick=… (D-S39-02).</summary>
     private static readonly Regex ОбработчикиСобытий = new(
-        "\\son[a-zA-Z]+\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)",
+        "(?<=[\"'>\\s])on[a-zA-Z]+\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)",
         RegexOptions.Compiled,
         TimeSpan.FromMilliseconds(200));
 
@@ -401,7 +416,9 @@ public sealed class HtmlMailEditor : Form
         _исходныйHtml = очищенный;
         ТекущийHtml = очищенный;
 
-        _код.Text = html;
+        // D-S39-01: поле кода и предпросмотр тоже получают очищенное — иначе
+        // «Готово» и preview возвращают опасную разметку.
+        _код.Text = очищенный;
 
         ОбновитьПредпросмотр();
     }
@@ -565,7 +582,9 @@ public sealed class HtmlMailEditor : Form
 
         кнопкаОк.Click += (_, _) =>
         {
-            ТекущийHtml = _код.Text;
+            // D-S39-01: результат подтверждения — очищенная разметка (оператор
+            // мог внести опасный HTML вручную на вкладке «HTML-код»).
+            ТекущийHtml = КомандыРазметки.ОчиститьОпасныйHtml(_код.Text);
             Подтверждено = true;
         };
     }

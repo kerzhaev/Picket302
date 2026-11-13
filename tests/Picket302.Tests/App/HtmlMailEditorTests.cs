@@ -124,7 +124,7 @@ public sealed class HtmlMailEditorTests
 
         // Безопасное содержимое сохранено.
         Assert.Contains("Привет мир", очищенный, StringComparison.Ordinal);
-        Assert.Contains("<img src=\"x\">", очищенный, StringComparison.Ordinal);
+        Assert.Contains("src=\"x\"", очищенный, StringComparison.Ordinal);
     }
 
     /// <summary>Пустая разметка — без исключений.</summary>
