@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using Picket302.App.UI.Editors;
 using Picket302.Domain.Email;
 using Picket302.Infrastructure.Mail;
@@ -14,6 +15,7 @@ namespace Picket302.Tests.App;
 /// и совпадение «UI и MIME» (HTML редактора попадает в письмо без искажений).
 /// COM, реестр, сеть (кроме локального приёмника) и печать не используются.
 /// </summary>
+[Collection("WinFormsПрофиль")]
 public sealed class HtmlMailEditorTests
 {
     /// <summary>Команды форматирования оборачивают выделение.</summary>
@@ -139,8 +141,9 @@ public sealed class HtmlMailEditorTests
 
         var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(опасный);
 
-        Assert.DoesNotContain("alert", очищенный, StringComparison.Ordinal);
-        Assert.DoesNotContain("<script", очищенный, StringComparison.OrdinalIgnoreCase);
+        // Вся разметка снята: вывод — инертный текст без «<».
+        Assert.DoesNotContain("<", очищенный, StringComparison.Ordinal);
+        Assert.Contains("alert(1)", очищенный, StringComparison.Ordinal);
     }
 
     /// <summary>F-S39R2-02: незакрытый script-блок удаляется до EOF.</summary>
@@ -176,6 +179,134 @@ public sealed class HtmlMailEditorTests
         Assert.Contains("href=\"x\"", очищенный, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Корректирующий проход: подтверждённый обход
+    /// <c>&lt;img src=x ONERROR=alert(1)&gt;</c> (верхний регистр, значение
+    /// без кавычек) — обработчик удаляется, img остаётся с src.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_ВерхнийРегистрОбработчикаБезКавычек_Удаляется()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml("<img src=x ONERROR=alert(1)>");
+
+        Assert.DoesNotContain("onerror", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert", очищенный, StringComparison.Ordinal);
+        Assert.Contains("src=\"x\"", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>Смешанный регистр и одинарные кавычки в обработчике.</summary>
+    [Fact]
+    public void Санитизатор_СмешанныйРегистрОдинарныеКавычки_Удаляются()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<p OnError='alert(1)'>текст</p><a HREF=\'javascript:alert(2)\'>x</a>");
+
+        Assert.DoesNotContain("onerror", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("javascript", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("текст", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Слитный атрибут после кавычки (href="x"onclick=) — обработчик
+    /// удаляется, безопасный href остаётся.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_СлитныйОбработчик_УдаляетсяБезопасныйHrefОстаётся()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<a href=\"https://ok.test/\"onclick=\"alert(1)\">ссылка</a>");
+
+        Assert.DoesNotContain("onclick", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("href=\"https://ok.test/\"", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>Опасные URL-схемы (смешанный регистр, сущности) удаляются.</summary>
+    [Fact]
+    public void Санитизатор_ОпасныеСхемы_Удаляются()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<a href=\"JaVaScRiPt:alert(1)\">x</a>"
+            + "<a href=\"java&#115;cript:alert(2)\">y</a>"
+            + "<a href=\"data:text/html;base64,x\">z</a>");
+
+        Assert.DoesNotContain("javascript", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("vbscript", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("data:", очищенный, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Недопустимый элемент: тег удаляется, содержимое остаётся.</summary>
+    [Fact]
+    public void Санитизатор_НедопустимыйЭлемент_ТегУдаляетсяСодержимоОстаётся()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml("до <foobar>текст внутри</foobar> после");
+
+        Assert.DoesNotContain("foobar", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("текст внутри", очищенный, StringComparison.Ordinal);
+        Assert.Contains("до ", очищенный, StringComparison.Ordinal);
+        Assert.Contains(" после", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>Комментарий удаляется целиком.</summary>
+    [Fact]
+    public void Санитизатор_Комментарий_Удаляется()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml("а<!-- скрытый скрипт -->б");
+
+        Assert.DoesNotContain("скрытый", очищенный, StringComparison.Ordinal);
+        Assert.Contains("а", очищенный, StringComparison.Ordinal);
+        Assert.Contains("б", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Идемпотентность: повторная очистка уже очищенного не меняет разметку.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_Идемпотентен()
+    {
+        var опасный = "<p>Привет <script>alert(1)</script><img src=x onerror=alert(2)>мир</p>";
+
+        var первый = КомандыРазметки.ОчиститьОпасныйHtml(опасный);
+        var второй = КомандыРазметки.ОчиститьОпасныйHtml(первый);
+
+        Assert.Equal(первый, второй);
+    }
+
+    /// <summary>
+    /// Загрузка в редактор: и ТекущийHtml, и поле кода получают очищенную
+    /// разметку (все пути формы — Готово/код/preview — безопасны).
+    /// </summary>
+    /// <summary>WebBrowser (ActiveX) требует STA: форма создаётся и
+    /// управляется на выделенном STA-потоке.</summary>
+    private static T НаSta<T>(Func<T> действие)
+    {
+        T результат = default!;
+
+        var поток = new Thread(() => результат = действие());
+        поток.SetApartmentState(ApartmentState.STA);
+        поток.Start();
+        поток.Join();
+
+        return результат;
+    }
+
+    [Fact]
+    public void Загрузить_КодПолеТожеОчищено()
+    {
+        var форма = НаSta(() => new HtmlMailEditor());
+
+        НаSta<object?>(() =>
+        {
+            форма.Загрузить("<p>ок</p><script>alert(1)</script><img src=x onerror=alert(2)>");
+            return null;
+        });
+
+        var текст = форма.ТекущийHtml;
+
+        Assert.DoesNotContain("script", текст, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onerror", текст, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<p>ок</p>", текст, StringComparison.Ordinal);
+    }
+
     /// <summary>Пустая разметка — без исключений.</summary>
     [Fact]
     public void ОчисткаОпасногоHtml_ПустаяСтрока()
@@ -190,9 +321,17 @@ public sealed class HtmlMailEditorTests
         var шаблон = HtmlMailEditor.ЗагрузитьШаблон();
 
         Assert.False(string.IsNullOrWhiteSpace(шаблон));
+
+        // Allowlist-очистка: шаблон остаётся безопасным и содержимым,
+        // head/meta (вне белого списка) удаляются.
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(шаблон);
+
+        Assert.False(string.IsNullOrWhiteSpace(очищенный));
+        Assert.DoesNotContain("<meta", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<script", очищенный, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(
-            шаблон,
-            КомандыРазметки.ОчиститьОпасныйHtml(шаблон),
+            КомандыРазметки.ОчиститьОпасныйHtml(очищенный),
+            очищенный,
             ignoreCase: false,
             ignoreLineEndingDifferences: true,
             ignoreWhiteSpaceDifferences: true,

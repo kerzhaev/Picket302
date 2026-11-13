@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -193,10 +194,16 @@ public static class КомандыРазметки
     };
 
     /// <summary>
-    /// Очищает опасную разметку (ТЗ §8.7, функция 97: «очистка опасного
-    /// HTML»): удаляет блоки script/iframe/object/embed/form целиком,
-    /// обработчики событий on* и URL-схемы javascript:/vbscript:/data:.
-    /// Текст и безопасное форматирование сохраняются.
+    /// Очищает разметку по разрешённому набору элементов и атрибутов
+    /// (ТЗ §8.7, функция 97: «очистка опасного HTML»). Подход «белого
+    /// списка» безопасен по построению: сохраняются только элементы и
+    /// атрибуты из каталога ниже, причём в любом регистре и при любом
+    /// способе записи кавычек; комментарии, DOCTYPE, инструкции обработки,
+    /// элемент <c>script</c> (в том числе незакрытый и с атрибутом через
+    /// слэш) и любые обработчики on* удаляются; значения URL-атрибутов
+    /// декодируются и проверяются на схему (http/https/mailto/относительная).
+    /// Регрессии обходов — тесты «Санитизатор_*» (F-S39R2-02, подтверждённый
+    /// обход <c>&lt;img src=x ONERROR=alert(1)&gt;</c>).
     /// </summary>
     /// <param name="html">Исходная разметка.</param>
     /// <returns>Очищенная разметка.</returns>
@@ -209,57 +216,388 @@ public static class КомандыРазметки
             return html;
         }
 
-        var результат = html;
+        var результат = new StringBuilder(html.Length);
+        var позиция = 0;
 
-        // D-S39-02: удаление блоков повторяется до стабилизации (до 5 итераций)
-        // — вложенная пересборка «<scr<script>…</script>ipt>» не переживает
-        // повторное сканирование; незакрытый блок удаляется до конца строки.
-        for (var итерация = 0; итерация < 5; итерация++)
+        while (позиция < html.Length)
         {
-            var до = результат;
-
-            foreach (var блок in ОпасныеБлоки)
+            if (html[позиция] != '<')
             {
-                результат = Regex.Replace(
-                    результат,
-                    "<" + блок + "[^>]*>.*?(</" + блок + ">|$)",
-                    string.Empty,
-                    RegexOptions.IgnoreCase | RegexOptions.Singleline,
-                    TimeSpan.FromMilliseconds(200));
+                результат.Append(html[позиция]);
+                позиция++;
+                continue;
             }
 
-            if (результат == до)
+            // Комментарий: удаляется целиком.
+            if (НачинаетсяС(html, позиция, "<!--"))
             {
-                break;
+                позиция = ПропуститьДо(html, позиция + 4, "-->");
+                continue;
+            }
+
+            // DOCTYPE и инструкции обработки: удаляются.
+            if (НачинаетсяС(html, позиция, "<!")
+                || НачинаетсяС(html, позиция, "<?"))
+            {
+                позиция = ПропуститьДо(html, позиция + 2, ">");
+                continue;
+            }
+
+            var закрывающий = позиция + 1 < html.Length && html[позиция + 1] == '/';
+            var стартИмени = позиция + (закрывающий ? 2 : 1);
+
+            // «<» без имени тега — текст; экранируется.
+            if (стартИмени >= html.Length || !char.IsLetter(html[стартИмени]))
+            {
+                результат.Append("&lt;");
+                позиция++;
+                continue;
+            }
+
+            var конец = позиция + 1;
+
+            while (конец < html.Length && html[конец] != '>')
+            {
+                конец++;
+            }
+
+            if (конец >= html.Length)
+            {
+                // Незакрытая «<» до конца строки — текст.
+                результат.Append("&lt;");
+                позиция++;
+                continue;
+            }
+
+            var имя = ИмяТега(html, стартИмени, конец);
+            var самозакрыт = html[конец - 1] == '/';
+            var атрибуты = закрывающий ? null : РазобратьАтрибуты(html, стартИмени + имя.Length, конец);
+
+            позиция = конец + 1;
+
+            if (!закрывающий && ПропускаемыеССодержимым.Contains(имя))
+            {
+                // Опасный/служебный элемент: пропуск вместе с содержимым
+                // (незакрытый — до конца строки; регистр имени не имеет
+                // значения).
+                var закрывающийТег = "</" + имя;
+                var глухо = html.IndexOf(закрывающийТег, конец + 1, StringComparison.OrdinalIgnoreCase);
+
+                if (глухо < 0)
+                {
+                    return результат.ToString();
+                }
+
+                var концЗакрывающего = html.IndexOf('>', глухо);
+
+                позиция = концЗакрывающего < 0 ? html.Length : концЗакрывающего + 1;
+            }
+            else if (закрывающий && !РазрешённыеЭлементы.Contains(имя))
+            {
+                // Закрывающий тег недопустимого/пропускаемого элемента —
+                // удаляется.
+            }
+            else if (!РазрешённыеЭлементы.Contains(имя))
+            {
+                // Недопустимый открывающий элемент: тег удаляется,
+                // содержимое остаётся.
+            }
+            else
+            {
+                результат.Append('<');
+
+                if (закрывающий)
+                {
+                    результат.Append('/');
+                }
+
+                результат.Append(имя);
+
+                if (!закрывающий && атрибуты is not null)
+                {
+                    foreach (var (атрибут, значение) in атрибуты)
+                    {
+                        var чистое = ДопустимыйАтрибут(имя, атрибут, значение);
+
+                        if (чистое is null)
+                        {
+                            continue;
+                        }
+
+                        результат.Append(' ').Append(атрибут).Append("=\"").Append(чистое).Append('"');
+                    }
+
+                    if (имя is "br" or "hr" or "img")
+                    {
+                        результат.Append(" /");
+                    }
+                }
+
+                результат.Append('>');
             }
         }
 
-        // Обработчики событий on* в атрибутах — в том числе без пробела перед
-        // «on» (после закрывающей кавычки: href="x"onclick=…).
-        результат = ОбработчикиСобытий.Replace(результат, string.Empty);
-
-        // Опасные URL-схемы в атрибутах: нейтрализуются якорем.
-        результат = ОпасныеСхемы.Replace(результат, "#");
-
-        return результат;
+        return результат.ToString();
     }
 
-    /// <summary>Опасные блоки, удаляемые целиком с содержимым.</summary>
-    private static readonly string[] ОпасныеБлоки = ["script", "iframe", "object", "embed", "form"];
+    /// <summary>Проверяет, начинается ли строка с префикса с заданной позиции.</summary>
+    private static bool НачинаетсяС(string текст, int позиция, string префикс)
+    {
+        if (позиция + префикс.Length > текст.Length)
+        {
+            return false;
+        }
 
-    /// <summary>Обработчики событий on* в атрибутах — в том числе слитно
-    /// с предыдущим атрибутом: href="x"onclick=… (D-S39-02).</summary>
-    private static readonly Regex ОбработчикиСобытий = new(
-        "(?<=[\"'>\\s])on[a-zA-Z]+\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)",
-        RegexOptions.Compiled,
-        TimeSpan.FromMilliseconds(200));
+        return текст.AsSpan(позиция, префикс.Length).SequenceEqual(префикс);
+    }
 
-    /// <summary>Опасные URL-схемы в атрибутах (href/src/action).</summary>
-    private static readonly Regex ОпасныеСхемы = new(
-        "(href|src|action)\\s*=\\s*(\"|')?(javascript|vbscript|data)\\s*:",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase,
-        TimeSpan.FromMilliseconds(200));
+    /// <summary>Пропускает символы до вхождения маркера; возвращает новую позицию.</summary>
+    private static int ПропуститьДо(string текст, int позиция, string маркер)
+    {
+        var глухо = текст.IndexOf(маркер, позиция, StringComparison.Ordinal);
 
+        return глухо < 0 ? текст.Length : глухо + маркер.Length;
+    }
+
+    /// <summary>Читает имя тега (буквы/цифры/дефис) в нижнем регистре.</summary>
+    private static string ИмяТега(string html, int старт, int конец)
+    {
+        var поз = старт;
+
+        while (поз < конец && (char.IsLetterOrDigit(html[поз]) || html[поз] == '-' || html[поз] == '_'))
+        {
+            поз++;
+        }
+
+        return html[старт..поз].ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Разбирает атрибуты тега до закрывающей «&gt;»: пары «имя=значение»
+    /// (кавычки двойные/одинарные либо без кавычек). Имена — в нижнем регистре.
+    /// </summary>
+    private static List<(string Имя, string Значение)> РазобратьАтрибуты(string html, int старт, int конец)
+    {
+        var список = new List<(string Имя, string Значение)>();
+        var позиция = старт;
+
+        while (позиция < конец)
+        {
+            while (позиция < конец && char.IsWhiteSpace(html[позиция]))
+            {
+                позиция++;
+            }
+
+            if (позиция >= конец || html[позиция] == '/')
+            {
+                break;
+            }
+
+            var имяСтарт = позиция;
+
+            while (позиция < конец
+                && (char.IsLetterOrDigit(html[позиция]) || html[позиция] == '-' || html[позиция] == '_'))
+            {
+                позиция++;
+            }
+
+            if (позиция == имяСтарт)
+            {
+                позиция++;
+                continue;
+            }
+
+            var имя = html[имяСтарт..позиция].ToLowerInvariant();
+
+            while (позиция < конец && char.IsWhiteSpace(html[позиция]))
+            {
+                позиция++;
+            }
+
+            var значение = string.Empty;
+
+            if (позиция < конец && html[позиция] == '=')
+            {
+                позиция++;
+
+                while (позиция < конец && char.IsWhiteSpace(html[позиция]))
+                {
+                    позиция++;
+                }
+
+                if (позиция < конец && (html[позиция] == '"' || html[позиция] == '\''))
+                {
+                    var кавычка = html[позиция++];
+                    var значСтарт = позиция;
+
+                    while (позиция < конец && html[позиция] != кавычка)
+                    {
+                        позиция++;
+                    }
+
+                    значение = html[значСтарт..Math.Min(позиция, конец)];
+
+                    if (позиция < конец && html[позиция] == кавычка)
+                    {
+                        позиция++;
+                    }
+                }
+                else
+                {
+                    var значСтарт = позиция;
+
+                    while (позиция < конец && !char.IsWhiteSpace(html[позиция]) && html[позиция] != '>')
+                    {
+                        позиция++;
+                    }
+
+                    значение = html[значСтарт..позиция];
+                }
+            }
+
+            список.Add((имя, значение));
+        }
+
+        return список;
+    }
+
+    /// <summary>Разрешённые элементы (в нижнем регистре).</summary>
+    private static readonly HashSet<string> РазрешённыеЭлементы = new(StringComparer.Ordinal)
+    {
+        "html", "body", "p", "div", "span", "br", "hr", "b", "strong", "i", "em", "u",
+        "s", "strike", "ul", "ol", "li", "table", "thead", "tbody", "tfoot", "tr",
+        "td", "th", "caption", "a", "img", "h1", "h2", "h3", "h4", "h5", "h6",
+        "blockquote", "pre", "code", "center", "font", "small", "sub", "sup",
+    };
+
+    /// <summary>
+    /// Элементы, удаляемые вместе с содержимым (код/служебные/активные):
+    /// всё вне разрешённого набора теряет только теги, эти — и содержимое.
+    /// </summary>
+    private static readonly HashSet<string> ПропускаемыеССодержимым = new(StringComparer.Ordinal)
+    {
+        "script", "style", "head", "title", "iframe", "frame", "frameset", "object",
+        "embed", "applet", "form", "input", "button", "select", "option", "textarea",
+        "noscript", "template", "svg", "math", "canvas", "audio", "video", "source",
+        "track", "link", "meta", "base", "datalist", "dialog", "portal",
+    };
+
+    /// <summary>Разрешённые атрибуты по элементам (плюс глобальный style).</summary>
+    private static readonly Dictionary<string, HashSet<string>> АтрибутыПоЭлементам =
+        new(StringComparer.Ordinal)
+        {
+            ["a"] = new HashSet<string>(StringComparer.Ordinal) { "href", "title" },
+            ["img"] = new HashSet<string>(StringComparer.Ordinal) { "src", "alt", "width", "height" },
+            ["font"] = new HashSet<string>(StringComparer.Ordinal) { "face", "color", "size" },
+            ["td"] = new HashSet<string>(StringComparer.Ordinal) { "colspan", "rowspan" },
+            ["th"] = new HashSet<string>(StringComparer.Ordinal) { "colspan", "rowspan" },
+        };
+
+    /// <summary>Разрешённые свойства стиля (без url/expression/behavior).</summary>
+    private static readonly HashSet<string> РазрешённыеСвойстваСтиля = new(StringComparer.Ordinal)
+    {
+        "color", "text-align", "font-weight", "font-style", "text-decoration",
+        "background-color", "font-size", "font-family",
+    };
+
+    /// <summary>
+    /// Возвращает безопасное значение атрибута либо <see langword="null"/>,
+    /// если атрибут недопустим и должен быть удалён. Обработчики on*,
+    /// неизвестные атрибуты и опасные URL-схемы удаляются всегда; значения
+    /// декодируются (обход через сущности) и повторно экранируются.
+    /// </summary>
+    private static string? ДопустимыйАтрибут(string элемент, string атрибут, string значение)
+    {
+        // Любой обработчик событий — вне белого списка.
+        if (атрибут.StartsWith("on", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var декодированное = WebUtility.HtmlDecode(значение);
+
+        if (атрибут == "style")
+        {
+            return ДопустимыйСтиль(декодированное);
+        }
+
+        var разрешены = АтрибутыПоЭлементам.TryGetValue(элемент, out var набор)
+            ? набор
+            : new HashSet<string>(StringComparer.Ordinal);
+
+        if (!разрешены.Contains(атрибут))
+        {
+            return null;
+        }
+
+        if (атрибут is "href" or "src")
+        {
+            if (!БезопасныйАдрес(декодированное))
+            {
+                return null;
+            }
+
+            return Экранировать(декодированное.Trim());
+        }
+
+        return Экранировать(декодированное.Trim());
+    }
+
+    /// <summary>
+    /// Проверяет адрес: после удаления всех пробельных/управляющих символов
+    /// и приведения к нижнему регистру адрес не должен начинаться с опасной
+    /// схемы и не должен содержать угловых скобок.
+    /// </summary>
+    private static bool БезопасныйАдрес(string адрес)
+    {
+        var плотное = new string(
+            адрес.Where(знак => знак > ' ' && знак != '\u007f').ToArray())
+            .ToLowerInvariant();
+
+        foreach (var схема in new[] { "javascript:", "vbscript:", "data:", "file:", "about:" })
+        {
+            if (плотное.StartsWith(схема, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return !плотное.Contains('<') && !плотное.Contains('>');
+    }
+
+    /// <summary>
+    /// Фильтрует стиль: допускаются только свойства из каталога, значения без
+    /// url()/expression/схем; пустой результат — атрибут удаляется.
+    /// </summary>
+    private static string? ДопустимыйСтиль(string декодированное)
+    {
+        var нижнее = декодированное.ToLowerInvariant();
+
+        foreach (var запрещённое in new[] { "url(", "expression", "javascript", "vbscript", "behavior", "@import", "script", "<" })
+        {
+            if (нижнее.Contains(запрещённое, StringComparison.Ordinal))
+            {
+                return null;
+            }
+        }
+
+        var чистые = декодированное
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(часть => часть.Contains(':', StringComparison.Ordinal))
+            .Where(часть =>
+            {
+                var имя = часть[..часть.IndexOf(':', StringComparison.Ordinal)].Trim().ToLowerInvariant();
+
+                return РазрешённыеСвойстваСтиля.Contains(имя);
+            })
+            .ToList();
+
+        return чистые.Count == 0 ? null : string.Join("; ", чистые);
+    }
+
+    /// <summary>
+    /// Экранирует значение атрибута HTML.
+    /// </summary>
     /// <summary>
     /// Экранирует значение атрибута HTML.
     /// </summary>
@@ -351,7 +689,10 @@ public sealed class HtmlMailEditor : Form
     {
         Dock = DockStyle.Fill,
         ScriptErrorsSuppressed = true,
-        AllowNavigation = true,
+        // F-S39R2-03 (корректирующий проход): preview не выполняет активное
+        // содержимое и не переходит по ссылкам/фреймам — санитизатор остаётся
+        // единственной границей, а навигация из письма запрещена.
+        AllowNavigation = false,
     };
 
     private string _исходныйHtml = string.Empty;
