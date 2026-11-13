@@ -154,6 +154,24 @@ COM_FULL_ACCEPTANCE_VERIFIED=PARTIAL     (Волна 3, S14: CreateInstance/Safe
                                            открыта находка D-S14-warncode)
 COM_DELIVERY_REGISTRATION_CLEAN=true     (Волна 3, S15: register/unregister, 0 ключей/0 процессов, без админа)
 COM_HKCU_HKLM_DECISION=OWNER_DECISION_REQUIRED  (Волна 3, S15: машинная HKLM-установка не реализована)
+
+# — Волны 7–8 (S31–S40, S46–S47): консолидация флагов из чекпойнтов (F-CP-01) —
+
+CSV_IMPORT_EDITOR_VERIFIED=true          (Волна 7, S31: профиль round-trip, mapper, CP1251, preview)
+INCOMING_MAIL_JOURNAL_VERIFIED=true      (Волна 7, S32: журнал+сканы в профиле, изоляция сбоя)
+INCOMING_MOVEMENT_VERIFIED=true          (Волна 7, S33: приём/передача/архив, append-only, V011)
+POSTAL_TRACKER_UI_VERIFIED=true          (Волна 7, S34: партия/ШПИ/статусы на тестовом источнике)
+SUPPORT_LAUNCHER_HTTPS_ONLY_VERIFIED=true (Волна 7, S35: http отклоняется до загрузки/запуска)
+DB_SERVICE_DOCTOR_VERIFIED=true          (Волна 7, S35: команды пинятся, сырой вывод человеку)
+SELECT_ONLY_GUARD_ENFORCED=true          (Волна 7, S27fix: SELECT/WITH-only + сканер обходов)
+SMTP_TLS_STAND_VERIFIED=true             (Волна 8, S36: 3 режима, отпечаток, сниффер)
+SMTP_PROXY_STAND_VERIFIED=true           (Волна 8, S37: CONNECT/Basic/407/таймаут)
+SMTP_MIME_ENVELOPE_VERIFIED=true         (Волна 8, S38: полное DATA + envelope раздельно)
+SMTP_CLIENT_CONTRACT_VERIFIED=true       (Волна 8, S40: отчёт/журнал/отмена/частичный отказ)
+HTML_EDITOR_CONTRACT_VERIFIED=true       (Волна 8, S39: санитизация всех путей, UI≡MIME)
+EDITIONS_CATALOG_VERIFIED=true           (Волна 8, S46: лимиты/фичи редакций)
+VM_DETECTOR_SOFT_VERIFIED=true           (Волна 8, S46: мягкая детекция, no-WMI пин)
+UPDATE_PACKAGE_INTEGRITY_VERIFIED=true   (Волна 8, S47: SHA-256 манифеста, откат повреждённого)
 ```
 
 ## 7. Известные границы baseline (входы в план RC)
