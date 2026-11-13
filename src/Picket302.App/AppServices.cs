@@ -8,6 +8,7 @@ using Picket302.Domain.Services;
 using Picket302.Infrastructure;
 using Picket302.Infrastructure.Data;
 using Picket302.Infrastructure.Fonts;
+using Picket302.Infrastructure.Integration;
 using Picket302.Infrastructure.Licensing;
 using System.Drawing.Printing;
 using Picket302.Infrastructure.Localization;
@@ -447,6 +448,40 @@ public sealed class AppServices : IAsyncDisposable
     /// передача → архив; история только дополнением.
     /// </summary>
     public IncomingMovementTracker ТрекерВходящих { get; }
+
+    /// <summary>Базовый адрес сервиса трекера Почты России по умолчанию.</summary>
+    public const string АдресТрекераПочтыПоУмолчанию = "https://tracking.pochta.ru/";
+
+    /// <summary>
+    /// Создаёт трекер Почты России (ТЗ §8.8, функция 110): базовый адрес и
+    /// учётные данные берутся из таблицы параметров (значения пароля/токена —
+    /// в защищённом виде DPAPI; пустые — запрос вернёт ошибку авторизации).
+    /// </summary>
+    /// <returns>Готовый трекер.</returns>
+    public async Task<RussianPostTracker> СоздатьТрекерПочтыAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var адрес = await Параметры
+            .GetValueAsync("RussianPost.BaseUrl", cancellationToken)
+            .ConfigureAwait(false);
+
+        var логин = await Параметры
+            .GetValueAsync("RussianPost.Login", cancellationToken)
+            .ConfigureAwait(false);
+
+        var пароль = await Параметры
+            .GetValueAsync("RussianPost.ProtectedPassword", cancellationToken)
+            .ConfigureAwait(false);
+
+        var токен = await Параметры
+            .GetValueAsync("RussianPost.ProtectedToken", cancellationToken)
+            .ConfigureAwait(false);
+
+        return new RussianPostTracker(
+            string.IsNullOrWhiteSpace(адрес) ? АдресТрекераПочтыПоУмолчанию : адрес,
+            new RussianPostCredentials(логин ?? string.Empty, пароль, токен),
+            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+    }
 
     /// <summary>
     /// Вычислитель идентификатора оборудования (ТЗ §8.10, функция 120).

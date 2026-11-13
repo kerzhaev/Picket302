@@ -67,7 +67,7 @@ public sealed class IncomingMovementTrackerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ТекущееМестонахождение_ПоМереЫ痣еВистории()
+    public async Task ТекущееМестонахождение_ПоМереРостаИстории()
     {
         var документ = await ЗарегистрироватьДокументAsync("ВХ-М/1");
         var трекер = СоздатьТрекер();

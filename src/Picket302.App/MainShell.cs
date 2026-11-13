@@ -839,6 +839,9 @@ public sealed class MainShell : Form
         // Входящая корреспонденция и движение документов (ТЗ §8.2,
         // функции 29 и 30).
         сервис.DropDownItems.Add("Входящая корреспонденция…", null, (_, _) => ОткрытьВходящуюКорреспонденцию());
+
+        // Трекер отправлений Почты России (ТЗ §8.8, функция 110).
+        сервис.DropDownItems.Add("Трекер Почты России…", null, (_, _) => ОткрытьТрекерПочты());
         сервис.DropDownItems.Add(new ToolStripSeparator());
         сервис.DropDownItems.Add("Выгрузить данные…", null, (_, _) => ВыгрузитьДанные());
         сервис.DropDownItems.Add("Сформировать документ…", null, (_, _) => СформироватьДокумент());
@@ -5763,6 +5766,34 @@ public sealed class MainShell : Form
             состав.СлужбаВходящих,
             состав.ТрекерВходящих);
         форма.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает диалог трекера Почты России (ТЗ §8.8, функция 110):
+    /// регистрация партии и опрос статусов ШПИ.
+    /// </summary>
+    private async void ОткрытьТрекерПочты()
+    {
+        var состав = _состав;
+        if (состав is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var трекер = await состав.СоздатьТрекерПочтыAsync().ConfigureAwait(true);
+
+            using var форма = new UI.Forms.FormRussianPostTracker(трекер);
+            форма.ShowDialog(this);
+        }
+        catch (Exception ошибка)
+        {
+            MessageBox.Show(
+                this,
+                $"Не удалось открыть трекер: {ошибка.Message}",
+                "Трекер Почты России");
+        }
     }
 
     /// <summary>
