@@ -95,6 +95,21 @@ public sealed class SmtpProxyStandTests
         Assert.Equal($"proxy-user:{ПарольПрокси}", раскодировано);
     }
 
+    /// <summary>
+    /// D-S37-03: 403 при ПРАВИЛЬНОЙ авторизации — ветка отказа стенда
+    /// достижима; текст ошибки тот же (не-200 обрабатывается одинаково).
+    /// </summary>
+    [Fact]
+    public void ОтказПрокси_403_ПриАвторизации_ПонятнаяОшибка()
+    {
+        using var прокси = SmtpProxyStand.Запустить(авторизация: true, отказ: true);
+
+        var (успех, ошибка, _) = Отправить(прокси, сАвторизациейНаПрокси: true);
+
+        Assert.False(успех);
+        Assert.Contains("Прокси-сервер отказал в туннеле", ошибка, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ОтказПрокси_407_ПонятнаяОшибка()
     {
@@ -115,15 +130,27 @@ public sealed class SmtpProxyStandTests
     {
         using var прокси = SmtpProxyStand.Запустить(авторизация: true, молчать: true);
 
+        var часы = System.Diagnostics.Stopwatch.StartNew();
+
         var задача = Task.Run(() => Отправить(прокси, сАвторизациейНаПрокси: true, timeoutSeconds: 2));
 
-        var завершена = await Task.WhenAny(задача, Task.Delay(TimeSpan.FromSeconds(15)));
+        var завершена = await Task.WhenAny(задача, Task.Delay(TimeSpan.FromSeconds(30)));
 
         Assert.True(завершена == задача, "Отправка не завершилась за отведённое время.");
+
+        часы.Stop();
 
         var (успех, ошибка, _) = await задача;
 
         Assert.False(успех);
+
+        // D-S37-01: ожидание ОГРАНИЧЕНО таймаутом клиента — соединение
+        // держится открытым, клиент реально упирается в таймаут (не в обрыв).
+        Assert.True(
+            часы.Elapsed.TotalSeconds >= 1.5,
+            string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"Ожидание завершилось слишком быстро: {часы.Elapsed.TotalSeconds:0.0} с."));
+
         Assert.DoesNotContain(ПарольПрокси, ошибка, StringComparison.Ordinal);
         Assert.DoesNotContain(ПарольSmtp, ошибка, StringComparison.Ordinal);
     }
@@ -199,12 +226,18 @@ public sealed class SmtpProxyStand : IDisposable
 
         if (_молчать)
         {
-            // Прокси принял соединение и молчит: клиент упрётся в таймаут.
+            // Прокси принял соединение и МОЛЧИТ: читаем, пока клиент сам не
+            // закроет соединение по своему таймауту (D-S37-01 — прежняя
+            // версия рвала соединение после первого чтения, клиент получал
+            // обрыв вместо таймаута).
             var буфер = new byte[4096];
 
             try
             {
-                await потокКлиента.ReadAsync(буфер).ConfigureAwait(false);
+                while (await потокКлиента.ReadAsync(буфер).ConfigureAwait(false) > 0)
+                {
+                    // Ответа нет — просто продолжаем поглощать байты.
+                }
             }
             catch (IOException)
             {
@@ -322,31 +355,6 @@ ConnectЗапросы.Add(запрос);
                     await писатель.WriteLineAsync("500 Unknown").ConfigureAwait(false);
                     return;
             }
-        }
-    }
-
-    /// <summary>Реле двух потоков до закрытия любой стороны.</summary>
-    private static async Task РелеAsync(NetworkStream от, NetworkStream к)
-    {
-        var буфер = new byte[8192];
-
-        try
-        {
-            while (true)
-            {
-                var прочитано = await от.ReadAsync(буфер).ConfigureAwait(false);
-
-                if (прочитано == 0)
-                {
-                    return;
-                }
-
-                await к.WriteAsync(буфер.AsMemory(0, прочитано)).ConfigureAwait(false);
-            }
-        }
-        catch (IOException)
-        {
-            // Штатный обрыв стороны.
         }
     }
 
