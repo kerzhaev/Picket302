@@ -299,6 +299,7 @@ public sealed class SmtpTlsStandTests
             var стенд = new TlsFakeSmtp(сниффер, сервер, сертификат, режим, рекламироватьStartTls)
             {
                 ПортСниффера = ((IPEndPoint)сниффер.LocalEndpoint).Port,
+                СертификатСтенда = сертификат,
             };
 
             стенд._транзит = Task.Run(стенд.ТранзитAsync);
@@ -384,6 +385,13 @@ public sealed class SmtpTlsStandTests
 
         /// <summary>Исключения диалога (диагностика стенда).</summary>
         public List<string> ОшибкиДиалога { get; } = [];
+
+        /// <summary>Сертификат стенда (освобождается в Dispose, D-S36-02).</summary>
+        public X509Certificate2? СертификатСтенда
+        {
+            get => _сертификат;
+            init => _сертификат = value;
+        }
 
         /// <summary>Ведёт SMTP-диалог с клиентом (под сетевым потоком).</summary>
         /// <summary>
@@ -532,6 +540,11 @@ public sealed class SmtpTlsStandTests
             {
                 // Повторная остановка безопасна.
             }
+
+            // Приватный ключ персистирован (PersistKeySet): освобождаем
+            // сертификат, чтобы ключ не оставался закреплённым дольше прогона
+            // (файл ключа в профиле остаётся — см. §4 доки этапа).
+            _сертификат?.Dispose();
         }
     }
 }
