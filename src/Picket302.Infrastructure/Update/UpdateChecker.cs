@@ -17,7 +17,8 @@ public sealed record UpdateInfo(
     string DownloadUrl,
     string Notes,
     bool IsUpdateAvailable,
-    string? DownloadedPath)
+    string? DownloadedPath,
+    string? ExpectedSha256 = null)
 {
     /// <summary>Создаёт сведения об отсутствии обновления.</summary>
     /// <returns>Сведения без обновления.</returns>
@@ -55,9 +56,13 @@ public sealed class UpdateChecker
     /// <summary>Ключ пояснения к обновлению в файле обновлений.</summary>
     public const string NotesKey = "notes";
 
+    /// <summary>Ключ SHA-256 пакета обновления в файле обновлений.</summary>
+    public const string Sha256Key = "sha256";
+
     private readonly string _адресОбновлений;
     private readonly string _текущаяВерсия;
     private readonly Func<string, CancellationToken, Task<string>> _запрос;
+    private readonly Func<Uri, CancellationToken, Task<Stream>> _загрузчик;
     private readonly Action<string>? _журнал;
 
     /// <summary>
@@ -85,7 +90,8 @@ public sealed class UpdateChecker
         string адресОбновлений,
         string текущаяВерсия,
         Func<string, CancellationToken, Task<string>>? запрос,
-        Action<string>? журнал = null)
+        Action<string>? журнал = null,
+        Func<Uri, CancellationToken, Task<Stream>>? загрузчик = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(адресОбновлений);
         ArgumentException.ThrowIfNullOrWhiteSpace(текущаяВерсия);
@@ -93,6 +99,7 @@ public sealed class UpdateChecker
         _адресОбновлений = адресОбновлений;
         _текущаяВерсия = текущаяВерсия;
         _запрос = запрос ?? ЗапроситьПоHttp;
+        _загрузчик = загрузчик ?? ЗагрузитьПоУмолчанию;
         _журнал = журнал;
     }
 
@@ -146,8 +153,9 @@ public sealed class UpdateChecker
 
         var адрес = параметры.TryGetValue(UrlKey, out var значениеАдреса) ? значениеАдреса : string.Empty;
         var пояснение = параметры.TryGetValue(NotesKey, out var значениеПояснения) ? значениеПояснения : string.Empty;
+        var хеш = параметры.TryGetValue(Sha256Key, out var значениеХеша) ? значениеХеша : null;
 
-        return new UpdateInfo(версия, адрес, пояснение, true, null);
+        return new UpdateInfo(версия, адрес, пояснение, true, null, хеш);
     }
 
     /// <summary>
@@ -190,11 +198,21 @@ public sealed class UpdateChecker
 
         try
         {
-            using var клиент = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            Stream поток;
 
-            var поток = await клиент
-                .GetStreamAsync(адресЗагрузки, cancellationToken)
-                .ConfigureAwait(false);
+            if (_загрузчик is not null)
+            {
+                // Инъекция: проверка целостности использует тестовый источник.
+                поток = await _загрузчик(адресЗагрузки, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                using var клиент = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+                поток = await клиент
+                    .GetStreamAsync(адресЗагрузки, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             var целевойПоток = System.IO.File.Create(путь);
 
@@ -222,6 +240,25 @@ public sealed class UpdateChecker
             УдалитьЧастичныйФайл(путь);
 
             return null;
+        }
+
+        // ТЗ §8.12, функция 163: «подписанный/повреждённый пакет не
+        // ставится» — целостность по SHA-256 из манифеста; повреждённый
+        // файл удаляется (откат частичной установки).
+        if (!string.IsNullOrWhiteSpace(info.ExpectedSha256))
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            await using var файл = System.IO.File.OpenRead(путь);
+            var фактический = Convert.ToHexString(sha.ComputeHash(файл));
+            await файл.DisposeAsync().ConfigureAwait(false);
+
+            if (!string.Equals(фактический, info.ExpectedSha256.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                ЗаписатьВЖурнал("Повреждённый пакет обновления: хеш SHA-256 не совпал.");
+                УдалитьЧастичныйФайл(путь);
+
+                return null;
+            }
         }
 
         return путь;
@@ -345,6 +382,24 @@ public sealed class UpdateChecker
     /// <summary>
     /// Запрашивает файл обновлений по HTTPS.
     /// </summary>
+    /// <summary>
+    /// Загрузка пакета по HTTP/HTTPS (по умолчанию): возвращает поток ответа.
+    /// </summary>
+    private static async Task<Stream> ЗагрузитьПоУмолчанию(Uri адресЗагрузки, CancellationToken cancellationToken)
+    {
+        var клиент = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+        try
+        {
+            return await клиент.GetStreamAsync(адресЗагрузки, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            клиент.Dispose();
+            throw;
+        }
+    }
+
     private static async Task<string> ЗапроситьПоHttp(string адрес, CancellationToken cancellationToken)
     {
         using var клиент = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
