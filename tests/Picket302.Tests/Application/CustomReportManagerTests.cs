@@ -172,8 +172,8 @@ public sealed class CustomReportManagerTests : IDisposable
         Assert.Equal(2, перечень.Count);
         Assert.Contains(перечень, запись => запись.Name == "Первый");
         Assert.Contains(перечень, запись => запись.Name == "Второй");
-        Assert.All(перечень, запись => Assert.True(запись.TemplatePath.EndsWith(".lbk", StringComparison.Ordinal)));
-        Assert.All(перечень, запись => Assert.True(запись.QueryXmlPath.EndsWith("query.xml", StringComparison.Ordinal)));
+        Assert.All(перечень, запись => Assert.EndsWith(".lbk", запись.TemplatePath, StringComparison.Ordinal));
+        Assert.All(перечень, запись => Assert.EndsWith("query.xml", запись.QueryXmlPath, StringComparison.Ordinal));
     }
 
     /// <summary>Создаёт файл в корне проверки, возвращает путь.</summary>

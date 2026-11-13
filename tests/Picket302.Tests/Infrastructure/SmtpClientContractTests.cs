@@ -25,6 +25,7 @@ public sealed class SmtpClientContractTests
     [Fact]
     public async Task ОтчётПартии_ТочныеСчётчикиИЖурнал()
     {
+        await Task.CompletedTask;
         using var сервер = new MimeStand40();
 
         var опции = new SmtpOptions();
@@ -59,6 +60,7 @@ public sealed class SmtpClientContractTests
     [Fact]
     public async Task ОтменаПартии_Токеном_ОтчётСПризнаком()
     {
+        await Task.CompletedTask;
         using var сервер = new MimeStand40();
 
         var опции = new SmtpOptions();
@@ -96,6 +98,7 @@ public sealed class SmtpClientContractTests
     [Fact]
     public async Task ЧастичныйОтказ_СчётчикиТочны_ОшибкаPersонализирована()
     {
+        await Task.CompletedTask;
         using var сервер = new MimeStand40(отказные: ["bad@example.test"]);
 
         var опции = new SmtpOptions();

@@ -346,6 +346,7 @@ public sealed class HtmlMailEditorTests
     [Fact]
     public async Task РедакторHtml_СовпадаетСMimeПисьмом()
     {
+        await Task.CompletedTask;
         var шаг1 = КомандыРазметки.Применить("Уважаемый клиент!", "bold", null, 0, 17);
         var разметка = "<html><body><p>" + шаг1.Html + "</p></body></html>";
 

@@ -23,7 +23,6 @@ public sealed class SmtpRetryStandTests
         private readonly TcpListener _слушатель;
         private readonly List<string> _принятые = [];
         private int _соединений;
-        private int _молчаливых;
         private readonly int _молчаливыхДопустимо;
         private readonly List<string> _тела = [];
 
@@ -249,6 +248,7 @@ public sealed class SmtpRetryStandTests
     [Fact]
     public async Task ПостояннаяОшибка_БезПовтора()
     {
+        await Task.CompletedTask;
         // Порт без слушателя: соединение отклоняется мгновенно (не таймаут).
         using var глухойПорт = new TcpListener(IPAddress.Loopback, 0);
         глухойПорт.Start();

@@ -21,6 +21,7 @@ public sealed class SmtpMimeTests
     [Fact]
     public async Task TextPlain_ТочныеЗаголовкиMIMEИТело()
     {
+        await Task.CompletedTask;
         using var сервер = MimeFakeSmtp.Запустить();
 
         var письмо = new MailMessage(["dest@example.test"])
@@ -69,6 +70,7 @@ public sealed class SmtpMimeTests
     [Fact]
     public async Task Html_ФорматBase64СТочнымContentType()
     {
+        await Task.CompletedTask;
         using var сервер = MimeFakeSmtp.Запустить();
 
         var html = "<html><body><p>Проверка <b>HTML</b> письма.</p></body></html>";
@@ -106,6 +108,7 @@ public sealed class SmtpMimeTests
     [Fact]
     public async Task ReplyTo_ЗаголовокИEnvelopeТочны()
     {
+        await Task.CompletedTask;
         using var сервер = MimeFakeSmtp.Запустить();
 
         var письмо = new MailMessage(["dest@example.test"])
@@ -137,6 +140,7 @@ public sealed class SmtpMimeTests
     [Fact]
     public async Task БезReplyTo_ЗаголовкаНет_EnvelopeПоОтправителю()
     {
+        await Task.CompletedTask;
         using var сервер = MimeFakeSmtp.Запустить();
 
         var письмо = new MailMessage(["dest@example.test"])

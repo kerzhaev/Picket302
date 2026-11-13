@@ -157,8 +157,9 @@ public sealed class FormRussianPostTracker : Form
             _статусы.Rows[индекс].Cells[0].Value = статус.TrackingId;
             _статусы.Rows[индекс].Cells[1].Value = статус.Status;
             _статусы.Rows[индекс].Cells[2].Value = статус.Delivered ? "да" : "нет";
-            _статусы.Rows[индекс].Cells[3].Value = статус.DeliveredAtUtc?.ToLocalTime()
-                .ToString("dd.MM.yyyy HH:mm") ?? "—";
+            _статусы.Rows[индекс].Cells[3].Value = статус.DeliveredAtUtc?.ToLocalTime().ToString(
+                "dd.MM.yyyy HH:mm",
+                System.Globalization.CultureInfo.CurrentCulture) ?? "—";
             _статусы.Rows[индекс].Cells[4].Value = статус.Error ?? "—";
         }
 
@@ -200,7 +201,7 @@ public sealed class FormRussianPostTracker : Form
         _зарегистрировать.Text = "Зарегистрировать партию";
         _зарегистрировать.AutoSize = true;
         _зарегистрировать.AccessibleName = "Зарегистрировать партию отправлений";
-        _зарегистрировать.Click += async (_, _) => await ЗарегистрироватьAsync().ConfigureAwait(true);
+        _зарегистрировать.Click += (_, _) => Зарегистрировать();
 
         _запросить.Text = "Запросить статусы";
         _запросить.AutoSize = true;
@@ -282,7 +283,7 @@ public sealed class FormRussianPostTracker : Form
     }
 
     /// <summary>Регистрация партии из контролов диалога.</summary>
-    private async Task ЗарегистрироватьAsync()
+    private void Зарегистрировать()
     {
         var номер = _номерПартии.Text.Trim();
 

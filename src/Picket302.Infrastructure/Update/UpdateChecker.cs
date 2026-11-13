@@ -264,7 +264,8 @@ public sealed class UpdateChecker
         if (!string.IsNullOrWhiteSpace(info.ExpectedSha256))
         {
             using var sha = System.Security.Cryptography.SHA256.Create();
-            await using var файл = System.IO.File.OpenRead(путь);
+            var файл = System.IO.File.OpenRead(путь);
+            await using var адаптерФайла = файл.ConfigureAwait(false);
             var фактический = Convert.ToHexString(sha.ComputeHash(файл));
             await файл.DisposeAsync().ConfigureAwait(false);
 

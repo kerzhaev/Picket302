@@ -130,7 +130,9 @@ public sealed class FormIncomingMail : Form
                 ToolTipText = запись.Subject,
             };
 
-            пункт.SubItems.Add(запись.RegDate.ToLocalTime().ToString("dd.MM.yyyy"));
+            пункт.SubItems.Add(запись.RegDate.ToLocalTime().ToString(
+                "dd.MM.yyyy",
+                System.Globalization.CultureInfo.CurrentCulture));
             пункт.SubItems.Add(string.IsNullOrWhiteSpace(запись.Sender) ? "—" : запись.Sender);
             пункт.SubItems.Add(НазваниеТипа(запись.DocType));
             пункт.SubItems.Add(запись.ScanPath is null ? "—" : "есть");
