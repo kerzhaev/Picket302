@@ -166,7 +166,9 @@ public sealed class MigrationTests
             Assert.True(
                 миграция.Sql.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase)
                     || миграция.Sql.Contains("ALTER TABLE", StringComparison.OrdinalIgnoreCase)
-                    || миграция.Sql.Contains("CREATE TABLE", StringComparison.OrdinalIgnoreCase),
+                    || миграция.Sql.Contains("CREATE TABLE", StringComparison.OrdinalIgnoreCase)
+                    || миграция.Sql.Contains("CREATE UNIQUE INDEX", StringComparison.OrdinalIgnoreCase)
+                    || миграция.Sql.Contains("CREATE INDEX", StringComparison.OrdinalIgnoreCase),
                 $"Миграция {миграция.Version} не содержит ни наполнения, ни изменения схемы.");
         });
     }

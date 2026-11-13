@@ -18,6 +18,9 @@ public sealed class FormIncomingMail : Form
     private readonly IncomingMovementTracker _трекер;
 
     private readonly TextBox _поиск = new();
+
+    /// <summary>Таймер отложенного поиска (D-S33-08: не запрос на символ).</summary>
+    private readonly System.Windows.Forms.Timer _отложенныйПоиск = new() { Interval = 300 };
     private readonly ListView _список = new();
     private readonly Label _статус = new();
     private readonly Button _обновить = new();
@@ -227,6 +230,17 @@ public sealed class FormIncomingMail : Form
     internal async Task<bool> УдалитьДляПроверокAsync()
     {
         var id = ТребоватьВыбор();
+
+        // Политика удаления (D-S33-02): документ с историей движения
+        // удалять нельзя — FK и сохранность истории движения.
+        var движения = await _трекер.ИсторияAsync(id).ConfigureAwait(true);
+
+        if (движения.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Документ принят и имеет историю движения: удаление запрещено. Передайте документ в архив.");
+        }
+
         var удалено = await _служба.УдалитьAsync(id).ConfigureAwait(true);
 
         if (удалено)
@@ -253,7 +267,17 @@ public sealed class FormIncomingMail : Form
         _поиск.Dock = DockStyle.Fill;
         _поиск.AccessibleName = "Поиск по журналу входящей корреспонденции";
         _поиск.AccessibleDescription = "Подстрока номера, отправителя или содержания.";
-        _поиск.TextChanged += (_, _) => ОбновитьСписок();
+        _поиск.TextChanged += (_, _) =>
+        {
+            // Debounce: обновление через 300 мс после последнего символа.
+            _отложенныйПоиск.Stop();
+            _отложенныйПоиск.Start();
+        };
+        _отложенныйПоиск.Tick += (_, _) =>
+        {
+            _отложенныйПоиск.Stop();
+            ОбновитьСписок();
+        };
 
         var надписьПоиска = new Label { Text = "Поиск:", AutoSize = true, Padding = new Padding(0, 6, 6, 0) };
 
@@ -392,6 +416,8 @@ public sealed class FormIncomingMail : Form
 
         AcceptButton = null;
         CancelButton = _закрыть;
+
+        Disposed += (_, _) => _отложенныйПоиск.Dispose();
     }
 
     /// <summary>Включает кнопки движения при наличии выделения.</summary>
@@ -419,17 +445,9 @@ public sealed class FormIncomingMail : Form
     private async Task<IncomingMovement> ВыполнитьДвижениеAsync(
         Func<Task<IncomingMovement>> действие)
     {
-        IncomingMovement движение;
-
-        try
-        {
-            движение = await действие().ConfigureAwait(true);
-        }
-        catch (Exception ошибка) when (ошибка is InvalidOperationException or IOException)
-        {
-            Сообщить(ошибка.Message, "Движение документа");
-            throw;
-        }
+        // Уведомление показывается ТОЛЬКО обработчиком кнопки (D-S33-03:
+        // двойного MessageBox нет); проверочные точки получают исключение.
+        IncomingMovement движение = await действие().ConfigureAwait(true);
 
         ОбновитьСписок();
 

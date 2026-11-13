@@ -125,7 +125,14 @@ public sealed class IncomingMovementTracker
         long incomingId,
         CancellationToken cancellationToken = default)
     {
-        await ИсторияВалиднуюAsync(incomingId, cancellationToken).ConfigureAwait(false);
+        var история = await ИсторияВалиднуюAsync(incomingId, cancellationToken).ConfigureAwait(false);
+
+        if (история.Count == 0)
+        {
+            // D-S33-01: архив без приёма — невалидный переход ∅→Архив.
+            throw new InvalidOperationException(
+                "Документ ещё не принят: сначала зарегистрируйте приём.");
+        }
 
         return await ДобавитьAsync(
             incomingId,

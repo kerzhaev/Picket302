@@ -117,6 +117,34 @@ public sealed class FormIncomingMailTests : IAsyncLifetime
             () => форма.ПередачаДляПроверокAsync("Отдел"));
     }
 
+    /// <summary>
+    /// D-S33-02 (ревью S33): удаление принятого документа (с историей
+    /// движения) запрещено и изолируется уведомлением — не краш.
+    /// </summary>
+    [Fact]
+    public async Task УдалениеПринятогоДокумента_ЗапрещеноУведомлением()
+    {
+        using var форма = СоздатьФорму();
+
+        var сообщения = new List<string>();
+        форма.УведомитьДляПроверок = (текст, _) => сообщения.Add(текст);
+
+        var запись = await форма.ЗарегистрироватьДляПроверокAsync(
+            "ВХ-UI/5", "Отправитель", "Тема", Picket302.Domain.Entities.IncomingMailType.Letter, null);
+
+        await форма.ПриёмДляПроверокAsync("Канцелярия");
+
+        // Проверочная точка бросает; уведомление оператору — в обработчике
+        // кнопки (catch InvalidOperationException -> Сообщить).
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => форма.УдалитьДляПроверокAsync());
+
+        Assert.Empty(сообщения);
+
+        // Запись на месте.
+        Assert.Equal(1, форма.ЧислоЗаписей);
+    }
+
     [Fact]
     public async Task Удаление_ЗаписьУходитСканОстаётся()
     {

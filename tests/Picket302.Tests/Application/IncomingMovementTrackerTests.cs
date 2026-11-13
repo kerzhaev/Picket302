@@ -141,6 +141,27 @@ public sealed class IncomingMovementTrackerTests : IAsyncLifetime
         Assert.Equal(2, (await трекер.ИсторияAsync(документ.Id)).Count);
     }
 
+    /// <summary>
+    /// D-S33-01 (ревью S33): переход ∅→Архив невалиден — архив требует
+    /// зарегистрированного приёма; отказ не портит историю.
+    /// </summary>
+    [Fact]
+    public async Task АрхивБезПриёма_Запрещён()
+    {
+        var документ = await ЗарегистрироватьДокументAsync("ВХ-АП/1");
+        var трекер = СоздатьТрекер();
+
+        var ошибка = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => трекер.АрхивироватьAsync(документ.Id));
+
+        Assert.Contains("не принят", ошибка.Message);
+        Assert.Empty(await трекер.ИсторияAsync(документ.Id));
+
+        // После отказа приём по-прежнему возможен (история не испорчена).
+        await трекер.ПриёмAsync(документ.Id, "Канцелярия");
+        Assert.Single(await трекер.ИсторияAsync(документ.Id));
+    }
+
     [Fact]
     public async Task НесуществующийДокумент_Отклоняется()
     {
