@@ -127,6 +127,55 @@ public sealed class HtmlMailEditorTests
         Assert.Contains("src=\"x\"", очищенный, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// F-S39R2-02 (регрессионные пины обходов санитизатора):
+    /// вложенная пересборка «scr<script>ipt» снимается итерациями.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_ВложеннаяПересборкаСкрипта_Удаляется()
+    {
+        var опасный = "&lt;scr&lt;script&gt;alert(1)&lt;/script&gt;ipt&gt;alert(2)&lt;/script&gt;"
+            .Replace("&lt;", "<").Replace("&gt;", ">");
+
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(опасный);
+
+        Assert.DoesNotContain("alert", очищенный, StringComparison.Ordinal);
+        Assert.DoesNotContain("<script", очищенный, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>F-S39R2-02: незакрытый script-блок удаляется до EOF.</summary>
+    [Fact]
+    public void Санитизатор_НезакрытыйСкрипт_Удаляется()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml("<p>текст</p><script>alert(1)");
+
+        Assert.DoesNotContain("script", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert", очищенный, StringComparison.Ordinal);
+        Assert.Contains("текст", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>F-S39R2-02: «script/src=…» (слэш в теге) удаляется.</summary>
+    [Fact]
+    public void Санитизатор_СкриптСоСлэшем_Удаляется()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<script/src=\"https://evil.test/x.js\">alert(1)</script>");
+
+        Assert.DoesNotContain("alert", очищенный, StringComparison.Ordinal);
+        Assert.DoesNotContain("evil.test", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>F-S39R2-02: обработчик слитно с кавычкой (href=x"onclick=).</summary>
+    [Fact]
+    public void Санитизатор_ОбработчикСлитноСКавычкой_Удаляется()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<a href=\"x\"onclick=\"alert(1)\">ссылка</a>");
+
+        Assert.DoesNotContain("onclick", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("href=\"x\"", очищенный, StringComparison.Ordinal);
+    }
+
     /// <summary>Пустая разметка — без исключений.</summary>
     [Fact]
     public void ОчисткаОпасногоHtml_ПустаяСтрока()

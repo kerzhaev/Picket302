@@ -741,8 +741,10 @@ public sealed class HtmlMailEditor : Form
         {
             // Элемент управления WebBrowser Windows показывает документ
             // свойством DocumentText: разметка письма отображается без
-            // сохранения во временный файл.
-            _браузер.DocumentText = _код.Text;
+            // сохранения во временный файл. Предпросмотр рендерит
+            // ОЧИЩЕННУЮ разметку (F-S39R2-03: ручной ввод опасного HTML на
+            // вкладке кода не попадает в исполняемый preview).
+            _браузер.DocumentText = КомандыРазметки.ОчиститьОпасныйHtml(_код.Text);
             _сообщение.Visible = false;
         }
         catch (System.Runtime.InteropServices.COMException)
