@@ -27,7 +27,8 @@ public sealed class SmtpMimeTests
         {
             From = "sender@example.test",
             Subject = "Тема проверки",
-            Body = "Тело обычного письма — строка 1.\r\nСтрока 2 (русский текст).",
+            Body = "Тело обычного письма — строка 1.\r\nСтрока 2 (русский текст) со знаком = для пина =3D."
+                + "\r\nДлинная строка: " + new string('д', 120),
         };
 
         var клиент = Клиент(сервер.Порт);
@@ -40,11 +41,12 @@ public sealed class SmtpMimeTests
         // Точные заголовки (№96).
         Assert.Contains("From: sender@example.test\r\n", тело, StringComparison.Ordinal);
         Assert.Contains("To: dest@example.test\r\n", тело, StringComparison.Ordinal);
-        // Subject кодируется по RFC 2047; регистр метки кодировки
-        // допускает варианты (utf-8 / UTF-8 / windows-1251-выход).
-        Assert.True(
-            тело.Contains("Subject: =?", StringComparison.Ordinal),
-            "dump=" + тело.Replace(Environment.NewLine, "|"));
+        // Subject кодируется по RFC 2047 детерминированным кодировщиком
+        // (=?UTF-8?B?base64?=): пиним точное значение.
+        Assert.Contains(
+            "Subject: =?UTF-8?B?0KLQtdC80LAg0L/RgNC+0LLQtdGA0LrQuA==?=",
+            тело,
+            StringComparison.Ordinal);
         Assert.Contains("MIME-Version: 1.0\r\n", тело, StringComparison.Ordinal);
         Assert.Contains("Content-Type: text/plain; charset=\"utf-8\"\r\n", тело, StringComparison.Ordinal);
         Assert.Contains("Content-Transfer-Encoding: quoted-printable\r\n", тело, StringComparison.Ordinal);
@@ -54,7 +56,14 @@ public sealed class SmtpMimeTests
         var раскодированное = РаскодироватьQuotedPrintable(частьТела.TrimEnd('\r', '\n'));
 
         Assert.Contains("Тело обычного письма — строка 1.", раскодированное, StringComparison.Ordinal);
-        Assert.Contains("Строка 2 (русский текст).", раскодированное, StringComparison.Ordinal);
+        Assert.Contains("Строка 2 (русский текст)", раскодированное, StringComparison.Ordinal);
+
+        // D-S38-04: экранирование '=' (=3D) и ограничение длины строк ≤76
+        // (RFC 2045) — данные теста содержат оба случая.
+        Assert.Contains("=3D", частьТела, StringComparison.Ordinal);
+        Assert.All(частьТела.Split("\r\n"), строка => Assert.True(
+            строка.Length <= 76,
+            "Строка QP длиннее 76: " + строка.Length));
     }
 
     [Fact]
@@ -102,7 +111,7 @@ public sealed class SmtpMimeTests
         var письмо = new MailMessage(["dest@example.test"])
         {
             From = "sender@example.test",
-            ReplyTo = "ответы@example.test",
+            ReplyTo = "reply@example.test",
             Subject = "С обратным адресом",
             Body = "Тело.",
         };
@@ -112,8 +121,12 @@ public sealed class SmtpMimeTests
 
         Assert.True(результат.IsSuccess, результат.Error ?? "Отправка не удалась.");
 
-        // Заголовок Reply-To присутствует с точным адресом.
-        Assert.Contains("Reply-To:", сервер.ТелоПисьма!, StringComparison.Ordinal);
+        // Заголовок Reply-To присутствует с точным адресом (bare-адрес
+        // фасад пишет verbatim — ОформитьАдрес без отображаемого имени).
+        Assert.Contains(
+            "Reply-To: reply@example.test\r\n",
+            сервер.ТелоПисьма!,
+            StringComparison.Ordinal);
 
         // Envelope (№99): MAIL FROM — адрес отправителя письма, RCPT TO —
         // точный адрес получателя; Reply-To остаётся заголовком письма.
