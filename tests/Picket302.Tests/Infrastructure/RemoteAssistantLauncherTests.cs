@@ -121,4 +121,50 @@ public sealed class RemoteAssistantLauncherTests
         public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException();
     }
+    /// <summary>
+    /// S35 (ТЗ §8.8, функция 109) — критерий приёмки «только https»:
+    /// http-адрес отклоняется ДО сетевых операций и запуска.
+    /// </summary>
+    [Fact]
+    public async Task HttpАдрес_ОтклоняетсяБезЗагрузкиИЗапуска()
+    {
+        var запускатель = new RemoteAssistantLauncher(
+            получитьНастройку: ключ => ключ switch
+            {
+                RemoteAssistantLauncher.КлючUrl => "http://support.example.test/helper.exe",
+                RemoteAssistantLauncher.КлючИмениФайла => "helper.exe",
+                _ => null,
+            },
+            скачать: (_, _, _) => throw new InvalidOperationException("Загрузка не должна вызываться для http."),
+            запустить: _ => throw new InvalidOperationException("Запуск не должен вызываться для http."),
+            папкаПоУмолчанию: Path.Combine(Path.GetTempPath(), "picket302-ras-http"));
+
+        var запущена = await запускатель.TryLaunchRemoteAssistantAsync();
+
+        Assert.False(запущена);
+        Assert.Contains("https://", запускатель.ПоследняяОшибка, StringComparison.Ordinal);
+    }
+
+    /// <summary>S35: не настроенный адрес — отказ с пояснением, без запуска.</summary>
+    [Fact]
+    public async Task НенастроенныйАдрес_ОтказБезЗапуска()
+    {
+        var запуски = 0;
+
+        var запускатель = new RemoteAssistantLauncher(
+            получитьНастройку: _ => null,
+            скачать: (_, _, _) => Task.FromResult(true),
+            запустить: _ =>
+            {
+                запуски++;
+
+                return true;
+            });
+
+        var запущена = await запускатель.TryLaunchRemoteAssistantAsync();
+
+        Assert.False(запущена);
+        Assert.Equal(RemoteAssistantLauncher.СообщениеНеНастроено, запускатель.ПоследняяОшибка);
+        Assert.Equal(0, запуски);
+    }
 }

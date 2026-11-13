@@ -52,6 +52,10 @@ public sealed class FormDbServiceDoctor : Form
     /// <summary>Отчёт диагностики.</summary>
     public DiagnosisReport Отчёт { get; private set; }
 
+    /// <summary>Текст отчёта в поле формы (точка автопроверок: ошибки
+    /// диагностики показываются человеку).</summary>
+    internal string ТекстОтчётаДляПроверок => _отчёт.Text;
+
     /// <summary>
     /// Удаляет выбранную осиротевшую службу после подтверждения пользователя.
     /// </summary>
