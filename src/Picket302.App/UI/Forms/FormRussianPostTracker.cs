@@ -90,7 +90,7 @@ public sealed class FormRussianPostTracker : Form
     /// <param name="shippingPoint">Пункт отправки.</param>
     /// <param name="trackingIds">Список ШПИ (по 14 знаков).</param>
     /// <returns>Зарегистрированная партия.</returns>
-    internal TrackBatch ЗарегистрироватьДляПроверокAsync(
+    internal TrackBatch ЗарегистрироватьДляПроверок(
         string batchNumber,
         DateTime shippingDate,
         string shippingPoint,
@@ -302,7 +302,7 @@ public sealed class FormRussianPostTracker : Form
 
         try
         {
-            ЗарегистрироватьДляПроверокAsync(
+            ЗарегистрироватьДляПроверок(
                 номер,
                 _датаОтправки.Value.Date,
                 _пунктОтправки.Text.Trim(),

@@ -42,7 +42,7 @@ public sealed class FormRussianPostTrackerTests
 
         using var форма = new FormRussianPostTracker(трекер);
 
-        var партия = форма.ЗарегистрироватьДляПроверокAsync(
+        var партия = форма.ЗарегистрироватьДляПроверок(
             "ПАР-2026-01",
             new DateTime(2026, 11, 13),
             "Москва, УЦ",
@@ -74,7 +74,7 @@ public sealed class FormRussianPostTrackerTests
             null);
 
         using var форма = new FormRussianPostTracker(трекер);
-        форма.ЗарегистрироватьДляПроверокAsync(
+        форма.ЗарегистрироватьДляПроверок(
             "PAR-FOUND-01",
             new DateTime(2026, 11, 10),
             "Москва",
@@ -103,7 +103,7 @@ public sealed class FormRussianPostTrackerTests
             null);
 
         using var форма = new FormRussianPostTracker(трекер);
-        форма.ЗарегистрироватьДляПроверокAsync(
+        форма.ЗарегистрироватьДляПроверок(
             "PAR-EMPTY-01",
             new DateTime(2026, 11, 10),
             "Москва",
@@ -136,7 +136,7 @@ public sealed class FormRussianPostTrackerTests
         var уведомления = new List<string>();
         форма.УведомитьДляПроверок = (текст, _) => уведомления.Add(текст);
 
-        форма.ЗарегистрироватьДляПроверокAsync(
+        форма.ЗарегистрироватьДляПроверок(
             "PAR-ERROR-01",
             new DateTime(2026, 11, 10),
             "Москва",
@@ -179,10 +179,13 @@ public sealed class FormRussianPostTrackerTests
         var уведомления = new List<(string, Exception?)>();
         форма.УведомитьДляПроверок = (текст, _) => уведомления.Add((текст, null));
 
-        Assert.ThrowsAny<Exception>(() => форма.ЗарегистрироватьДляПроверокAsync(
+        // ТЗ §8.8, ф.110: ШПИ — 14 знаков; ArgumentException с числом знаков.
+        var ошибка = Assert.Throws<ArgumentException>(() => форма.ЗарегистрироватьДляПроверок(
             "PAR-BAD-ID",
             new DateTime(2026, 11, 10),
             "Москва",
             new[] { "короткий-шпи" }));
+
+        Assert.Contains("14", ошибка.Message);
     }
 }

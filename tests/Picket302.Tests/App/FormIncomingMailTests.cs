@@ -111,10 +111,15 @@ public sealed class FormIncomingMailTests : IAsyncLifetime
         await форма.ПриёмДляПроверокAsync("Канцелярия");
         await форма.АрхивДляПроверокAsync();
 
-        // Движение после архива — InvalidOperationException из трекера,
-        // форма изолирует его в уведомление (не падает).
+        сообщения.Clear();
+
+        // Движение после архива — InvalidOperationException из трекера.
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => форма.ПередачаДляПроверокAsync("Отдел"));
+
+        // D-S33-06 (S33R2-03): проверочная точка НЕ уведомляет — уведомление
+        // ровно одно и принадлежит обработчику кнопки.
+        Assert.Empty(сообщения);
     }
 
     /// <summary>
