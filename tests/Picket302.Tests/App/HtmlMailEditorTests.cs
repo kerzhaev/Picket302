@@ -1,0 +1,328 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using Picket302.App.UI.Editors;
+using Picket302.Domain.Email;
+using Picket302.Infrastructure.Mail;
+using Xunit;
+
+namespace Picket302.Tests.App;
+
+/// <summary>
+/// S39 (ТЗ §8.7, функция 97): визуальный редактор письма — команды
+/// форматирования (чистый слой), очистка опасного HTML, шаблон по умолчанию
+/// и совпадение «UI и MIME» (HTML редактора попадает в письмо без искажений).
+/// COM, реестр, сеть (кроме локального приёмника) и печать не используются.
+/// </summary>
+public sealed class HtmlMailEditorTests
+{
+    /// <summary>Команды форматирования оборачивают выделение.</summary>
+    [Theory]
+    [InlineData("bold", "<b>", "</b>")]
+    [InlineData("italic", "<i>", "</i>")]
+    [InlineData("underline", "<u>", "</u>")]
+    public void Форматирование_ОборачиваетВыделение(string команда, string открывающий, string закрывающий)
+    {
+        var ожидаемое = "текст " + открывающий + "выделение" + закрывающий + " хвост";
+
+        var результат = КомандыРазметки.Применить("текст выделение хвост", команда, null, 6, 9);
+
+        Assert.Equal(ожидаемое, результат.Html);
+        Assert.Equal(6, результат.SelectionStart);
+    }
+
+    [Fact]
+    public void Цвет_НормализуетсяВHex()
+    {
+        var результат = КомандыРазметки.Применить("текст", "foreColor", "FF0000", 0, 5);
+
+        Assert.Contains("color:#FF0000", результат.Html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Списки_ОборачиваютФрагмент()
+    {
+        var маркированный = КомандыРазметки.Применить("пункт", "insertUnorderedList", null, 0, 5);
+
+        Assert.Equal("<ul><li>пункт</li></ul>", маркированный.Html);
+
+        var нумерованный = КомандыРазметки.Применить("пункт", "insertOrderedList", null, 0, 5);
+
+        Assert.Equal("<ol><li>пункт</li></ol>", нумерованный.Html);
+    }
+
+    [Fact]
+    public void Ссылка_ЗначениеАтрибутаЭкранируется()
+    {
+        var результат = КомандыРазметки.Применить(
+            "сайт",
+            "insertLink",
+            "https://x.test/a\" onmouseover=\"alert(1)",
+            0,
+            4);
+
+        // Кавычки в значении href экранированы — атрибут не разрывается.
+        Assert.Contains("&quot;", результат.Html, StringComparison.Ordinal);
+        Assert.DoesNotContain("\" onmouseover=", результат.Html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ОчиститьФорматирование_СнимаетТеги()
+    {
+        var результат = КомандыРазметки.Применить(
+            "<b>жирный</b> и <i>курсив</i>",
+            "removeFormat",
+            null,
+            0,
+            27);
+
+        Assert.DoesNotContain("<b>", результат.Html, StringComparison.Ordinal);
+        Assert.DoesNotContain("<i>", результат.Html, StringComparison.Ordinal);
+        Assert.Contains("жирный", результат.Html, StringComparison.Ordinal);
+        Assert.Contains("курсив", результат.Html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void НеизвестнаяКоманда_РазметкаБезИзменений()
+    {
+        var результат = КомандыРазметки.Применить("<p>текст</p>", "неизвестнаяКоманда", null, 0, 4);
+
+        Assert.Equal("<p>текст</p>", результат.Html);
+    }
+
+    [Fact]
+    public void ВыделениеЗаГраницами_Нормализуется()
+    {
+        var результат = КомандыРазметки.Применить("текст", "bold", null, 100, 50);
+
+        // Начало сжато к длине текста; выделение пустое — команда оборачивает
+        // пустой фрагмент (точка вставки готова к вводу жирным).
+        Assert.Equal("текст<b></b>", результат.Html);
+        Assert.Equal(5, результат.SelectionStart);
+    }
+
+    /// <summary>
+    /// Критерий приёмки №97 «очистка опасного HTML»: script-блок удаляется
+    /// целиком, обработчики событий и javascript:-схемы нейтрализуются,
+    /// безопасное содержимое сохраняется.
+    /// </summary>
+    [Fact]
+    public void ОчисткаОпасногоHtml_СкриптыИОбработчикиУдаляются()
+    {
+        var опасный = "<p>Привет <script>alert(1)</script>мир</p>"
+            + "<iframe src=\"https://evil.test\"></iframe>"
+            + "<img src=\"x\" onerror=\"alert(2)\">"
+            + "<a href=\"javascript:alert(3)\">ссылка</a>";
+
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(опасный);
+
+        Assert.DoesNotContain("<script", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert(1)", очищенный, StringComparison.Ordinal);
+        Assert.DoesNotContain("<iframe", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onerror", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("javascript:", очищенный, StringComparison.OrdinalIgnoreCase);
+
+        // Безопасное содержимое сохранено.
+        Assert.Contains("Привет мир", очищенный, StringComparison.Ordinal);
+        Assert.Contains("<img src=\"x\">", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>Пустая разметка — без исключений.</summary>
+    [Fact]
+    public void ОчисткаОпасногоHtml_ПустаяСтрока()
+    {
+        Assert.Equal(string.Empty, КомандыРазметки.ОчиститьОпасныйHtml(string.Empty));
+    }
+
+    /// <summary>Шаблон по умолчанию не пуст и безопасен после очистки.</summary>
+    [Fact]
+    public void ШаблонПоУмолчанию_НеПустойИБезопасный()
+    {
+        var шаблон = HtmlMailEditor.ЗагрузитьШаблон();
+
+        Assert.False(string.IsNullOrWhiteSpace(шаблон));
+        Assert.Equal(
+            шаблон,
+            КомандыРазметки.ОчиститьОпасныйHtml(шаблон),
+            ignoreCase: false,
+            ignoreLineEndingDifferences: true,
+            ignoreWhiteSpaceDifferences: true,
+            ignoreAllWhiteSpace: false);
+    }
+
+    /// <summary>
+    /// Критерий «UI и MIME совпадают»: HTML, собранный командами редактора,
+    /// уходит в письмо (base64, BodyFormat.Html) без искажений — приёмник
+    /// захватывает полное DATA (сервер S38).
+    /// </summary>
+    [Fact]
+    public async Task РедакторHtml_СовпадаетСMimeПисьмом()
+    {
+        var шаг1 = КомандыРазметки.Применить("Уважаемый клиент!", "bold", null, 0, 17);
+        var разметка = "<html><body><p>" + шаг1.Html + "</p></body></html>";
+
+        using var сервер = new MimeStand();
+        var порт = сервер.Запустить();
+
+        var клиент = new SmtpClientFacade(new SmtpSettings
+        {
+            Server = "127.0.0.1",
+            Port = порт,
+            SslMode = SslMode.None,
+            TimeoutSeconds = 15,
+        });
+
+        var письмо = new MailMessage(["dest@example.test"])
+        {
+            From = "sender@example.test",
+            Subject = "UI и MIME",
+            Body = разметка,
+            BodyFormat = BodyFormat.Html,
+        };
+
+        var результат = клиент.SendOne(письмо);
+
+        Assert.True(результат.IsSuccess, результат.Error ?? "Отправка не удалась.");
+
+        // MIME-письмо содержит ИМЕННО HTML редактора (base64 → исходная строка).
+        Assert.NotNull(сервер.ТелоПисьма);
+        Assert.Contains("Content-Type: text/html; charset=\"utf-8\"", сервер.ТелоПисьма, StringComparison.Ordinal);
+
+        var часть = сервер.ТелоПисьма!.Substring(
+            сервер.ТелоПисьма.IndexOf("\r\n\r\n", StringComparison.Ordinal) + 4);
+        var base64 = string.Concat(
+            часть.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).TakeWhile(строка => строка != "."));
+
+        Assert.Equal(разметка, Encoding.UTF8.GetString(Convert.FromBase64String(base64)));
+    }
+
+    /// <summary>
+    /// Локальный приёмник с захватом полного DATA — копия минимального
+    /// диалога стенда (внутренние серверы S36/S38 приватны).
+    /// </summary>
+    public sealed class MimeStand : IDisposable
+    {
+        private readonly TcpListener _слушатель;
+        private readonly Task _диалог;
+        private readonly TaskCompletionSource _готов = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public MimeStand()
+        {
+            _слушатель = new TcpListener(IPAddress.Loopback, 0);
+            _слушатель.Start();
+            _диалог = Task.Run(async () =>
+            {
+                using var клиент = await _слушатель.AcceptTcpClientAsync();
+                await ОбслужитьAsync(клиент.GetStream());
+            });
+        }
+
+        /// <summary>Полное тело DATA (MIME-текст).</summary>
+        public string? ТелоПисьма { get; private set; }
+
+        /// <summary>Запускает приёмник и возвращает порт.</summary>
+        public int Запустить()
+        {
+            var порт = ((IPEndPoint)_слушатель.LocalEndpoint).Port;
+            _ = _готов.Task.Wait(TimeSpan.FromSeconds(5));
+
+            return порт;
+        }
+
+        private async Task ОбслужитьAsync(NetworkStream поток)
+        {
+            using var читатель = new StreamReader(поток, Encoding.UTF8, false, 4096, leaveOpen: true);
+            await using var писатель = new StreamWriter(поток, new ASCIIEncoding(), 4096, leaveOpen: true)
+            {
+                AutoFlush = true,
+                NewLine = "\r\n",
+            };
+
+            await писатель.WriteLineAsync("220 mime-stand ESMTP ready").ConfigureAwait(false);
+            _готов.TrySetResult();
+
+            var состояние = "старт";
+            var тело = new StringBuilder();
+
+            while (await читатель.ReadLineAsync().ConfigureAwait(false) is { } команда)
+            {
+                switch (состояние)
+                {
+                    case "старт" when команда.StartsWith("EHLO", StringComparison.Ordinal):
+                        await писатель.WriteLineAsync("250 OK").ConfigureAwait(false);
+                        continue;
+
+                    case "старт" when команда.StartsWith("MAIL FROM", StringComparison.Ordinal)
+                        || команда.StartsWith("RCPT TO", StringComparison.Ordinal):
+                        await писатель.WriteLineAsync("250 OK").ConfigureAwait(false);
+                        continue;
+
+                    case "старт" when команда.Equals("DATA", StringComparison.Ordinal):
+                        await писатель.WriteLineAsync("354 End data").ConfigureAwait(false);
+
+                        while (await читатель.ReadLineAsync().ConfigureAwait(false) is { } строка && строка != ".")
+                        {
+                            тело.AppendLine(строка);
+                        }
+
+                        ТелоПисьма = тело.ToString();
+                        await писатель.WriteLineAsync("250 OK queued").ConfigureAwait(false);
+                        continue;
+
+                    case "старт" when команда.StartsWith("AUTH LOGIN", StringComparison.Ordinal):
+                        состояние = "ждётЛогин";
+                        await писатель.WriteLineAsync("334 Username:").ConfigureAwait(false);
+                        continue;
+
+                    case "ждётЛогин":
+                        состояние = "ждётПароль";
+                        await писатель.WriteLineAsync("334 Password:").ConfigureAwait(false);
+                        continue;
+
+                    case "ждётПароль":
+                        состояние = "авторизован";
+                        await писатель.WriteLineAsync("235 Authentication successful").ConfigureAwait(false);
+                        continue;
+
+                    case "авторизован" when команда.StartsWith("MAIL FROM", StringComparison.Ordinal)
+                        || команда.StartsWith("RCPT TO", StringComparison.Ordinal):
+                        await писатель.WriteLineAsync("250 OK").ConfigureAwait(false);
+                        continue;
+
+                    case "авторизован" when команда.Equals("DATA", StringComparison.Ordinal):
+                        await писатель.WriteLineAsync("354 End data").ConfigureAwait(false);
+
+                        while (await читатель.ReadLineAsync().ConfigureAwait(false) is { } строка && строка != ".")
+                        {
+                            тело.AppendLine(строка);
+                        }
+
+                        ТелоПисьма = тело.ToString();
+                        await писатель.WriteLineAsync("250 OK queued").ConfigureAwait(false);
+                        continue;
+
+                    case "авторизован" when команда.Equals("QUIT", StringComparison.Ordinal):
+                        await писатель.WriteLineAsync("221 Bye").ConfigureAwait(false);
+                        return;
+
+                    default:
+                        await писатель.WriteLineAsync("500 Unknown").ConfigureAwait(false);
+                        return;
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            try
+            {
+                _слушатель.Stop();
+            }
+            catch (SocketException)
+            {
+                // Повторная остановка безопасна.
+            }
+        }
+    }
+}

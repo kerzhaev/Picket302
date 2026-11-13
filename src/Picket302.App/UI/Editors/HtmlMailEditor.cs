@@ -193,6 +193,59 @@ public static class КомандыРазметки
     };
 
     /// <summary>
+    /// Очищает опасную разметку (ТЗ §8.7, функция 97: «очистка опасного
+    /// HTML»): удаляет блоки script/iframe/object/embed/form целиком,
+    /// обработчики событий on* и URL-схемы javascript:/vbscript:/data:.
+    /// Текст и безопасное форматирование сохраняются.
+    /// </summary>
+    /// <param name="html">Исходная разметка.</param>
+    /// <returns>Очищенная разметка.</returns>
+    public static string ОчиститьОпасныйHtml(string html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+
+        if (html.Length == 0)
+        {
+            return html;
+        }
+
+        var результат = html;
+
+        foreach (var блок in ОпасныеБлоки)
+        {
+            результат = Regex.Replace(
+                результат,
+                "<" + блок + "[^>]*>.*?</" + блок + ">",
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.Singleline,
+                TimeSpan.FromMilliseconds(200));
+        }
+
+        // Обработчики событий on* в атрибутах.
+        результат = ОбработчикиСобытий.Replace(результат, string.Empty);
+
+        // Опасные URL-схемы в атрибутах: нейтрализуются якорем.
+        результат = ОпасныеСхемы.Replace(результат, "#");
+
+        return результат;
+    }
+
+    /// <summary>Опасные блоки, удаляемые целиком с содержимым.</summary>
+    private static readonly string[] ОпасныеБлоки = ["script", "iframe", "object", "embed", "form"];
+
+    /// <summary>Обработчики событий on* в атрибутах.</summary>
+    private static readonly Regex ОбработчикиСобытий = new(
+        "\\son[a-zA-Z]+\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)",
+        RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(200));
+
+    /// <summary>Опасные URL-схемы в атрибутах (href/src/action).</summary>
+    private static readonly Regex ОпасныеСхемы = new(
+        "(href|src|action)\\s*=\\s*(\"|')?(javascript|vbscript|data)\\s*:",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        TimeSpan.FromMilliseconds(200));
+
+    /// <summary>
     /// Экранирует значение атрибута HTML.
     /// </summary>
     /// <param name="значение">Значение атрибута.</param>
@@ -341,8 +394,12 @@ public sealed class HtmlMailEditor : Form
     {
         ArgumentNullException.ThrowIfNull(html);
 
-        _исходныйHtml = html;
-        ТекущийHtml = html;
+        // Очистка опасного HTML (ТЗ §8.7, функция 97): редактор никогда не
+        // держит скрипты/обработчики/опасные схемы в содержимом письма.
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(html);
+
+        _исходныйHtml = очищенный;
+        ТекущийHtml = очищенный;
 
         _код.Text = html;
 
