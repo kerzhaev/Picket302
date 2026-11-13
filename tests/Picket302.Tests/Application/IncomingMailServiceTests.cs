@@ -95,9 +95,11 @@ public sealed class IncomingMailServiceTests : IAsyncLifetime
         await служба.ЗарегистрироватьAsync(
             "ВХ-100", DateTime.UtcNow, "Отправитель", "Тема", IncomingMailType.Other);
 
-        await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(() =>
+        var ошибка = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             служба.ЗарегистрироватьAsync(
                 "ВХ-100", DateTime.UtcNow, "Другой", "Тема", IncomingMailType.Other));
+
+        Assert.Contains("уже занят", ошибка.Message);
     }
 
     /// <summary>
@@ -145,8 +147,9 @@ public sealed class IncomingMailServiceTests : IAsyncLifetime
         await служба.ЗарегистрироватьAsync(
             "ВХ-ДУБЛЬ", DateTime.UtcNow, "Первый", "Тема", IncomingMailType.Letter, скан);
 
-        // Повтор с занятым номером: вставка падает (UNIQUE).
-        await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(() =>
+        // Повтор с занятым номером: вставка падает (UNIQUE), транслируясь
+        // в InvalidOperationException доменного контракта (D-S32-01).
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
             служба.ЗарегистрироватьAsync(
                 "ВХ-ДУБЛЬ", DateTime.UtcNow, "Второй", "Тема", IncomingMailType.Letter, скан));
 
@@ -168,6 +171,34 @@ public sealed class IncomingMailServiceTests : IAsyncLifetime
 
         // Журнал не записан.
         Assert.Empty(await служба.НайтиAsync(null));
+    }
+
+    /// <summary>
+    /// D-S32-02 (ревью S32): скан свыше 50 МБ отклоняется до копирования
+    /// (ТЗ §8.2, ф.29) — журнал не записывается.
+    /// </summary>
+    [Fact]
+    public async Task СканСвыше50МБ_Отклоняется()
+    {
+        var служба = СоздатьСлужбу();
+
+        var большой = Path.Combine(_профиль, "big-scan.pdf");
+
+        // Разреженный файл: 50 МБ + 1 байт без фактической записи содержимого.
+        using (var поток = new FileStream(большой, FileMode.CreateNew))
+        {
+            поток.SetLength(IncomingMailService.ЛимитСканаБайт + 1);
+        }
+
+        var ошибка = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            служба.ЗарегистрироватьAsync(
+                "ВХ-БОЛЬШОЙ", DateTime.UtcNow, "Отправитель", "Тема", IncomingMailType.Letter, большой));
+
+        Assert.Contains("50 МБ", ошибка.Message);
+
+        // Журнал не записан, каталог сканов не создан.
+        Assert.Empty(await служба.НайтиAsync(null));
+        Assert.False(Directory.Exists(служба.КаталогСканов));
     }
 
     [Fact]

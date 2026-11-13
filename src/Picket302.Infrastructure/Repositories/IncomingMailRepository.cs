@@ -21,11 +21,37 @@ public sealed class IncomingMailRepository : IIncomingMailRepository
     }
 
     /// <inheritdoc />
+    /// <exception cref="InvalidOperationException">
+    /// Регистрационный номер уже занят (нарушение UNIQUE — драйверное
+    /// исключение транслируется в доменный контракт, D-S32-01).
+    /// </exception>
     public async Task<long> AddAsync(IncomingMail mail, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mail);
         ArgumentException.ThrowIfNullOrWhiteSpace(mail.RegNumber);
 
+        long идентификатор;
+
+        try
+        {
+            идентификатор = await ВставитьAsync(mail, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ошибка)
+            when (ошибка.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Регистрационный номер «{mail.RegNumber}» уже занят.",
+                ошибка);
+        }
+
+        mail.Id = идентификатор;
+
+        return идентификатор;
+    }
+
+    /// <summary>Выполняет вставку записи журнала.</summary>
+    private async Task<long> ВставитьAsync(IncomingMail mail, CancellationToken cancellationToken)
+    {
         var идентификатор = await _сессия.ExecuteScalarAsync<long>(
             """
             INSERT INTO incoming_mails (reg_number, reg_date, sender, subject, doc_type, scan_path, created_at)
@@ -43,8 +69,6 @@ public sealed class IncomingMailRepository : IIncomingMailRepository
                 CreatedAt = ФорматДаты(mail.CreatedAt),
             },
             cancellationToken).ConfigureAwait(false);
-
-        mail.Id = идентификатор;
 
         return идентификатор;
     }
@@ -104,5 +128,5 @@ public sealed class IncomingMailRepository : IIncomingMailRepository
     /// <summary>Формат даты для хранения: сортируемая строка UTC.</summary>
     private static string ФорматДаты(DateTime момент) => момент
         .ToUniversalTime()
-        .ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        .ToString(SqliteDateTimeHandler.Формат, System.Globalization.CultureInfo.InvariantCulture);
 }

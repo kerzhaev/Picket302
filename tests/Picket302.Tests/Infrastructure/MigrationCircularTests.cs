@@ -124,8 +124,9 @@ public sealed class MigrationCircularTests : IDisposable
 
             var таблицы = await база.Connection.QueryAsync<string>(
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;");
-            // V009 добавила incoming_mails (S32): полный набор таблиц.
-            Assert.Equal(21, таблицы.Count());
+            // V009 добавила incoming_mails (S32), V010 — incoming_movements
+            // (S33): полный набор таблиц.
+            Assert.Equal(22, таблицы.Count());
 
             var контрагент = await база.Connection.QuerySingleAsync<string>(
                 "SELECT name FROM counterparties;");

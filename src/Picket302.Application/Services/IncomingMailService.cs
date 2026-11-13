@@ -21,6 +21,9 @@ public sealed class IncomingMailService
     /// <summary>Подкаталог сканов в профиле пользователя.</summary>
     public const string СканыПодкаталог = "scans";
 
+    /// <summary>Лимит размера файла скана (ТЗ §8.2, ф.29: свыше 50 МБ).</summary>
+    public const long ЛимитСканаБайт = 50 * 1024 * 1024;
+
     private readonly IIncomingMailRepository _репозиторий;
     private readonly string _кореньПрофиля;
 
@@ -57,7 +60,8 @@ public sealed class IncomingMailService
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Зарегистрированная запись.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Регистрационный номер уже занят (скан при этом остаётся в профиле).
+    /// Регистрационный номер уже занят (скан при этом остаётся в профиле) либо
+    /// файл скана превышает лимит <see cref="ЛимитСканаБайт"/>.
     /// </exception>
     public async Task<IncomingMail> ЗарегистрироватьAsync(
         string regNumber,
@@ -124,6 +128,16 @@ public sealed class IncomingMailService
         if (!File.Exists(источник))
         {
             throw new FileNotFoundException("Файл скана не найден.", источник);
+        }
+
+        // ТЗ §8.2, ф.29: скан свыше 50 МБ отклоняется с предупреждением
+        // (D-S32-02) — до копирования и записи в журнал.
+        var размер = new FileInfo(источник).Length;
+
+        if (размер > ЛимитСканаБайт)
+        {
+            throw new InvalidOperationException(
+                $"Размер скана {размер / (1024 * 1024)} МБ превышает лимит 50 МБ. Приложите скан меньшего размера.");
         }
 
         Directory.CreateDirectory(КаталогСканов);

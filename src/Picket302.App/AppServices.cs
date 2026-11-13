@@ -228,9 +228,14 @@ public sealed class AppServices : IAsyncDisposable
 
         // Входящая корреспонденция (ТЗ §8.2, функция 29): журнал в базе,
         // сканы в каталоге профиля (scans/) — путь не теряется при сбое.
-        СлужбаВходящих = new IncomingMailService(
-            new IncomingMailRepository(сессия),
-            _профиль.DataDirectory);
+        var репозиторийВходящих = new IncomingMailRepository(сессия);
+        СлужбаВходящих = new IncomingMailService(репозиторийВходящих, _профиль.DataDirectory);
+
+        // Движение входящих документов (ТЗ §8.2, функция 30): история —
+        // только дополнение (append-only).
+        ТрекерВходящих = new IncomingMovementTracker(
+            new IncomingMovementRepository(сессия),
+            репозиторийВходящих);
     }
 
     /// <summary>
@@ -436,6 +441,12 @@ public sealed class AppServices : IAsyncDisposable
     /// регистрации, поиск, сканы в каталоге профиля пользователя.
     /// </summary>
     public IncomingMailService СлужбаВходящих { get; }
+
+    /// <summary>
+    /// Трекер движения входящих документов (ТЗ §8.2, функция 30): приём →
+    /// передача → архив; история только дополнением.
+    /// </summary>
+    public IncomingMovementTracker ТрекерВходящих { get; }
 
     /// <summary>
     /// Вычислитель идентификатора оборудования (ТЗ §8.10, функция 120).

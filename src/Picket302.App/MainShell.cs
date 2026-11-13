@@ -835,6 +835,10 @@ public sealed class MainShell : Form
         сервис.DropDownItems.Add("Демо-база", null, (_, _) => НаполнитьДемоБазу());
         сервис.DropDownItems.Add("Восстановить удалённые записи", null, (_, _) => ВосстановитьУдалённые());
         сервис.DropDownItems.Add("Создать отправителя…", null, (_, _) => СоздатьОтправителя());
+
+        // Входящая корреспонденция и движение документов (ТЗ §8.2,
+        // функции 29 и 30).
+        сервис.DropDownItems.Add("Входящая корреспонденция…", null, (_, _) => ОткрытьВходящуюКорреспонденцию());
         сервис.DropDownItems.Add(new ToolStripSeparator());
         сервис.DropDownItems.Add("Выгрузить данные…", null, (_, _) => ВыгрузитьДанные());
         сервис.DropDownItems.Add("Сформировать документ…", null, (_, _) => СформироватьДокумент());
@@ -5741,6 +5745,24 @@ public sealed class MainShell : Form
 
         using var редактор = new UI.Forms.FormBlankEditor(бланк);
         редактор.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Открывает журнал входящей корреспонденции и движения документов
+    /// (ТЗ §8.2, функции 29 и 30).
+    /// </summary>
+    private void ОткрытьВходящуюКорреспонденцию()
+    {
+        var состав = _состав;
+        if (состав is null)
+        {
+            return;
+        }
+
+        using var форма = new UI.Forms.FormIncomingMail(
+            состав.СлужбаВходящих,
+            состав.ТрекерВходящих);
+        форма.ShowDialog(this);
     }
 
     /// <summary>
