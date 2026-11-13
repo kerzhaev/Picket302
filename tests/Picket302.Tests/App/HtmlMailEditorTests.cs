@@ -307,6 +307,44 @@ public sealed class HtmlMailEditorTests
         Assert.Contains("<p>ок</p>", текст, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// FINAL-01 (финальное ревью): инъекция атрибута через style — значение
+    /// с сущностью-кавычкой не должно прорывать атрибут при сериализации.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_СтильСКавычкойИзСущности_АтрибутНеПрорывается()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"color:red&quot; onmouseover=&quot;alert(1)\">x</div>");
+
+        Assert.DoesNotContain("onmouseover", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("style", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<div>x</div>", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>FINAL-01: вариант с десятичной сущностью &#34;.</summary>
+    [Fact]
+    public void Санитизатор_СтильСДесятичнойСущностью_АтрибутНеПрорывается()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"color:blue&#34; onclick=&#34;alert(2)\">y</div>");
+
+        Assert.DoesNotContain("onclick", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("style", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<div>y</div>", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>Стиль с безопасными свойствами проходит и экранируется корректно.</summary>
+    [Fact]
+    public void Санитизатор_СтильБезопасный_Сохраняется()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"color:red; text-align:center\">z</div>");
+
+        Assert.Contains("color: red", очищенный, StringComparison.Ordinal);
+        Assert.Contains("text-align: center", очищенный, StringComparison.Ordinal);
+    }
+
     /// <summary>Пустая разметка — без исключений.</summary>
     [Fact]
     public void ОчисткаОпасногоHtml_ПустаяСтрока()

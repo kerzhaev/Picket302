@@ -766,9 +766,11 @@ public sealed class SmtpClientFacade
             {
                 сессия.Выполнить("QUIT");
             }
-            catch (TimeoutException)
+            catch (Exception ошибкаQuit) when (ошибкаQuit is TimeoutException or IOException)
             {
-                // QUIT — наилучшим образом: письмо уже поставлено в очередь.
+                // QUIT — наилучшим образом (FINAL-07): письмо уже поставлено
+                // в очередь; таймаут И обрыв соединения на QUIT не меняют
+                // исход — успех остаётся успехом.
             }
 
             foreach (var адрес in принятые)

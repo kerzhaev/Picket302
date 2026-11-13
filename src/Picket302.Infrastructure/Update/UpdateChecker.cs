@@ -63,6 +63,14 @@ public sealed class UpdateChecker
     private readonly string _текущаяВерсия;
     private readonly Func<string, CancellationToken, Task<string>> _запрос;
     private readonly Func<Uri, CancellationToken, Task<Stream>> _загрузчик;
+
+    /// <summary>
+    /// Каталог загрузки для автоматических проверок (FINAL-10): тесты
+    /// подменяют его временным каталогом — производственный
+    /// %TEMP%/Picket302Update (реальное скачанное обновление пользователя)
+    /// не затрагивается.
+    /// </summary>
+    internal static string? КаталогЗагрузкиДляПроверок { get; set; }
     private readonly Action<string>? _журнал;
 
     /// <summary>
@@ -184,7 +192,9 @@ public sealed class UpdateChecker
             return null;
         }
 
-        var каталог = Path.Combine(Path.GetTempPath(), "Picket302Update");
+        var каталог = КаталогЗагрузкиДляПроверок is { } подменённый
+            ? подменённый
+            : Path.Combine(Path.GetTempPath(), "Picket302Update");
         Directory.CreateDirectory(каталог);
 
         // Разбор адреса до файловых операций (F-C8): некорректный адрес
@@ -210,21 +220,10 @@ public sealed class UpdateChecker
 
         try
         {
-            Stream поток;
-
-            if (_загрузчик is not null)
-            {
-                // Инъекция: проверка целостности использует тестовый источник.
-                поток = await _загрузчик(адресЗагрузки, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                using var клиент = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-
-                поток = await клиент
-                    .GetStreamAsync(адресЗагрузки, cancellationToken)
-                    .ConfigureAwait(false);
-            }
+            // Инъекция загрузчика (проверки целостности используют тестовый
+            // источник); production-загрузчик запрещает редиректы
+            // (FINAL-02: HTTPS-only сквозной — 30x на http:// отклоняется).
+            Stream поток = await _загрузчик(адресЗагрузки, cancellationToken).ConfigureAwait(false);
 
             var целевойПоток = System.IO.File.Create(путь);
 
@@ -404,11 +403,22 @@ public sealed class UpdateChecker
     /// </summary>
     private static async Task<Stream> ЗагрузитьПоУмолчанию(Uri адресЗагрузки, CancellationToken cancellationToken)
     {
-        var клиент = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+        var обработчик = new HttpClientHandler
+        {
+            // FINAL-02: редиректы запрещены — финальная схема останется
+            // HTTPS (30x на http:// отклоняется как ошибка).
+            AllowAutoRedirect = false,
+        };
+
+        var клиент = new HttpClient(обработчик) { Timeout = TimeSpan.FromMinutes(5) };
 
         try
         {
-            return await клиент.GetStreamAsync(адресЗагрузки, cancellationToken).ConfigureAwait(false);
+            var поток = await клиент.GetStreamAsync(адресЗагрузки, cancellationToken).ConfigureAwait(false);
+
+            // FINAL-08: поток владеет клиентом — утилизация потока
+            // освобождает и HttpClient (dispose-on-success).
+            return new ПотокВладелецКлиента(поток, клиент);
         }
         catch
         {
@@ -417,9 +427,60 @@ public sealed class UpdateChecker
         }
     }
 
+    /// <summary>
+    /// Поток-обёртка, утилизирующий HttpClient вместе с собой (FINAL-08):
+    /// освобождение ресурсов загрузки не происходит лишь на успешном пути.
+    /// </summary>
+    private sealed class ПотокВладелецКлиента : Stream
+    {
+        private readonly Stream _внутренний;
+        private readonly HttpClient _клиент;
+
+        public ПотокВладелецКлиента(Stream внутренний, HttpClient клиент)
+        {
+            _внутренний = внутренний;
+            _клиент = клиент;
+        }
+
+        public override bool CanRead => _внутренний.CanRead;
+        public override bool CanSeek => _внутренний.CanSeek;
+        public override bool CanWrite => _внутренний.CanWrite;
+        public override long Length => _внутренний.Length;
+        public override long Position { get => _внутренний.Position; set => _внутренний.Position = value; }
+
+        public override void Flush() => _внутренний.Flush();
+
+        public override int Read(byte[] буфер, int смещение, int счёт)
+            => _внутренний.Read(буфер, смещение, счёт);
+
+        public override Task<int> ReadAsync(byte[] буфер, int смещение, int счёт, CancellationToken маркер)
+            => _внутренний.ReadAsync(буфер, смещение, счёт, маркер);
+
+        public override long Seek(long смещение, SeekOrigin происхождение)
+            => _внутренний.Seek(смещение, происхождение);
+
+        public override void SetLength(long значение) => _внутренний.SetLength(значение);
+
+        public override void Write(byte[] буфер, int смещение, int счёт)
+            => _внутренний.Write(буфер, смещение, счёт);
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _внутренний.Dispose();
+                _клиент.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
     private static async Task<string> ЗапроситьПоHttp(string адрес, CancellationToken cancellationToken)
     {
-        using var клиент = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        // FINAL-02: манифест тоже без редиректов (HTTPS-only сквозной).
+        using var обработчикМанифеста = new HttpClientHandler { AllowAutoRedirect = false };
+        using var клиент = new HttpClient(обработчикМанифеста) { Timeout = TimeSpan.FromSeconds(20) };
 
         using var ответ = await клиент.GetAsync(адрес, cancellationToken).ConfigureAwait(false);
 

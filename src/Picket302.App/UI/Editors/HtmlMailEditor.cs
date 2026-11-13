@@ -270,7 +270,6 @@ public static class КомандыРазметки
             }
 
             var имя = ИмяТега(html, стартИмени, конец);
-            var самозакрыт = html[конец - 1] == '/';
             var атрибуты = закрывающий ? null : РазобратьАтрибуты(html, стартИмени + имя.Length, конец);
 
             позиция = конец + 1;
@@ -518,6 +517,9 @@ public static class КомандыРазметки
 
         if (атрибут == "style")
         {
+            // FINAL-01: стиль пересобирается из распарсенных пар, значение
+            // каждой пары экранируется — кавычка/угловые скобки в исходном
+            // значении не прорывают атрибут при сериализации.
             return ДопустимыйСтиль(декодированное);
         }
 
@@ -581,19 +583,43 @@ public static class КомандыРазметки
             }
         }
 
+        // FINAL-01: кавычка в CSS-значении не легитимна (разрешённые свойства
+        // — цвета/выравнивание/шрифты) и является попыткой прорвать атрибут
+        // при сериализации; такой стиль отбрасывается целиком.
+        if (декодированное.Contains('"', StringComparison.Ordinal)
+            || декодированное.Contains('\'', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
         var чистые = декодированное
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(часть => часть.Contains(':', StringComparison.Ordinal))
-            .Where(часть =>
+            .Select(часть =>
             {
-                var имя = часть[..часть.IndexOf(':', StringComparison.Ordinal)].Trim().ToLowerInvariant();
+                var деление = часть.IndexOf(':', StringComparison.Ordinal);
+                var имя = часть[..деление].Trim().ToLowerInvariant();
 
-                return РазрешённыеСвойстваСтиля.Contains(имя);
+                return РазрешённыеСвойстваСтиля.Contains(имя)
+                    ? имя + ": " + ЭкранироватьЗначениеСтиля(часть[(деление + 1)..].Trim())
+                    : null;
             })
+            .OfType<string>()
             .ToList();
 
         return чистые.Count == 0 ? null : string.Join("; ", чистые);
     }
+
+    /// <summary>
+    /// Экранирует значение свойства стиля: кавычки и угловые скобки
+    /// заменяются сущностями — атрибут style="…" не прорывается
+    /// синтезированными атрибутами (FINAL-01).
+    /// </summary>
+    private static string ЭкранироватьЗначениеСтиля(string значение) => значение
+        .Replace("\"", "&quot;", StringComparison.Ordinal)
+        .Replace("'", "&#39;", StringComparison.Ordinal)
+        .Replace("<", "&lt;", StringComparison.Ordinal)
+        .Replace(">", "&gt;", StringComparison.Ordinal);
 
     /// <summary>
     /// Экранирует значение атрибута HTML.

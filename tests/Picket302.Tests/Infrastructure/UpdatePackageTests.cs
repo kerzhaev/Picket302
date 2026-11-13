@@ -29,13 +29,19 @@ public sealed class UpdatePackageTests
     private static Func<Uri, CancellationToken, Task<Stream>> ЗагрузчикПакета(byte[] содержимое)
         => (_, _) => Task.FromResult<Stream>(new MemoryStream(содержимое, writable: false));
 
+    /// <summary>Изолированный каталог проверок (FINAL-10): производственный
+    /// %TEMP%/Picket302Update пользователя не затрагивается.</summary>
+    private static string КаталогПроверки { get; } = Path.Combine(
+        Path.GetTempPath(),
+        "Picket302UpdateTests-" + Guid.NewGuid().ToString("N"));
+
     private static void ОчиститьКаталог()
     {
-        var каталог = Path.Combine(Path.GetTempPath(), "Picket302Update");
+        UpdateChecker.КаталогЗагрузкиДляПроверок = КаталогПроверки;
 
-        if (Directory.Exists(каталог))
+        if (Directory.Exists(КаталогПроверки))
         {
-            Directory.Delete(каталог, recursive: true);
+            Directory.Delete(КаталогПроверки, recursive: true);
         }
     }
 
@@ -100,9 +106,7 @@ public sealed class UpdatePackageTests
             журнал,
             запись => запись.Contains("хеш", StringComparison.OrdinalIgnoreCase));
 
-        var каталог = Path.Combine(Path.GetTempPath(), "Picket302Update");
-
-        Assert.False(Directory.Exists(каталог) && Directory.GetFiles(каталог, "*.bin").Length > 0);
+        Assert.False(Directory.Exists(КаталогПроверки) && Directory.GetFiles(КаталогПроверки, "*.bin").Length > 0);
     }
 
     /// <summary>
@@ -200,9 +204,7 @@ public sealed class UpdatePackageTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => задача);
 
         // Частичный файл удалён.
-        var каталог = Path.Combine(Path.GetTempPath(), "Picket302Update");
-
-        Assert.False(Directory.Exists(каталог) && Directory.GetFiles(каталог, "*.bin").Length > 0);
+        Assert.False(Directory.Exists(КаталогПроверки) && Directory.GetFiles(КаталогПроверки, "*.bin").Length > 0);
     }
 
     /// <summary>Медленный поток: отдаёт пакет с паузами, отменяемый.</summary>
