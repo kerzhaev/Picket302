@@ -174,15 +174,27 @@ public sealed class UpdateChecker
             return null;
         }
 
+        // Корректирующий проход: доказательство целостности ОБЯЗАТЕЛЬНО —
+        // без SHA-256 в манифесте пакет не загружается (функция №163 остаётся
+        // PARTIAL до решения владельца о ключе подписания и доверенном канале).
+        if (string.IsNullOrWhiteSpace(info.ExpectedSha256))
+        {
+            ЗаписатьВЖурнал("Манифест обновления не содержит SHA-256 пакета: загрузка запрещена.");
+
+            return null;
+        }
+
         var каталог = Path.Combine(Path.GetTempPath(), "Picket302Update");
         Directory.CreateDirectory(каталог);
 
         // Разбор адреса до файловых операций (F-C8): некорректный адрес
         // прежде падал UriFormatException либо создавал частичный файл.
+        // Корректирующий проход: только HTTPS — HTTP исключён из
+        // production-пути (незащищённый канал недопустим для пакетов).
         if (!Uri.TryCreate(info.DownloadUrl, UriKind.Absolute, out var адресЗагрузки)
-            || (адресЗагрузки.Scheme != Uri.UriSchemeHttps && адресЗагрузки.Scheme != Uri.UriSchemeHttp))
+            || адресЗагрузки.Scheme != Uri.UriSchemeHttps)
         {
-            ЗаписатьВЖурнал($"Некорректный адрес обновления: {info.DownloadUrl}");
+            ЗаписатьВЖурнал($"Адрес обновления должен быть HTTPS: {info.DownloadUrl}");
 
             return null;
         }
@@ -223,6 +235,10 @@ public sealed class UpdateChecker
         }
         catch (OperationCanceledException)
         {
+            // Отмена загрузки: частичный файл удаляется (откат), отмена
+            // пробрасывается вызывающему коду.
+            УдалитьЧастичныйФайл(путь);
+
             throw;
         }
         catch (System.Net.Http.HttpRequestException ошибка)

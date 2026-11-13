@@ -105,17 +105,27 @@ public sealed class UpdatePackageTests
         Assert.False(Directory.Exists(каталог) && Directory.GetFiles(каталог, "*.bin").Length > 0);
     }
 
-    /// <summary>Манифест без sha256 — обратная совместимость (проверка пропускается).</summary>
+    /// <summary>
+    /// Корректирующий проход: доказательство целостности ОБЯЗАТЕЛЬНО —
+    /// манифест без sha256 отклоняется (загрузчик не вызывается).
+    /// </summary>
     [Fact]
-    public async Task МанифестБезХеша_ОбратнаяСовместимость()
+    public async Task ОтсутствуетХеш_ЗагрузкаЗапрещена_ЗагрузчикНеВызван()
     {
         ОчиститьКаталог();
+
+        var вызовыЗагрузчика = 0;
 
         var проверятель = new UpdateChecker(
             "https://updates.example.test/updates.txt",
             "1.0.0",
             запрос: (_, _) => Task.FromResult("version = 1.1.0\r\nurl = https://x.test/p.bin"),
-            загрузчик: ЗагрузчикПакета(Пакет));
+            загрузчик: (_, _) =>
+            {
+                вызовыЗагрузчика++;
+
+                return Task.FromResult<Stream>(new MemoryStream(Пакет, writable: false));
+            });
 
         var информация = await проверятель.CheckForUpdatesAsync();
 
@@ -124,9 +134,125 @@ public sealed class UpdatePackageTests
 
         var путь = await проверятель.DownloadUpdateAsync(информация);
 
-        Assert.NotNull(путь);
+        Assert.Null(путь);
+        Assert.Equal(0, вызовыЗагрузчика);
+    }
 
-        File.Delete(путь!);
+    /// <summary>Корректирующий проход: HTTP-адрес отклоняется (только HTTPS).</summary>
+    [Fact]
+    public async Task HttpАдрес_Отклоняется()
+    {
+        ОчиститьКаталог();
+
+        var вызовыЗагрузчика = 0;
+
+        var проверятель = new UpdateChecker(
+            "https://updates.example.test/updates.txt",
+            "1.0.0",
+            запрос: (_, _) => Task.FromResult(Манифест(Хеш(Пакет))),
+            загрузчик: (_, _) =>
+            {
+                вызовыЗагрузчика++;
+
+                return Task.FromResult<Stream>(new MemoryStream(Пакет, writable: false));
+            });
+
+        var информация = await проверятель.CheckForUpdatesAsync();
+
+        Assert.True(информация.IsUpdateAvailable);
+
+        // Подменяем URL в поле обновления на HTTP.
+        var httpИнформация = информация with { DownloadUrl = "http://updates.example.test/p.bin" };
+
+        var путь = await проверятель.DownloadUpdateAsync(httpИнформация);
+
+        Assert.Null(путь);
+        Assert.Equal(0, вызовыЗагрузчика);
+    }
+
+    /// <summary>
+    /// Отмена загрузки: частичный файл удаляется (откат), отмена
+    /// пробрасывается вызывающему коду.
+    /// </summary>
+    [Fact]
+    public async Task ОтменаЗагрузки_ЧастичныйФайлУдаляется()
+    {
+        ОчиститьКаталог();
+
+        var медленный = new SlowStream(Пакет);
+
+        var проверятель = new UpdateChecker(
+            "https://updates.example.test/updates.txt",
+            "1.0.0",
+            запрос: (_, _) => Task.FromResult(Манифест(Хеш(Пакет))),
+            загрузчик: (_, _) => Task.FromResult<Stream>(медленный));
+
+        var информация = await проверятель.CheckForUpdatesAsync();
+
+        Assert.True(информация.IsUpdateAvailable);
+
+        using var отмена = new CancellationTokenSource();
+        var задача = проверятель.DownloadUpdateAsync(информация, отмена.Token);
+
+        await Task.Delay(80);
+        отмена.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => задача);
+
+        // Частичный файл удалён.
+        var каталог = Path.Combine(Path.GetTempPath(), "Picket302Update");
+
+        Assert.False(Directory.Exists(каталог) && Directory.GetFiles(каталог, "*.bin").Length > 0);
+    }
+
+    /// <summary>Медленный поток: отдаёт пакет с паузами, отменяемый.</summary>
+    private sealed class SlowStream : Stream
+    {
+        private readonly byte[] _данные;
+        private int _позиция;
+
+        public SlowStream(byte[] данные)
+        {
+            _данные = данные;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => _данные.Length;
+        public override long Position { get => _позиция; set => throw new NotSupportedException(); }
+
+        public override async Task<int> ReadAsync(byte[] буфер, int смещение, int счёт, CancellationToken маркер)
+        {
+            await Task.Delay(30, маркер).ConfigureAwait(false);
+
+            if (_позиция >= _данные.Length)
+            {
+                return 0;
+            }
+
+            // Отдаём по 1 байту: отмена гарантированно срабатывает
+            // в середине загрузки.
+            var счётРеальный = Math.Min(1, _данные.Length - _позиция);
+
+            if (счётРеальный == 0)
+            {
+                return 0;
+            }
+
+            буфер[0] = _данные[_позиция];
+            _позиция += 1;
+
+            return счётРеальный;
+        }
+
+        public override int Read(byte[] буфер, int смещение, int счёт)
+            => ReadAsync(буфер, смещение, счёт, CancellationToken.None).GetAwaiter().GetResult();
+
+        public override void Flush() { }
+        public override long Seek(long смещение, SeekOrigin происхождение) => throw new NotSupportedException();
+        public override void SetLength(long значение) => throw new NotSupportedException();
+        public override void Write(byte[] буфер, int смещение, int счёт) => throw new NotSupportedException();
     }
 
     /// <summary>Манифест отдаёт sha256 в поле обновления (функция 163).</summary>
