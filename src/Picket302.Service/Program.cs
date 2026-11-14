@@ -26,6 +26,8 @@ namespace Picket302.Service;
 /// <list type="bullet">
 /// <item><description><c>--data &lt;каталог&gt;</c> — каталог данных службы;</description></item>
 /// <item><description><c>--port &lt;номер&gt;</c> — порт TCP;</description></item>
+/// <item><description><c>--install</c> — регистрация службы в SCM (запуск от администратора);</description></item>
+/// <item><description><c>--uninstall</c> — снятие регистрации службы;</description></item>
 /// </list>
 /// </para>
 /// </remarks>
@@ -38,6 +40,39 @@ internal static class Program
     /// <returns>Код завершения.</returns>
     private static async Task<int> Main(string[] args)
     {
+        // Регистрация службы выполняется из установщика: неуспешная установка
+        // не должна оставлять наполовину созданную службу.
+        if (args.Contains("--install", StringComparer.Ordinal))
+        {
+            var путьСлужбы = Environment.ProcessPath
+                ?? throw new InvalidOperationException("Путь к исполняемому файлу службы не определён.");
+
+            var ошибка = Hosting.ServiceInstaller.Установить(путьСлужбы);
+
+            if (ошибка is null)
+            {
+                Console.WriteLine($"Служба {WindowsServiceRunner.ИмяСлужбы} установлена.");
+                return 0;
+            }
+
+            Console.Error.WriteLine($"Служба не установлена: {ошибка}");
+            return 3;
+        }
+
+        if (args.Contains("--uninstall", StringComparer.Ordinal))
+        {
+            var ошибка = Hosting.ServiceInstaller.Удалить();
+
+            if (ошибка is null)
+            {
+                Console.WriteLine($"Служба {WindowsServiceRunner.ИмяСлужбы} удалена.");
+                return 0;
+            }
+
+            Console.Error.WriteLine($"Служба не удалена: {ошибка}");
+            return 3;
+        }
+
         var параметры = ПрочитатьПараметры(args);
 
         Directory.CreateDirectory(параметры.DataDirectory);
