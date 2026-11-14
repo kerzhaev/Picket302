@@ -371,6 +371,52 @@ public sealed class HtmlMailEditorTests
         Assert.Contains("<div>y</div>", очищенный, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// FINAL3-02 (P1): двойное кодирование entity (&amp;#101;) в style —
+    /// амперсанд на выходе экранируется, браузер видит ровно проверенную
+    /// гейтом строку и НЕ декодирует остаточную сущность повторно.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_СтильДвойноеКодирование_СущностьНеВосстанавливается()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"font-size:&amp;#101;xpression(alert(1))\">x</div>");
+
+        // Остаточная сущность выводится только в экранированной форме
+        // (&amp;#101…): при разборе атрибута браузер декодирует &amp; → &
+        // ровно один раз — значение стиля совпадает с проверенным гейтом
+        // («&#101;xpression…», CSS-движок сущности не декодирует).
+        Assert.DoesNotContain("expression", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&amp;#101", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>FINAL3-02: легитимный амперсанд в значении переносится экранированным.</summary>
+    [Fact]
+    public void Санитизатор_СтильЛегитимныйАмперсанд_Экранируется()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"font-family:Serif&amp;Sans\">z</div>");
+
+        Assert.Contains("&amp;", очищенный, StringComparison.Ordinal);
+        Assert.DoesNotContain("Serif&Sans", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// FINAL3-03 (P2): управляющие символы (NUL и прочие C0, DEL) в
+    /// style-значении не легитимны — стиль отбрасывается целиком.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_СтильСУправляющимиСимволами_Отбрасывается()
+    {
+        var payload = "font-size:expre\u0000ssion(alert(1))";
+
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"" + payload.Replace("\"", "&quot;") + "\">n</div>");
+
+        Assert.DoesNotContain("style", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<div>n</div>", очищенный, StringComparison.Ordinal);
+    }
+
     /// <summary>Пустая разметка — без исключений.</summary>
     [Fact]
     public void ОчисткаОпасногоHtml_ПустаяСтрока()

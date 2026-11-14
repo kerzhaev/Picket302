@@ -598,6 +598,17 @@ public static class КомандыРазметки
             return null;
         }
 
+        // FINAL3-03: управляющие символы (кроме \t/\n/\r) и DEL не
+        // легитимны в значениях разрешённых свойств — потенциальная
+        // маскировка токенов; такой стиль отбрасывается целиком.
+        foreach (var знак in декодированное)
+        {
+            if ((знак < ' ' && знак != '\t' && знак != '\n' && знак != '\r') || знак == '\u007f')
+            {
+                return null;
+            }
+        }
+
         var чистые = декодированное
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(часть => часть.Contains(':', StringComparison.Ordinal))
@@ -622,6 +633,10 @@ public static class КомандыРазметки
     /// синтезированными атрибутами (FINAL-01).
     /// </summary>
     private static string ЭкранироватьЗначениеСтиля(string значение) => значение
+        // FINAL3-02: амперсанд экранируется ПЕРВЫМ — остаточные сущности
+        // (&#101; и т.п.) не декодируются браузером повторно: он видит
+        // ровно ту строку, которую проверил гейт.
+        .Replace("&", "&amp;", StringComparison.Ordinal)
         .Replace("\"", "&quot;", StringComparison.Ordinal)
         .Replace("'", "&#39;", StringComparison.Ordinal)
         .Replace("<", "&lt;", StringComparison.Ordinal)
