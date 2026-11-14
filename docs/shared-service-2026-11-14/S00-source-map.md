@@ -153,7 +153,7 @@
 | 79 | **Сортировка реестра** (`RegistrySorter`) | `src/Picket302.Application/Services/RegistrySorter.cs:25` | LOCAL_ONLY — чистая функция сортировки уже загруженного списка | PLAN | — |
 | 80 | **Эвристика разбора адресов** | `src/Picket302.Application/Services/AddressHeuristicsService.cs:66` | LOCAL_ONLY — разбор адреса на ПК пользователя (применяется при импорте); на сервере применяется тот же класс при серверном слиянии импорта | PLAN | — |
 | 81 | **Запуск удалённого помощника** | `src/Picket302.Infrastructure/Support/RemoteAssistantLauncher.cs:23` | LOCAL_ONLY — служебная утилита рабочего места | PLAN | — |
-| 82 | **Профили импорта CSV** (`CsvProfileService`, `ICsvProfileStore`) | `src/Picket302.Application/Import/CsvProfileService.cs:17`, `src/Picket302.Application/Import/ICsvProfileStore.cs:49` | LOCAL_ONLY — профили сопоставления столбцов хранятся в профиле рабочего места | PLAN | — |
+| 82 | **Профили импорта CSV** (`CsvProfileService`, `ICsvProfileStore`) | `src/Picket302.Application/Import/CsvProfileService.cs:17`, `src/Picket302.Application/Import/ICsvProfileStore.cs:23` | LOCAL_ONLY — профили сопоставления столбцов хранятся в профиле рабочего места | PLAN | — |
 
 ---
 

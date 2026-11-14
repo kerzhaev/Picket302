@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Контрактный слой совместного режима: типизированные DTO, команды,
+       коды ошибок и правила совместимости версий протокола.
+
+       Слой используется и клиентом (Picket302.App), и серверной службой
+       (Picket302.Service), поэтому зависит только от доменного слоя:
+       доменные перечисления переиспользуются как есть, чтобы на границе
+       не возникало расхождения значений. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Picket302.Shared</RootNamespace>
+    <AssemblyName>Picket302.Shared</AssemblyName>
+    <Description>Контракт совместного режима Picket302: DTO, команды и коды ошибок.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Picket302.Domain\Picket302.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

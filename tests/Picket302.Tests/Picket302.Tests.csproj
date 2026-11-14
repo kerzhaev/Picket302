@@ -43,6 +43,9 @@
     <ProjectReference Include="..\..\src\Picket302.Domain\Picket302.Domain.csproj" />
     <ProjectReference Include="..\..\src\Picket302.Infrastructure\Picket302.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Picket302.Printing\Picket302.Printing.csproj" />
+    <!-- Контракт совместного режима: DTO, команды, коды ошибок и правила
+         совместимости версий протокола. -->
+    <ProjectReference Include="..\..\src\Picket302.Shared\Picket302.Shared.csproj" />
   </ItemGroup>
 
   <!-- Coverlet/Cecil не может переписать Picket302.App.dll без контекста компиляции:
