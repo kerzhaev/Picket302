@@ -31,9 +31,9 @@
 
 | Опора | Файл:строка | Что там фактически |
 |---|---|---|
-| Единый `SqliteUnitOfWork` на всё приложение | `src/Picket302.Infrastructure/Data/SqliteUnitOfWork.cs:25` | Одно соединение открывается в конструкторе и живёт весь срок приложения. PRAGMA `journal_mode`/`busy_timeout` **не задаются** нигде в `src/` (единственный PRAGMA в проекте — `foreign_keys` в `MigrationRunner`). |
+| Единый `SqliteUnitOfWork` на всё приложение | `src/Picket302.Infrastructure/Data/SqliteUnitOfWork.cs:25` | Одно соединение открывается в конструкторе и живёт весь срок приложения. PRAGMA `journal_mode`/`busy_timeout` **не задаются** нигде в `src/`; из PRAGMA в проекте используются `foreign_keys` (`MigrationRunner`), `table_info` (`LegacyUpgradeSource.cs:211`) и `PRAGMA` в списке запрещённых команд (`SqliteReportDataProvider.cs:152`). |
 | Композиция репозиториев | `src/Picket302.App/AppServices.cs:88` (блок `Контрагенты = new CounterpartyRepository(сессия)` … `Обслуживание = new DatabaseMaintenanceRepository(сессия)`) | 12+ конкретных SQLite-репозиториев, все — над одной сессией. |
-| Свойство `Сессия` у `AppServices` | `src/Picket302.App/AppServices.cs:253` | Тип `SqliteUnitOfWork`. Через него завязаны `PrintSessionController`, пользовательские отчёты (`AppServices.cs:224` — `new SqliteReportDataProvider(сессия.Connection)`), входящая корреспонденция, COM (`MainShell.cs:2236`), email-журнал (`MainShell.cs:2494`). |
+| Свойство `Сессия` у `AppServices` | `src/Picket302.App/AppServices.cs:253` | Тип `SqliteUnitOfWork`. Через него завязаны `PrintSessionController`, пользовательские отчёты (`AppServices.cs:224` — `new SqliteReportDataProvider(сессия.Connection)`), входящая корреспонденция, импорт из прежней установки (`MainShell.cs:2236` — `new LegacyUpgradeImporter(_состав.Сессия)`), email-журнал (`MainShell.cs:2494` — `new SqliteEmailLogWriter(_состав.Сессия)`). COM-автоматизация к `AppServices.Сессия` **не** привязана: это отдельный процесс со своей сессией (см. сценарий 51). |
 | Транзакции — на уровне прикладных служб | `src/Picket302.Domain/IUnitOfWork.cs:7` | `IUnitOfWork` умеет только `Begin/Commit/Rollback`. `SaveChangesAsync` в проекте **нет**. 12 прикладных служб берут `IUnitOfWork` в конструктор и сами открывают транзакцию. |
 | Перечисление режимов подключения | `src/Picket302.Infrastructure/Persistence/ConnectionManager.cs:14` | `DatabaseKind.LocalSqlite = 0`, `DatabaseKind.ServerPostgres = 1`. Значение `1` не переопределяем. |
 | Диалог подключения | `src/Picket302.App/UI/Forms/FormConnectionSettings.cs:101` | Режим «Сервер» собирает `ServerPostgres` и спрашивает имя БД/пользователя/пароль, порт по умолчанию `5432` (строка 38). |
@@ -57,7 +57,7 @@
 
 | № | Сценарий | Текущий код | Граница в общем режиме | Статус | Тест приёмки |
 |---|---|---|---|---|---|
-| 1 | Список контрагентов постранично с фильтром | `AppServices.cs:88` (`ICounterpartyRepository`), UI: `MainShell.cs:2135` | SHARED | PLAN | `Shared_CounterpartyPage_A_И_B_ВидятОдниДанные` |
+| 1 | Список контрагентов постранично с фильтром | `AppServices.cs:88` (`ICounterpartyRepository`), UI: `MainShell.cs:2806` (загрузка получателей с фильтром) и `MainShell.cs:2135` (сборка всех записей постранично без фильтра) | SHARED | PLAN | `Shared_CounterpartyPage_A_И_B_ВидятОдниДанные` |
 | 2 | Карточка контрагента (чтение) | `AppServices.cs:88`, `ICounterpartyRepository.GetByIdAsync` | SHARED | PLAN | `Shared_CounterpartyRead_СовпадаетУОбоих` |
 | 3 | Создание/изменение контрагента | `AppServices.cs:134` `CounterpartyService.SaveAsync` (транзакция `CounterpartyService.cs:73/86/90`) | SHARED — **серверная команда**: сохранение + проверка лицензии + `row_version` в одной транзакции | PLAN | `Shared_CounterpartySave_A_ВиденУ_B` |
 | 4 | Мягкое удаление / восстановление | `AppServices.cs:134`, `CounterpartyService.SoftDeleteAsync` | SHARED | PLAN | `Shared_CounterpartySoftDelete_ВидноУ_B` |
@@ -84,19 +84,19 @@
 | 20 | Счётчики писем по папкам | `IMailRepository.ПолучитьСчётчикиПоПапкамAsync` | SHARED | PLAN | `Shared_FolderCounts_СовпадаютУОбоих` |
 | 21 | Папки (список/создание/переименование/перенос/удаление) | `AppServices.cs:94` `FolderRepository`; прикладная служба `FolderService` (транзакции `61/103/147`) | SHARED | PLAN | `Shared_Folders_ВидныУ_B` |
 | 22 | Формирование рассылки (создание писем по выборке) | `AppServices.cs:142` `DistributionService.GenerateDistributionAsync` (транзакция `151–193`) | SHARED — **одна серверная команда**, одна транзакция: рассылка + N писем | PLAN | `Shared_DistributionGenerate_ОднаКоманда` |
-| 23 | Создание рассылки из выбранных контрагентов | `DistributionService.CreateFromSelectionAsync` (транзакция `302–370`) | SHARED | PLAN | `Shared_DistributionFromSelection_ОднаКоманда` |
-| 24 | Клонирование рассылки для повторной отправки | `DistributionService.CloneForResendAsync` (транзакция `441–531`) | SHARED | PLAN | `Shared_DistributionClone_ОднаКоманда` |
-| 25 | Правка сохранённой рассылки (добавление/удаление писем) | `DistributionService.UpdateDistributionAsync` | SHARED | PLAN | `Shared_DistributionUpdate_ОднаКоманда` |
+| 23 | Создание рассылки из выбранных контрагентов | `DistributionService.CreateFromSelectionAsync` (`DistributionService.cs:215`) — собственной транзакции не имеет и делегирует `GenerateDistributionAsync` (`DistributionService.cs:245`), транзакция `151–193` | SHARED | PLAN | `Shared_DistributionFromSelection_ОднаКоманда` |
+| 24 | Клонирование рассылки для повторной отправки | `DistributionService.CloneForResendAsync` (`DistributionService.cs:260`), транзакция `302–370` | SHARED | PLAN | `Shared_DistributionClone_ОднаКоманда` |
+| 25 | Правка сохранённой рассылки (добавление/удаление писем) | `DistributionService.UpdateDistributionAsync` (`DistributionService.cs:395`), транзакция `441–531` | SHARED | PLAN | `Shared_DistributionUpdate_ОднаКоманда` |
 | 26 | Список рассылок (фильтр) | `DistributionService.ListDistributionsAsync` | SHARED | PLAN | `Shared_DistributionList_ВиденУ_B` |
 | 27 | Отправка/сохранение/пересчёт конвертов | `DistributionService.SaveAsync/MarkDispatchedAsync/RecalculateEnvelopesRequiredAsync` | SHARED | PLAN | `Shared_DistributionState_ВиденУ_B` |
 | 28 | **Сквозная регистрационная нумерация** | `AppServices.cs:150` `RegistrationNumberGenerator` → `AppServices.cs:99` `ParameterRegistrationNumberStore` (`INSERT … ON CONFLICT … RETURNING`, атомарно) | SHARED — счётчик в общей базе, выдаётся **внутри** транзакции серверной команды | PLAN | `Shared_Numbering_ПятьКлиентов_НетДублей` |
-| 29 | Журнал печати (`print_history`) | `AppServices.cs:141` `PrintHistoryRepository`; `AppServices.cs:194` `PrintHistoryRecorder` | SHARED — общая семантика: «подготовлено → передано в спулер клиента → ошибка» + `device_id` | PLAN | `Shared_PrintHistory_ВиднаУ_B_С_deviceId` |
-| 30 | Реестр печатных сессий (`print_jobs`, неизменяемый) | `AppServices.cs:142` `PrintJobRepository` | SHARED | PLAN | `Shared_PrintJobs_ОбщийЖурнал` |
+| 29 | Журнал печати (`print_history`) | `AppServices.cs:139` `PrintHistoryRepository`; `AppServices.cs:194` `PrintHistoryRecorder` | SHARED — общая семантика: «подготовлено → передано в спулер клиента → ошибка» + `device_id` | PLAN | `Shared_PrintHistory_ВиднаУ_B_С_deviceId` |
+| 30 | Реестр печатных сессий (`print_jobs`, неизменяемый) | `AppServices.cs:156` `PrintJobRepository` | SHARED | PLAN | `Shared_PrintJobs_ОбщийЖурнал` |
 | 31 | Документы письма (`mail_documents`) | `IMailDocumentRepository` | SHARED | PLAN | `Shared_MailDocuments_ВидныУ_B` |
 | 32 | Движение документов (`document_movements`) | `IDocumentMovementRepository` | SHARED | PLAN | `Shared_DocumentMovements_ОбщаяИстория` |
 | 33 | Почтовые реестры (`post_registers`) | `IPostRegisterRepository` | SHARED | PLAN | `Shared_PostRegisters_ВидныУ_B` |
 | 34 | Описи (`inventories`, `inventory_items`) | `IInventoryRepository`, `IInventoryItemRepository` | SHARED | PLAN | `Shared_Inventories_ВидныУ_B` |
-| 35 | Журнал email-рассылок (`email_log`, V007) | `AppServices.cs:2494` → `src/Picket302.Infrastructure/Mail/EmailLogWriter.cs:35` | SHARED — журнал общий; SMTP-сессия выполняется на ПК отправителя | PLAN | `Shared_EmailLog_ВиденУ_B` |
+| 35 | Журнал email-рассылок (`email_log`, V007) | `MainShell.cs:2494` → `src/Picket302.Infrastructure/Mail/EmailLogWriter.cs:35` | SHARED — журнал общий; SMTP-сессия выполняется на ПК отправителя | PLAN | `Shared_EmailLog_ВиденУ_B` |
 
 ### 3.3. Шаблоны и печать
 
@@ -135,7 +135,7 @@
 | 61 | **Импорт из внешней БД** (ODBC/MySQL/SQL Server) | `src/Picket302.Infrastructure/Integration/ExternalDbImporter.cs` | LOCAL_ONLY (разбор внешнего источника) + SHARED (запись результата — серверной командой) | PLAN | — |
 | 62 | **Экспорт адресной книги** (CSV/RTF/XLSX) | `src/Picket302.Application/Services/UniversalAddressExchange.cs` | LOCAL_ONLY (файл на ПК) + SHARED (данные из общей базы) | PLAN | — |
 | 63 | **Резервное копирование/восстановление из клиента** | `AppServices.cs:210` `МенеджерПодключения`, `BackupService`, `RestoreService`, `ScheduledBackupService` | **NOT_IMPLEMENTED** в клиенте общего режима: копии общей базы делает сервер. Клиент получает понятное сообщение | PLAN | `Shared_ClientBackup_ОтключеноСMessage` |
-| 64 | **Реестр серверов** (`servers.ini`) | `AppServices.cs:212` `ServerRegistry` (`src/Picket302.Infrastructure/Persistence/ServerRegistry.cs:109`) | LOCAL_ONLY (файл профиля) — переиспользуется как список известных серверов Picket302 | PLAN | — |
+| 64 | **Реестр серверов** (`servers.ini`) | `AppServices.cs:211` `ServerRegistry` (`src/Picket302.Infrastructure/Persistence/ServerRegistry.cs:109`) | LOCAL_ONLY (файл профиля) — переиспользуется как список известных серверов Picket302 | PLAN | — |
 | 65 | **Диагностика службы БД** (`DbServiceDoctor`) | `src/Picket302.Infrastructure/Persistence/DbServiceDoctor.cs:62` | LOCAL_ONLY — относится к прежней службе БД, в общем режиме не применяется | PLAN | — |
 | 66 | **Установка на USB** | `src/Picket302.Infrastructure/Deployment/UsbInstaller.cs:72` | LOCAL_ONLY — переносимая однопользовательская поставка, к общему режиму не относится | PLAN | — |
 | 67 | **Обновление программы** (`UpdateChecker`) | `src/Picket302.Infrastructure/Update/` | LOCAL_ONLY — загрузка и проверка целостности на ПК клиента | PLAN | — |
@@ -144,6 +144,16 @@
 | 70 | **Изоляция профиля** | `src/Picket302.Infrastructure/ProfileIsolationGuard.cs:36` | LOCAL_ONLY — механизм проверок остаётся в силе для серверных и клиентских контуров | PLAN | `Shared_ProfileIsolation_РаботаетНаСервере` |
 | 71 | **Политика резервного копирования** | `src/Picket302.Infrastructure/Backup/BackupPolicyService.cs` | LOCAL_ONLY на клиенте; сервер использует свой экземпляр поверх общей базы | PLAN | — |
 | 72 | **QR/иерархия папок/групп — триггеры целостности** | `V001`–`V011` (`trg_folders_no_cycle_*`, `trg_groups_no_cycle_*`, `ux_groups_single_default`, `trg_print_jobs_no_update/no_delete`) | SHARED — работают на серверной базе без изменений | PLAN | — |
+| 73 | **Импорт из прежней установки** (мастер обновления с `LegacyUpgradeImporter`) | `src/Picket302.Infrastructure/Migration/LegacyUpgradeImporter.cs:43`, UI `MainShell.cs:2236`; пишет напрямую через `ISqliteSession`: группы, контрагенты, поля, письма, историю печати, параметры | **NOT_IMPLEMENTED** в общем режиме: мастер пишет в живую локальную базу, а в общем режиме локальной базы с общими данными нет. Модуль отключается с понятным сообщением; перенос данных из прежней установки в общую базу выполняется первичным импортом на сервере (чекпоинт 7) | PLAN | `Shared_LegacyUpgrade_ОтключеноСMessage` |
+| 74 | **Предпросмотр печати (UI)** | `src/Picket302.App/UI/Forms/PrintPreviewBuilder.cs:24`, `src/Picket302.App/UI/Forms/FormPrintPreview.cs:25` | LOCAL_ONLY — форма и построитель работают на ПК пользователя поверх данных, полученных из общей базы | PLAN | `Shared_PrintPreview_ЛокальныйПредпросмотр` |
+| 75 | **Пакетная генерация произвольных документов** | `src/Picket302.Application/Services/DocumentBatchGenerator.cs:80` | LOCAL_ONLY — файлы результата пишутся на ПК пользователя; исходные данные контрагентов берутся из общей базы | PLAN | — |
+| 76 | **Движок произвольных документов** (подстановка маркеров в шаблон) | `src/Picket302.Application/Services/ArbitraryDocumentEngine.cs:42` | LOCAL_ONLY — обработка файла шаблона на ПК пользователя | PLAN | — |
+| 77 | **Журнал событий печати** (`HistoryTracker`) | `src/Picket302.Application/Services/HistoryTracker.cs:43` | SHARED — пишет в общий журнал печати через `IPrintHistoryRepository` | PLAN | `Shared_HistoryTracker_ОбщийЖурнал` |
+| 78 | **Создание отправления из контрагента** (`MailFactory`) | `src/Picket302.Application/Services/MailFactory.cs:16` | SHARED — письмо создаётся в общей базе; фабрика выполняется на стороне службы | PLAN | `Shared_MailFactory_ПисьмоВОбщейБазе` |
+| 79 | **Сортировка реестра** (`RegistrySorter`) | `src/Picket302.Application/Services/RegistrySorter.cs:25` | LOCAL_ONLY — чистая функция сортировки уже загруженного списка | PLAN | — |
+| 80 | **Эвристика разбора адресов** | `src/Picket302.Application/Services/AddressHeuristicsService.cs:66` | LOCAL_ONLY — разбор адреса на ПК пользователя (применяется при импорте); на сервере применяется тот же класс при серверном слиянии импорта | PLAN | — |
+| 81 | **Запуск удалённого помощника** | `src/Picket302.Infrastructure/Support/RemoteAssistantLauncher.cs:23` | LOCAL_ONLY — служебная утилита рабочего места | PLAN | — |
+| 82 | **Профили импорта CSV** (`CsvProfileService`, `ICsvProfileStore`) | `src/Picket302.Application/Import/CsvProfileService.cs:17`, `src/Picket302.Application/Import/ICsvProfileStore.cs:49` | LOCAL_ONLY — профили сопоставления столбцов хранятся в профиле рабочего места | PLAN | — |
 
 ---
 
@@ -161,10 +171,11 @@
 | Пользовательские отчёты (SQL по общей базе) | Недоступно с понятным сообщением | NOT_IMPLEMENTED |
 | COM-автоматизация | Недоступно с понятным сообщением | NOT_IMPLEMENTED |
 | Входящая корреспонденция и сканы | Недоступно с понятным сообщением | NOT_IMPLEMENTED |
+| Импорт из прежней установки (`LegacyUpgradeImporter`) | Недоступно с понятным сообщением | NOT_IMPLEMENTED |
 | Резервное копирование общей базы из клиента | Недоступно; делает сервер | NOT_IMPLEMENTED |
 
 **Явно не заявляется:** «вся программа работает через сервер». Перечисленные
-четыре модуля недоступны в общем режиме и будут отключены в UI с сообщением.
+пять модулей недоступны в общем режиме и будут отключены в UI с сообщением.
 
 ---
 
@@ -251,6 +262,7 @@ PostgreSQL в этой волне не устанавливается и не р
 | Р8 | Сопряжение — по одноразовому коду, показываемому локально; после сопряжения у клиента свой секрет устройства в DPAPI, на сервере — только отпечаток | ТЗ, раздел «ЗАЩИТА ПОДКЛЮЧЕНИЯ БЕЗ АККАУНТОВ» |
 | Р9 | Закрепление доверия: клиент сверяет отпечаток сервера при сопряжении и закрепляет его для последующих соединений; `trust-all` и открытый HTTP запрещены | ТЗ, тот же раздел |
 | Р10 | Первичный импорт: только одна исходная локальная база, выбранная человеком; staging на том же томе, проверки, переключение только после полной проверки | ТЗ, раздел «ПЕРЕНОС ДАННЫХ» |
+| Р11 | Импорт из прежней установки (`LegacyUpgradeImporter`) в общем режиме недоступен: мастер пишет в живую локальную базу. Перенос выполняется первичным импортом на сервере | ТЗ, требование I (модуль не должен работать «наполовину») |
 
 ---
 
