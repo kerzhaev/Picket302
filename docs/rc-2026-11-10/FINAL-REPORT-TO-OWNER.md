@@ -1,80 +1,138 @@
-# FINAL REPORT TO OWNER — RC Picket302 (проверочный пакет)
+# FINAL REPORT TO OWNER — RC Picket302 (проверочный пакет, реконсиляция)
 
-Дата: 2026-11-14. Ветка `piscine/picket302-rc`. **Не пушится** — слияние и решения раздела 7 за владельцем.
+Дата: 2026-11-14. Ветка `piscine/picket302-rc`. **Не пушится** — слияние и
+решения раздела 7 за владельцем. Настоящая редакция — результат
+корректирующего прохода по замечаниям независимой проверки: устранены
+противоречия «47 завершено / 42 по перечню», «1587 для final4», «три
+раунда», ложный DEFERRED №10; добавлены первичный протокол R4,
+фактические счётчики TRX с SHA-256 и независимый прогон сборки.
 
 ## 1. Идентификаторы
 
 | Параметр | Значение |
 |---|---|
 | BASE_SHA | `5af9874e8c7550e2accd9c24e4440e659f0810f5` (origin/main) |
-| CANDIDATE_SHA | `09e152bafb0de8bd4117545db96e5afe24283b6c` |
-| Коммитов от main | **101** (`git rev-list --count main..HEAD`) |
-| Список коммитов | `git log --oneline main..09e152b` (приложение — 101 строка, см. §9) |
+| REVIEW-кандидат R4 (вердикт PASS) | `09e152bafb0de8bd4117545db96e5afe24283b6c` |
+| Итоговый HEAD (с реконсиляцией) | см. `git rev-parse HEAD` — фиксируется коммитом настоящего документа; код-слой идентичен 09e152b (`git diff --stat 09e152b..HEAD` до этого коммита = только .md) |
+| Коммитов от main | 102 на момент реконсиляции (+1 коммит реконсиляции; точный счёт — `git rev-list --count main..HEAD`) |
 
-## 2. Статусы 50 этапов
+## 2. Статусы 50 этапов (однозначная таблица)
 
-- **Завершено 47**: S01–S17, S20–S40, S46–S48 (+S50 — этот цикл отчётности), включая корректирующий проход владельца (пункты 1–6 выполнены; пункт 7 —三轮 финального ревью, см. §6).
-- **BLOCKED_EXTERNAL (2)**: S18, S19 — физический стенд печати (лотки/термопринтер) отсутствует; требования физической печати НЕ подменены контрактными тестами.
-- **OWNER_DECISION_REQUIRED (1)**: S41 — архитектурный документ №127 (A SQLite-only / B PostgreSQL / C гибрид Pro; формат `OWNER_DECISION=…`); S42–S45 не выполнялись до решения.
-- **NOT_RUN (1)**: S49 — установка на чистую машину (процедура для владельца: `S48-S49-deferred-and-install.md` §4).
+Арифметика: **COMPLETE 41 + AWAITING_OWNER_ACCEPTANCE 1 (S50) +
+BLOCKED_EXTERNAL 2 (S18, S19) + OWNER_DECISION_REQUIRED 1 (S41) +
+NOT_STARTED/DEPENDENT_ON_OWNER 4 (S42–S45) + NOT_RUN 1 (S49) = 50.**
+
+| Этап | Состояние | Критерий закрытия | Первичный источник | Ограничение/решение |
+|---|---|---|---|---|
+| S01–S17 | COMPLETE | базлайн/захват/матрица/coverage/дефекты/COM-волна по своим докам + ревью PASS | S01–S15-доки, WAVE1–WAVE3-чекпойнты | — |
+| S18 | BLOCKED_EXTERNAL | физическая печать A4 на стенде | S18-S20-док | физический стенд отсутствует на станции |
+| S19 | BLOCKED_EXTERNAL | лотки/термопринтер на стенде | S18-S20-док | то же |
+| S20–S40 | COMPLETE | калибровка №45, волны 5–8 (клипарт, отчёты №56/58/66/67/73, входящие №29/30, трекер №110, поддержка №109/136, SMTP №94–100), корректирующий проход владельца | S20–S40-доки, WAVE4–WAVE8-чекпойнты | — |
+| S41 | OWNER_DECISION_REQUIRED | архитектурный документ №127 готов и ревью-нейтрален | S41-db-architecture.md | `OWNER_DECISION=…` — владелец |
+| S42–S45 | NOT_STARTED/DEPENDENT_ON_OWNER_DECISION | не выполнялись | S41 §6 | ждут решения №127 |
+| S46–S48 | COMPLETE | №121/№126 тесты, №163 целостность+HTTPS-only (PARTIAL по функции — см. §3), №14/№125 deferred-обоснования | S46–S48-доки, EditionsAndVmDetectorTests, UpdatePackageTests | — |
+| S49 | NOT_RUN | установка на чистой машине | S48-S49 §4 | нужен чистый контур владельца |
+| S50 | AWAITING_OWNER_ACCEPTANCE | цикл работ и отчётности завершён, итоговые документы подготовлены; принятие владельцем не получено | настоящий отчёт | до принятия владельцем этап не считается COMPLETE |
+
+Формулировка итога: **цикл RC-работ завершён исполнителем** (все
+запланированные и не заблокированные этапы выполнены, отчётность
+подготовлена); **фактически COMPLETE — 41 этап из 50**; 8 этапов
+ограничены внешними контурами/решениями (см. таблицу) и не маскируются
+под READY.
 
 ## 3. Функции (163, docs/ACCEPTANCE.md)
 
-**DONE 150 / PARTIAL 10 / DEFERRED 3** (построчный счёт проверен ревьюером R2). Ключевые PARTIAL (честно): №163 (SHA-256 = целостность, НЕ подпись; ключ+канал — владелец; UI-путь установки закрыт), №110 (реальный pochta.ru не вызывается), №121 (нет предупреждения в «О программе»), №127 (OWNER_DECISION). DEFERRED: №10, №14, №125.
+**DONE 151 / PARTIAL 10 / DEFERRED 2 = 163** (построчный парсер строк
+функций с приоритетом [П]/[Д]/[К]; идентификаторы 1–163 ровно по одному
+разу; №10 «Группировка строк» → DONE по результату сверки контракта —
+см. §3.1). Разбивка по приоритетам: [К] 64 DONE + 1 PARTIAL (№127);
+[П] 70 DONE + 6 PARTIAL; [Д] 17 DONE + 3 PARTIAL + 2 DEFERRED (№14, №125).
 
-## 4. Команды и числа тестов
+### 3.1. Реконсиляция №10 (группировка строк)
 
-```
-# строгий набор (обе конфигурации, идентичные результаты):
-dotnet build Picket302.sln -c Debug
-dotnet build Picket302.sln -c Release
-dotnet test tests/Picket302.Tests/Picket302.Tests.csproj -c Debug   --no-build --filter "FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&FullyQualifiedName!~Printing.PrintEngineTests"  # 1590/0/0
-dotnet test tests/Picket302.Tests/Picket302.Tests.csproj -c Release --no-build --filter "FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&FullyQualifiedName!~Printing.PrintEngineTests"  # 1590/0/0
-```
-Артефакты: `docs/rc-2026-11-10/evidence/runtime-final4/final4-{debug,release}.trx.gz` (счётчики 1587/1587/0 в обоих, проверено ревьюером по коммиту).
+Контракт 00_FUNCTION_INDEX: «Группировка строк в списке, настройка и
+порядок группировки, снятие группировки» [П]. Реализация
+(`RowGroupingController.cs` + MainShell): выбор колонки группировки
+(контекстное меню «Группировка строк»), непрерывные блоки по первому
+вхождению (порядок группировки), сворачивание/разворачивание кликом по
+заголовку «− Ключ (N)», снятие («Без группировки» возвращает исходный
+порядок), сохранение выделения (теги записей) и совместимость с поиском
+(разворот скрытой строки — ревью-фикс F1). Тесты:
+`RowGroupingControllerTests` (11, порядок-независимые); runtime: команда
+GROUP + кадр S9 (S07-док §2/§6); ревью S07 закрыто PASS (R5). Одноуровневая
+группировка = паритет с легаси-референсом; многоуровневая и персистентность
+выбора колонки — зарегистрированные расширения (S07 §5), ТЗ-минимум не
+требует. **Вывод: DONE** (прошлый DEFERRED описывал состояние до S07).
 
-## 5. Сборка и гигиена
+Ключевые честные PARTIAL: №163 (SHA-256 = целостность, НЕ подпись; ключ и
+канал — владелец; UI-путь установки закрыт), №110 (реальный pochta.ru не
+вызывается), №121 (нет предупреждения в «О программе»), №127 (OWNER_DECISION).
 
-- Предупреждения: **Debug 0 / Release 0** (`dotnet build -v m | grep -c warning`).
-- `git diff --check 5af9874...09e152b` — **пусто**.
+## 4. Тесты и артефакты (историческое свидетельство vs свежий прогон)
 
-## 6. Финальное ревью Qwen (три раунда, весь дифф)
+**Сохранённые TRX на 09e152b** (прочитаны как данные, без запуска тестов):
 
-| Раунд | SHA | Вердикт | Находки → закрытия |
-|---|---|---|---|
-| R1 | c4f9a7d | CHANGES_REQUIRED | FINAL-01 P1 (style-breakout кавычкой) + 2×P2 + 7×P3 → всё закрыто в 798a2f7 (подтверждено R2) |
-| R2 | 798a2f7 | CHANGES_REQUIRED | FINAL2-01 P1 (CSS-комментарии/escape маскируют expression) + P3 → закрыто в 1e62d41 |
-| R3 | 1e62d41 | CHANGES_REQUIRED | FINAL3-02 P1 (double-encoded entity в style) + P2 (control chars) + P3 (незакоммиченная строка) → закрыто в 09e152b |
-| R4 | **09e152b** | **PASS — Findings: none** | Финальный вердикт финального ревью (см. §6.1) |
+| Файл | total | passed | failed | notExecuted | SHA-256 |
+|---|---|---|---|---|---|
+| evidence/runtime-final4/final4-debug.trx.gz | 1590 | 1590 | 0 | 0 | `86a9c011d02c44b5f5c332faaed192de8b7d25e0c88af39d48c1536d1d77e099` |
+| evidence/runtime-final4/final4-release.trx.gz | 1590 | 1590 | 0 | 0 | `b9517ba9085e89037b93ec97ca6841faeba369aacdd1e34fcecd7726bf8d8517` |
 
-Архив вердиктов по волнам/этапам: `docs/rc-2026-11-10/reviews/`, чекпойнты WAVE1–WAVE8, доки этапов S01–S50.
+Строгая команда (обе конфигурации): `dotnet test tests/Picket302.Tests/Picket302.Tests.csproj -c {Debug|Release} --no-build --filter "FullyQualifiedName!~Acceptance&FullyQualifiedName!~ComAutomation&FullyQualifiedName!~Printing.PrintEngineTests"`.
 
-### 6.1. Финальный вердикт R4 (дословно)
+Граница точности: **свежего прогона тестов на итоговом HEAD в этом проходе
+не выполнялось** — 1590/1590/0 являются историческим свидетельством на
+09e152b; код-слой идентичен (документальные коммиты после 09e152b не
+меняют исходники), поэтому артефакты остаются валидными для кода итогового
+HEAD, но это не «лично перезапущено на HEAD».
 
-- REVIEWED_SHA: 09e152bafb0de8bd4117545db96e5afe24283b6c
-- BASE_SHA: 5af9874e8c7550e2accd9c24e4440e659f0810f5
-- **VERDICT: PASS**
-- Findings: none
-- Проверено ревьюером по SHA: дельта 1e62d41..09e152b ровно 5 файлов; инвариант style-гейта (decode-once → gate → escape-amp-first — браузер видит ровно проверенную строку); охота на обходы (calc/var/attr/image-set/element, &#38;, точка-с-запятой, OWASP CSS-векторы) — векторов нет; счётчики 1590/1590/0 в обоих TRX, 3 пина присутствуют; diff --check пуст.
-- Coverage gaps (честно): warnings 0/0 — по commit message (артефактов сборки в evidence нет); инертность CSS — статический анализ, не браузерный рендер; рекомендуется класть build-log в evidence (принято в бэклог).
+## 5. Сборка
 
-## 7. РЕШЕНИЯ ВЛАДЕЛЬЦА (перечень)
+**Свежий прогон реконсиляции** (изоляция: bin/obj рабочего дерева; профиль/
+реестр/принтер/сеть не затрагиваются): `dotnet build Picket302.sln -c {Debug|Release} -v m`
+→ **exit 0 в обеих конфигурациях; предупреждения компилятора 0/0**
+(grep -cE " warning " по полным логам). Артефакты:
+evidence/build-reconcile/{BUILD-PROVENANCE.md, build-debug.log.gz
+(`b4980800…`), build-release.log.gz (`c0db7443…`)}. Исторические
+заявления R1–R4 «0 warnings» были подкреплены только commit messages —
+настоящий прогон закрывает этот пробел независимо.
 
-1. **№127**: `OWNER_DECISION=SQLITE_ONLY | POSTGRESQL | HYBRID_PRO` (`S41-db-architecture.md`).
+## 6. Финальное ревью Qwen — четыре раунда (R1–R4)
+
+| Раунд | SHA | Объём просмотра | Вердикт | Findings → закрытие |
+|---|---|---|---|---|
+| R1 | c4f9a7d | полный дифф main…c4f9a7d | CHANGES_REQUIRED | FINAL-01 (P1) + 2×P2 + 7×P3 → 798a2f7 |
+| R2 | 798a2f7 | полный дифф (повторная верификация закрытий R1 + охота на новые обходы санитизатора) | CHANGES_REQUIRED | FINAL2-01 (P1) + P3 → 1e62d41 |
+| R3 | 1e62d41 | дельта 798a2f7…1e62d41 + контекст полного диффа (сам ревьюер отметил: построчная проверка R1-объёма не повторялась) | CHANGES_REQUIRED | FINAL3-02 (P1) + P2 + P3 → 09e152b |
+| **R4** | **09e152b** | дельта 1e62d41…09e152b + целенаправленная охота на обходы style-гейта (calc/var/&#38;/;/OWASP-CSS) | **PASS** | Findings: none |
+
+Первичный протокол R4 сохранён дословно (7978 байт, копия output.txt
+ревью-агента): **docs/rc-2026-11-10/reviews/FINAL-R4-verdict.md**,
+SHA-256 `f79fb5fddcd7a45fb23dca76a9ba8cf09d3f4864f98eb8720340609a83187943`;
+содержит REVIEWED_SHA 09e152b, BASE_SHA 5af9874, VERDICT: PASS.
+Граница: **PASS относится к коду на 09e152b**; документальные коммиты
+после него (итоговый отчёт, реконсиляция) не входили в R4 и требуют
+самостоятельной проверки владельца/повторного ревью.
+
+## 7. РЕШЕНИЯ ВЛАДЕЛЬЦА (не закрыты документальной правкой)
+
+1. **№127**: `OWNER_DECISION=SQLITE_ONLY | POSTGRESQL | HYBRID_PRO` (`S41-db-architecture.md`); блокирует S42–S45.
 2. **№29** сужение объёма по ТЗ.
 3. **№163** ключ подписи пакетов + доверенный канал.
 4. **№14** probili.ru (DEFERRED — допустимость внешней интеграции).
-5. Ратификация OVERALL-эрратума (70,31%).
+5. Ратификация OVERALL-эрратума (70,31%) — методика/эрратум не ратифицированы владельцем.
 6. HKCU/HKLM COM-поставки (S15).
-7. Контуры: физический печатный стенд (S18/S19), чистая машина (S49), DPI 125/150.
+7. Контуры: физический печатный стенд (S18/S19), чистая машина (S49), DPI 125/150 (NOT_RUN_ON_HOST).
 
-## 8. Флаги (S01 §6 — канонический источник)
+## 8. Ограничения без повышения статуса
 
-COM_FULL_ACCEPTANCE=PARTIAL · UI_TO_SPOOLER=PARTIAL · PRINT_PHYSICAL=NOT_RUN · DPI_125/150=NOT_RUN_ON_HOST · CLEAN_MACHINE=NOT_RUN · OWNER_DECISION_REQUIRED(№127) · SMTP TLS/PROXY/MIME/CLIENT=VERIFIED · HTML_EDITOR=VERIFIED (allowlist, 3 раунда) · UPDATE_INTEGRITY=VERIFIED (SHA-256, подпись отсутствует) · остальные ~20 = true.
+COM_FULL_ACCEPTANCE=PARTIAL · UI_TO_SPOOLER=PARTIAL · PRINT_PHYSICAL=NOT_RUN ·
+DPI_125/150=NOT_RUN_ON_HOST · CLEAN_MACHINE=NOT_RUN · №127/S41=OWNER_DECISION
+· №163=PARTIAL (целостность ≠ подпись) · визуальная 70,31% = не ратифицировано.
 
-## 9. Список коммитов (101)
+## 9. Список коммитов
 
 ```
+c4686d3 docs(rc): FINAL-REPORT-TO-OWNER - R4 verdict PASS embedded (Findings: none), verification package complete
 09e152b fix(security): final review R3 findings FINAL3-01..03 closed
 1e62d41 fix(security): final review R2 findings FINAL2-01/02 closed
 798a2f7 fix(security): final review findings FINAL-01..10 closed
@@ -176,4 +234,6 @@ fd7cb0d docs(rc): close Qwen findings Q1-1..Q1-4, Q2-1..Q2-3 (spooler flag, 1374
 81c8419 docs(rc): S03 fresh UI capture via non-activating harness (45 PNG, 11 drivers PASS)
 1f7d195 docs(rc): S02 KonvertProNet reference inventory, R9 photo excluded from scoring
 e71fbbe docs(rc): S01 baseline actualization and open-items registry
+```
+(102 коммита от main на момент реконсиляции; настоящий коммит реконсиляции — следующий за списком)
 ```

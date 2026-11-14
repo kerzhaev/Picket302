@@ -26,16 +26,17 @@
 | Показатель | Значение |
 |---|---|
 | Всего функций | 163 |
-| `DONE` | 150 |
+| `DONE` | 151 |
 | `PARTIAL` | 10 |
-| `DEFERRED` | 3 |
+| `DEFERRED` | 2 |
 | Из них с приоритетом `[К]` | 64 `DONE`; 1 `PARTIAL` — №127 (перечислен в разделе «Дефекты [К]») |
-| Из них с приоритетом `[П]`/`[Д]` | 9 `PARTIAL` + 3 `DEFERRED` — с явной причиной и ссылкой на допущение/решение владельца. (Корректирующий проход 2026-11-14: сводка приведена к фактическим 10 `PARTIAL` всего — 9 `[П]`/`[Д]` + №127 `[К]`; прежний текст «25+4/26 PARTIAL» относился к состоянию до волн 7–8.) |
+| Из них с приоритетом `[П]`/`[Д]` | 9 `PARTIAL` (6 `[П]` + 3 `[Д]`) + 2 `DEFERRED` (оба `[Д]`) — с явной причиной и ссылкой на допущение/решение владельца. (Реконсиляция 2026-11-14: №10 → DONE; фактические итоги по всем 163 строкам — DONE 151 / PARTIAL 10 (9 `[П]`/`[Д]` + №127 `[К]`) / DEFERRED 2; подсчёт — построчный парсер строк функций с приоритетом [П]/[Д]/[К].) |
 
-Разбивка `DEFERRED`: №10 (группировка строк), №14 (поиск по внешней картоте
-probili.ru), №125 (антиотладка/антимониторинг — запрещено ТЗ, замена
-зафиксирована как S7.4). (Корректирующий проход: №35 переведён в DONE —
-a28b8f4, `PrintOptionsLastParametersTests`.)
+Разбивка `DEFERRED`: №14 (поиск по внешней картоте probili.ru), №125
+(антиотладка/антимониторинг — запрещено ТЗ, замена зафиксирована как S7.4).
+(Корректирующий проход 2026-11-14: №35 → DONE — a28b8f4,
+`PrintOptionsLastParametersTests`; №10 → DONE — 9cffaa7+36659f4,
+`RowGroupingControllerTests`, см. строку 10.)
 
 ## 1. Адресная книга и контрагенты (№1–19)
 
@@ -50,7 +51,7 @@ a28b8f4, `PrintOptionsLastParametersTests`.)
 | 7 | Пользовательские поля контрагента | [П] | DONE | `src/Picket302.Application/Services/CustomFieldManager.cs`; `src/Picket302.Domain/Entities/CounterpartyField.cs` | Юнит + интеграционный: `Application/CounterpartyServicesTests.cs`, `Domain/CustomFieldTagTests.cs` |
 | 8 | Группы/папки адресов, «группа по умолчанию», флаг «закрытая группа» | [К] | DONE | `src/Picket302.Application/Services/CategoryTreeService.cs`; `src/Picket302.Application/Services/GroupManager.cs` | Интеграционный: `Domain/IntegrityRulesTests.cs`, `Infrastructure/GroupRepositoryTests.cs`, **`Application/DemoAndCategoriesTests.cs` (`CategoryTreeService_ЗакрытаяКатегория_НеПринимаетНовыеЗаписи` — добавлен на этапе S8)** |
 | 9 | Фильтры и сортировка по любой колонке; сохранённые пользовательские фильтры | [К] | DONE | `src/Picket302.App/UI/Components/AddressBookSortController.cs`; `src/Picket302.Application/Services/SavedFilterService.cs`; `src/Picket302.Application/Queries/CounterpartyFilterQuery.cs`; `src/Picket302.Infrastructure/Repositories/CounterpartyRepository.cs` (`GetPagedAsync`) | Юнит: `App/AddressBookSortControllerTests.cs`, `Application/SavedFilterServiceTests.cs`; интеграционный: `Application/CounterpartyFilterRepositoryTests.cs` (отбор в БД). Операторские пути: меню «Вид» → «Фильтры» (сохранить, применить, удалить, сбросить сортировку); критерии отбора передаются в запрос БД |
-| 10 | Группировка строк в списке | [П] | DEFERRED | — | UI-автотест: не реализовано — компонент группировки (`GroupableGrid`) отсутствует. Допущение **S8.1** |
+| 10 | Группировка строк в списке | [П] | **DONE (9cffaa7+36659f4)** | `src/Picket302.App/UI/Components/RowGroupingController.cs`; интеграция `MainShell.cs` (контекстное меню «Группировка строк»: без/по группе/по городу/по VIP) | Путь: ПКМ по адресной книге → «Группировка строк» → выбор колонки; сворачивание/разворачивание кликом по заголовку «− Ключ (N)»; «Без группировки» возвращает исходный порядок; выделение и поиск (разворот скрытой строки) сохраняются. Тесты: `RowGroupingControllerTests` (11); runtime: команда GROUP + кадр S9 (`S07-search-grouping.md` §2, §6). Одноуровневая группировка = паритет с легаси; многоуровневая и персистентность выбора — расширение по решению владельца (S07 §5) |
 | 11 | Постраничный просмотр больших списков (виртуальный режим) | [К] | DONE | `src/Picket302.Infrastructure/Persistence/VirtualDataBuffer.cs`; `src/Picket302.Infrastructure/Repositories/CounterpartyRepository.cs` (`GetPagedAsync`) | Интеграционный: `Infrastructure/RegistrationNumberStoreTests.cs` (окно по смещению/размеру, «Записи 1-100 из 150000»), `Application/CounterpartyServicesTests.cs` |
 | 12 | Запоминание видимости и ширины столонок | [П] | DONE | `src/Picket302.App/UI/Components/GridViewSettingsController.cs`; `src/Picket302.Infrastructure/Storage/JsonUiSettingsStore.cs`; `src/Picket302.App/MainShell.cs` | Юнит: `App/GridViewSettingsControllerTests.cs` (`НастройкиВидаТаблицы_СохраняютШиринуСтолбца`, `СкрытиеСтолбца_СохраняетсяИВосстанавливается`, `ВозвратВсехСтолбцов_ОтменяетСкрытиеИСохраняется`) |
 | 13 | Поиск контрагента по ИНН/УНН через открытые источники | [П] | DONE | `src/Picket302.Infrastructure/Integration/WebLookupLauncher.cs` | Юнит: `Infrastructure/WebLookupLauncherTests.cs` (подстановка ИНН, ошибки, маршрут для Беларуси, пустой ИНН) |
