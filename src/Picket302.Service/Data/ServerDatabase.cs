@@ -62,6 +62,28 @@ public sealed class ServerDatabase
     }
 
     /// <summary>
+    /// Создаёт сессию для произвольного файла базы (staging импорта).
+    /// </summary>
+    /// <param name="путь">Путь к файлу базы.</param>
+    /// <returns>Готовая сессия.</returns>
+    public SqliteUnitOfWork СоздатьСессиюДляФайла(string путь)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(путь);
+
+        var сессия = new SqliteUnitOfWork(
+            new SqliteConnectionStringBuilder
+            {
+                DataSource = Path.GetFullPath(путь),
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Cache = SqliteCacheMode.Default,
+            }.ToString());
+
+        НастроитьСоединение(сессия.Connection);
+
+        return сессия;
+    }
+
+    /// <summary>
     /// Включает для базы режим WAL и применяет миграции схемы.
     /// </summary>
     /// <remarks>

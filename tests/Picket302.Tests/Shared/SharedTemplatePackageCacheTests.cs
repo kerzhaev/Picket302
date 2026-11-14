@@ -42,7 +42,7 @@ public sealed class SharedTemplatePackageCacheTests : IDisposable
         Convert.ToHexString(SHA256.HashData(содержимое)).ToLowerInvariant();
 
     [Fact]
-    public async Task Кэш_Отдаёт_Путь_Без_Повторной_Загрузки()
+    public void Кэш_Отдаёт_Путь_Без_Повторной_Загрузки()
     {
         var кэш = new SharedTemplatePackageCache(_каталог);
         var содержимое = "пакет версии один"u8.ToArray();

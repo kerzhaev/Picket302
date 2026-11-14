@@ -1,4 +1,5 @@
 using Picket302.Domain.Entities;
+using Dapper;
 using Picket302.Domain.Repositories;
 
 using Picket302.Infrastructure.Data;
@@ -123,5 +124,57 @@ public sealed class PrinterProfileRepository : IPrinterProfileRepository
             cancellationToken).ConfigureAwait(false);
 
         return затронуто > 0;
+    }
+}
+
+/// <summary>
+/// Читает профили калибровки из файла базы только для чтения.
+/// </summary>
+/// <param name="путьКБазе">Путь к файлу базы.</param>
+/// <returns>Профили калибровки; при недоступной базе — пустой список.</returns>
+/// <remarks>
+/// Соединение открывается только для чтения: чтение не изменяет исходную
+/// базу. Применяется при первом переходе рабочего места в совместный режим —
+/// калибровка переносится в локальный sidecar.
+/// </remarks>
+public static class ПрофилиПринтеровЧтение
+{
+    /// <summary>Читает профили калибровки.</summary>
+    /// <param name="путьКБазе">Путь к файлу базы.</param>
+    /// <returns>Список профилей.</returns>
+    public static IReadOnlyList<Picket302.Domain.Entities.PrinterProfile> Прочитать(string путьКБазе)
+    {
+        if (!File.Exists(путьКБазе))
+        {
+            return Array.Empty<Picket302.Domain.Entities.PrinterProfile>();
+        }
+
+        var сессия = new Picket302.Infrastructure.Data.SqliteUnitOfWork(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = Path.GetFullPath(путьКБазе),
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
+                Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Default,
+            }.ToString());
+
+        try
+        {
+            var все = сессия.Connection
+                .QueryAsync<Picket302.Domain.Entities.PrinterProfile>(
+                    "SELECT * FROM printer_profiles;")
+                .GetAwaiter()
+                .GetResult()
+                .ToList();
+
+            return все;
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            return Array.Empty<Picket302.Domain.Entities.PrinterProfile>();
+        }
+        finally
+        {
+            сессия.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
     }
 }

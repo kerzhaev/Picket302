@@ -70,6 +70,9 @@ public sealed class SharedTransport : IDisposable
     private readonly Dictionary<string, string> _телаОпераций = new(StringComparer.Ordinal);
     private readonly Action<string> _журнал;
 
+    /// <summary>Предельный размер кэша тел операций.</summary>
+    public const int ПредельныйКэшТелОпераций = 64;
+
     /// <summary>
     /// Создаёт транспорт для подключения к службе.
     /// </summary>
@@ -160,6 +163,13 @@ public sealed class SharedTransport : IDisposable
         if (!_телаОпераций.TryGetValue(идентификатор, out var тело))
         {
             тело = JsonSerializer.Serialize(запрос, SharedJson.Options);
+
+            // Кэш тел ограничен: он нужен только для повтора недавней
+            // операции, чей ответ ещё не дошёл до клиента.
+            while (_телаОпераций.Count >= ПредельныйКэшТелОпераций)
+            {
+                _телаОпераций.Remove(_телаОпераций.Keys.First());
+            }
 
             _телаОпераций[идентификатор] = тело;
         }

@@ -687,6 +687,48 @@ public static class SharedEndpoints
                 SharedJson.Options);
         });
 
+        приложение.MapPost("/api/v1/admin/import-base", async (
+            HttpContext http,
+            CancellationToken токен) =>
+        {
+            if (!ПроверитьАдминистратора(контекст, http))
+            {
+                return Ошибка(
+                    SharedErrorCodes.Unauthorized,
+                    "Служебный запрос отклонён: требуется локальный адрес и административный токен.",
+                    http);
+            }
+
+            // Путь к исходной базе выбирает человек в консоли администратора
+            // на серверном компьютере; клиентские пути сюда не попадают.
+            var путь = http.Request.Query["source"].ToString();
+
+            if (string.IsNullOrWhiteSpace(путь))
+            {
+                return Ошибка(
+                    SharedErrorCodes.ValidationFailed,
+                    "Укажите путь к исходной базе в параметре source.",
+                    http);
+            }
+
+            var импорт = new Data.ServerBaseImport(контекст.База, контекст.Параметры.DataDirectory);
+
+            var итог = await импорт.ВыполнитьAsync(путь, токен).ConfigureAwait(false);
+
+            if (итог.Успешно)
+            {
+                контекст.Журнал(
+                    $"Первичный импорт базы выполнен: контрагентов {итог.Контрагентов}, "
+                    + $"отправлений {итог.Писем}, схема {итог.ВерсияСхемы}.");
+            }
+            else
+            {
+                контекст.Журнал($"Первичный импорт базы не выполнен: {итог.Сообщение}");
+            }
+
+            return Results.Json(итог, SharedJson.Options);
+        });
+
         приложение.MapGet("/api/v1/admin/devices", async (HttpContext http, CancellationToken токен) =>
         {
             if (!ПроверитьАдминистратора(контекст, http))

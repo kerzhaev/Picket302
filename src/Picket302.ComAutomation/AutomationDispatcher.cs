@@ -646,6 +646,38 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
         ApplicationDirectoryName,
         DatabaseFileName);
 
+    /// <summary>
+    /// Определяет, сопряжено ли рабочее место с общей базой.
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/>, если в профиле есть реквизиты сопряжения
+    /// (shared.json с устройством и отпечатком сервера).
+    /// </returns>
+    private static bool ОбщаяБазаСопряжена()
+    {
+        try
+        {
+            var путь = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                ApplicationDirectoryName,
+                "shared.json");
+
+            if (!File.Exists(путь))
+            {
+                return false;
+            }
+
+            var текст = File.ReadAllText(путь);
+
+            return текст.Contains("\"deviceId\"", StringComparison.Ordinal)
+                && текст.Contains("\"serverFingerprint\"", StringComparison.Ordinal);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     /// <inheritdoc />
     public bool IsDatabaseLoaded
     {
@@ -667,6 +699,18 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
         if (IsDatabaseLoaded)
         {
             return true;
+        }
+
+        // Совместный режим: устройство сопряжено с общей базой, и COM-сервер
+        // не открывает устаревшую локальную базу вместо неё (решение
+        // SOURCE-MAP, сценарий 51).
+        if (ОбщаяБазаСопряжена())
+        {
+            AutomationServerLog.Write(
+                "Отказ: рабочее место сопряжено с общей базой; COM-автоматизация "
+                + "работает с устаревшей локальной базой и отключена.");
+
+            return false;
         }
 
         if (!File.Exists(_databasePath))

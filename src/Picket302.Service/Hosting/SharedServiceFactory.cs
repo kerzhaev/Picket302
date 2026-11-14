@@ -194,6 +194,7 @@ public static class SharedServiceFactory
         реестр.Register(new DeleteBlankFieldCommand(база));
 
         реестр.Register(new RecordPrintEventCommand(база));
+        реестр.Register(new CreatePrintSessionCommand(база));
         реестр.Register(new GetPrintDataCommand(база));
         реестр.Register(new UploadTemplatePackageCommand(база, каталогПакетов));
         реестр.Register(new DeleteTemplatePackageCommand(база, каталогПакетов));

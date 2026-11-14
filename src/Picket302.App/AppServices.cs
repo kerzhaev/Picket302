@@ -255,6 +255,7 @@ public sealed class AppServices : IAsyncDisposable
         НастройкиОтображения = new UiSettingsStorage(ХранилищеНастроек);
 
         Журнал = new LogHub(профиль.LogsDirectory);
+        var журнал = (string сообщение) => Журнал.LogError(new InvalidOperationException(сообщение));
 
         Машина = new MachineIdentity(сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
         ХранилищеЛицензии = new LicenseStore(
@@ -279,6 +280,30 @@ public sealed class AppServices : IAsyncDisposable
         // они относятся к этому компьютеру, а не к общей базе.
         var локальныеПараметры = new LocalParameterStore(профиль.DataDirectory);
         var локальныеПринтеры = new LocalPrinterProfileStore(профиль.DataDirectory);
+
+        // Первый переход в общий режим: калибровка этого рабочего места
+        // переносится из прежней локальной базы в sidecar. Чтение выполняется
+        // соединением только для чтения — исходная база не изменяется; уже
+        // существующие профили sidecar не дублируются.
+        if (File.Exists(профиль.DatabasePath))
+        {
+            try
+            {
+                var прежняя = Picket302.Infrastructure.Repositories.ПрофилиПринтеровЧтение
+                    .Прочитать(профиль.DatabasePath);
+
+                var перенесено = локальныеПринтеры.ПеренестиИз(прежняя);
+
+                if (перенесено > 0)
+                {
+                    журнал($"Калибровка принтеров перенесена из локальной базы: профилей {перенесено}.");
+                }
+            }
+            catch (Exception ошибка)
+            {
+                журнал($"Не удалось перенести калибровку принтеров: {ошибка.Message}");
+            }
+        }
 
         Параметры = локальныеПараметры;
         ПрофилиПринтеров = локальныеПринтеры;

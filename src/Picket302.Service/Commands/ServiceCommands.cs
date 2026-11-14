@@ -346,13 +346,70 @@ public sealed class GetPrintDataCommand
 }
 
 /// <summary>
+/// Создание записи реестра печатных сессий.
+/// </summary>
+/// <remarks>
+/// Сессия создаётся на сервере вместе с печатным событием: реестр сессий и
+/// журнал печати описывают одно и то же событие на одном рабочем месте.
+/// Служба не печатает и не вызывает спулер.
+/// </remarks>
+public sealed class CreatePrintSessionCommand
+    : SharedDbCommand<CreatePrintSessionRequest, CreatePrintSessionResponse>
+{
+    /// <summary>Имя команды в URL.</summary>
+    public const string Имя = "print.create-session";
+
+    /// <summary>
+    /// Создаёт команду.
+    /// </summary>
+    /// <param name="база">Фабрика сессий базы данных.</param>
+    public CreatePrintSessionCommand(ServerDatabase база)
+        : base(база)
+    {
+    }
+
+    /// <inheritdoc />
+    public override string Name => Имя;
+
+    /// <inheritdoc />
+    protected override async Task<CreatePrintSessionResponse> ВыполнитьВнутриAsync(
+        SharedDbScope область,
+        SharedCommandContext контекст,
+        CreatePrintSessionRequest запрос,
+        CancellationToken cancellationToken)
+    {
+        var сессия = new PrintJob(
+            0,
+            DateTime.UtcNow,
+            запрос.TemplateId,
+            запрос.PrinterName,
+            запрос.PaperSizeName,
+            запрос.PaperWidthMm,
+            запрос.PaperHeightMm,
+            запрос.FontInfo,
+            запрос.Copies,
+            запрос.PrintMode,
+            запрос.Status,
+            запрос.ErrorText,
+            null);
+
+        var идентификатор = await область.Данные.ЖурналПечати
+            .AddAsync(сессия, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new CreatePrintSessionResponse(идентификатор);
+    }
+}
+
+/// <summary>
 /// Фиксация печатного события в общем журнале.
 /// </summary>
 /// <remarks>
 /// Событие приходит от клиента, который напечатал на своём рабочем месте:
 /// служба не печатает и не знает, что напечатано физически. Исходы
 /// «подготовлено», «передано в локальный спулер», «ошибка» и «неизвестный
-/// исход после обрыва» различаются и не смешиваются.
+/// исход после обрыва» различаются и не смешиваются. Записи реестра сессий
+/// создаёт отдельная команда print.create-session.
 /// </remarks>
 public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRequest, PrintEventResponse>
 {
@@ -385,42 +442,12 @@ public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRe
 
         var исход = запрос.Outcome.ToString();
 
-        // Реестр печатных сессий пополняется: принтер, формат бумаги, число
-        // экземпляров и текст ошибки относятся к печати и не должны теряться.
-        // Статус сессии выбирается из словаря схемы, а точный исход печати
-        // хранится в журнале печати (колонка outcome).
-        var статус = запрос.Outcome switch
-        {
-            PrintEventOutcome.Spooled => "SUCCESS",
-            PrintEventOutcome.Error => "FAILED",
-            _ => "ABORTED",
-        };
-
-        var сессия = new PrintJob(
-            0,
-            DateTime.UtcNow,
-            null,
-            запрос.PrinterName ?? string.Empty,
-            запрос.PaperSizeName ?? string.Empty,
-            0m,
-            0m,
-            null,
-            запрос.Copies,
-            запрос.PrintMode,
-            статус,
-            запрос.ErrorText,
-            null);
-
-        var идентификаторСессии = await область.Данные.ЖурналПечати
-            .AddAsync(сессия, cancellationToken)
-            .ConfigureAwait(false);
-
         foreach (var идентификатор in запрос.MailIds)
         {
             var результат = await область.Данные.СлужбаПисем
                 .RegisterPrintAsync(
                     идентификатор,
-                    идентификаторСессии,
+                    null,
                     запрос.TemplateDescription,
                     cancellationToken,
                     исход,
@@ -433,7 +460,7 @@ public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRe
             }
         }
 
-        return new PrintEventResponse(запрос.MailIds, идентификаторСессии, запрос.Outcome);
+        return new PrintEventResponse(запрос.MailIds, null, запрос.Outcome);
     }
 }
 

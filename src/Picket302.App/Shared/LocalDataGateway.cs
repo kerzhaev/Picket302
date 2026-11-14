@@ -520,7 +520,13 @@ public sealed class LocalDataGateway : IDataGateway
         foreach (var идентификатор in идентификаторы)
         {
             последний = await _данные.СлужбаПисем
-                .RegisterPrintAsync(идентификатор, null, описаниеШаблона, токен)
+                .RegisterPrintAsync(
+                    идентификатор,
+                    null,
+                    описаниеШаблона,
+                    токен,
+                    исход.ToString(),
+                    deviceId: null)
                 .ConfigureAwait(false);
         }
 

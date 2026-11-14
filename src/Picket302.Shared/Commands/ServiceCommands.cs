@@ -3,6 +3,37 @@ using Picket302.Shared.Dtos;
 namespace Picket302.Shared.Commands;
 
 /// <summary>
+/// Запрос создания записи реестра печатных сессий.
+/// </summary>
+/// <param name="TemplateId">Использованный шаблон.</param>
+/// <param name="PrinterName">Имя принтера рабочего места.</param>
+/// <param name="PaperSizeName">Формат бумаги.</param>
+/// <param name="PaperWidthMm">Ширина бумаги.</param>
+/// <param name="PaperHeightMm">Высота бумаги.</param>
+/// <param name="FontInfo">Сведения о шрифте.</param>
+/// <param name="Copies">Число экземпляров.</param>
+/// <param name="PrintMode">Режим печати.</param>
+/// <param name="Status">Статус сессии.</param>
+/// <param name="ErrorText">Текст ошибки.</param>
+public sealed record CreatePrintSessionRequest(
+    long? TemplateId,
+    string PrinterName,
+    string PaperSizeName,
+    decimal PaperWidthMm,
+    decimal PaperHeightMm,
+    string? FontInfo,
+    int Copies,
+    string PrintMode,
+    string Status,
+    string? ErrorText);
+
+/// <summary>
+/// Ответ создания записи реестра печатных сессий.
+/// </summary>
+/// <param name="PrintJobId">Идентификатор записи реестра.</param>
+public sealed record CreatePrintSessionResponse(long PrintJobId);
+
+/// <summary>
 /// Фиксация печатного события в общем журнале.
 /// </summary>
 /// <remarks>

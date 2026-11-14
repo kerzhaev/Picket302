@@ -745,19 +745,31 @@ public sealed class MainShell : Form
 
                         // Явное решение оператора продолжить локально: это не
                         // автоматический переход, а осознанный выбор после
-                        // сообщения о недоступности общей базы.
+                        // сообщения о недоступности общей базы. Созданный
+                        // общий состав освобождается: его транспорт и таймер
+                        // счётчика объёма не должны продолжать опрос
+                        // недоступного сервера.
+                        if (_состав is not null)
+                        {
+                            await _состав.DisposeAsync().ConfigureAwait(true);
+                            _состав = null;
+                            _составСозданоВнутри = false;
+                        }
                     }
                 }
             }
 
-            _состав = пути is null
-                ? await AppServices
-                    .СоздатьAsync(путьБазы, true, cancellationToken)
-                    .ConfigureAwait(true)
-                : await AppServices
-                    .СоздатьAsync(пути, true, cancellationToken)
-                    .ConfigureAwait(true);
-            _составСозданоВнутри = true;
+            if (_состав is null)
+            {
+                _состав = пути is null
+                    ? await AppServices
+                        .СоздатьAsync(путьБазы, true, cancellationToken)
+                        .ConfigureAwait(true)
+                    : await AppServices
+                        .СоздатьAsync(пути, true, cancellationToken)
+                        .ConfigureAwait(true);
+                _составСозданоВнутри = true;
+            }
         }
 
         var активный = _состав!;
@@ -2296,6 +2308,22 @@ public sealed class MainShell : Form
     /// </summary>
     private void ОткрытьАрхивацию()
     {
+        if (_состав is not null && _состав.ОбщийРежим)
+        {
+            // Копии общей базы делает сервер: у клиента нет файла общей базы
+            // и ни одного локального аналога (решение SOURCE-MAP, сценарий 63).
+            MessageBox.Show(
+                this,
+                "Резервное копирование в режиме общей базы выполняет серверная "
+                + "служба: копии хранятся в каталоге данных службы на серверном "
+                + "компьютере.",
+                "Архивирование и восстановление",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
         using var форма = new FormBackupRestore(ПутьБазыПрограммы());
         форма.ShowDialog(this);
     }

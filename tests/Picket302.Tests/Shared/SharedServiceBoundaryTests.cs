@@ -201,6 +201,26 @@ public sealed class SharedServiceBoundaryTests
                 new CreateMailRequest(Письмо(созданный.Id, отправитель.Id)))
             ;
 
+        // Реестр сессий создаётся отдельной командой без привязки к
+        // отправлениям.
+        var сессия = await клиент
+            .ВыполнитьИРазобратьAsync<CreatePrintSessionRequest, CreatePrintSessionResponse>(
+                "print.create-session",
+                new CreatePrintSessionRequest(
+                    null,
+                    "Принтер HP",
+                    "A4",
+                    210m,
+                    297m,
+                    null,
+                    2,
+                    "selected",
+                    "SUCCESS",
+                    null))
+            ;
+
+        Assert.True(сессия.PrintJobId > 0);
+
         var ответ = await клиент
             .ВыполнитьИРазобратьAsync<RecordPrintEventRequest, PrintEventResponse>(
                 "print.record-event",
@@ -215,7 +235,6 @@ public sealed class SharedServiceBoundaryTests
                     null))
             ;
 
-        Assert.NotNull(ответ.PrintJobId);
         Assert.Equal(PrintEventOutcome.Spooled, ответ.Outcome);
 
         using var журнал = await клиент.Клиент.GetAsync("/api/v1/queries/print-history?offset=0&limit=50");

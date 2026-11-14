@@ -251,25 +251,27 @@ public sealed class RemotePrintJobRepository : IPrintJobRepository
     {
         ArgumentNullException.ThrowIfNull(printJob);
 
-        // Сессия печати создаётся на сервере вместе с печатным событием:
-        // запись реестра и запись журнала печати должны описывать одно и то же
-        // событие на одном рабочем месте.
+        // Сессия печати создаётся на сервере реестра без привязки к
+        // отправлениям: журнал печати с исходами и устройством заполняет
+        // отдельная команда print.record-event.
         var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<RecordPrintEventRequest, PrintEventResponse>(
-                "print.record-event",
-                new RecordPrintEventRequest(
-                    Array.Empty<long>(),
-                    printJob.PrinterName,
-                    printJob.Status == "SUCCESS" ? PrintEventOutcome.Spooled : PrintEventOutcome.Error,
+            .ВыполнитьКомандуAsync<CreatePrintSessionRequest, CreatePrintSessionResponse>(
+                "print.create-session",
+                new CreatePrintSessionRequest(
+                    printJob.TemplateId,
                     printJob.PrinterName,
                     printJob.PaperSizeName,
+                    printJob.PaperWidthMm,
+                    printJob.PaperHeightMm,
+                    printJob.FontInfo,
                     printJob.Copies,
                     printJob.PrintMode,
+                    printJob.Status,
                     printJob.ErrorText),
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        return ответ.PrintJobId ?? 0;
+        return ответ.PrintJobId;
     }
 
     /// <inheritdoc />

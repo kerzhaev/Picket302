@@ -85,6 +85,14 @@ internal static class Program
             $"Служба совместного режима запущена: порт {параметры.Port}, "
             + $"каталог данных {параметры.DataDirectory}.");
 
+        // Ежедневные копии общей базы: механизм тот же, что и в одиночном
+        // режиме (VACUUM INTO), копии — в каталоге backups данных службы.
+        var копии = new Hosting.ServerBackupScheduler(
+            параметры.DatabasePath,
+            параметры.BackupsDirectory,
+            журнал,
+            сразу: true);
+
         var отмена = new CancellationTokenSource();
         var приложение = SharedServiceFactory.Создать(параметры, журнал, сертификат);
 
@@ -117,6 +125,7 @@ internal static class Program
         }
 
         await приложение.DisposeAsync().ConfigureAwait(false);
+        копии.Dispose();
 
         журнал("Служба совместного режима остановлена.");
 
