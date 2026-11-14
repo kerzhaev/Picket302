@@ -80,11 +80,87 @@ S39-R2 (4×P3), S40-R2 (доки), CHECKPOINTS (F-CP-01..04), подтвержд
 
 ## 7. Числа
 
-- Коммитов от main: фиксируется в `git rev-parse/rev-list` на момент чтения (на момент реконсиляции — 102; история точных счётов: 95 на первой редакции S50, 98 на R2, 100 на R3, 101 на R4-кандидате 09e152b).
-- Строгий набор: 1385 (старт) → **1582/0/0** (Debug = Release).
-- Ревью-циклов: 12 + корректирующий проход.
+Значения этого раздела — **финальные**. Промежуточные прогоны строгого набора
+вынесены в приложение 1 (раздел 9) и результатом RC не являются.
+
+- Строгий набор (финальный): Debug = Release = **1590/0/0** (1590 PASS /
+  0 FAIL / 0 NOT EXECUTED) — `evidence/runtime-final4/final4-debug.trx.gz`
+  (SHA-256 `86a9c011d02c44b5f5c332faaed192de8b7d25e0c88af39d48c1536d1d77e099`)
+  и `evidence/runtime-final4/final4-release.trx.gz` (SHA-256
+  `b9517ba9085e89037b93ec97ca6841faeba369aacdd1e34fcecd7726bf8d8517`);
+  код-кандидат `09e152b` (Qwen R4 = PASS). Это историческое свидетельство на
+  коде-кандидате, а не свежий прогон на текущем HEAD.
+- Функций: 163 = 151 DONE + 10 PARTIAL + 2 DEFERRED (§2).
+- Этапов: 50 = 41 COMPLETE + 2 BLOCKED_EXTERNAL + 1 OWNER_DECISION_REQUIRED +
+  4 NOT_STARTED/DEPENDENT_ON_OWNER_DECISION + 1 NOT_RUN +
+  1 AWAITING_OWNER_ACCEPTANCE (§1).
+- Коммитов от main: 104 на коммите с настоящим документом; финальный HEAD
+  ветки содержит ещё один коммит — протокол независимого документального
+  ревью, — итого 105 (`git rev-list --count main..HEAD`).
+- Ревью-циклов: 12 этапных CR→fix→PASS + финальное ревью кода в 4 раундах
+  (R1–R4; R4 = PASS на 09e152b) + корректирующий проход + независимое
+  документальное ревью (`FINAL-REPORT-TO-OWNER.md` §6 и §10).
 
 ## 8. Финальное ревью и кандидатный SHA
 
-- CANDIDATE_SHA (после финального Qwen-ревью всего diff): фиксируется в `FINAL-VERDICT.md` рядом с этим документом.
+- Протокол финального ревью кода (R4 = PASS на 09e152b): `reviews/FINAL-R4-verdict.md` (7978 байт, SHA-256 `f79fb5fddcd7a45fb23dca76a9ba8cf09d3f4864f98eb8720340609a83187943`).
+- Протокол независимого документального ревью и REVIEWED_SHA: `FINAL-REPORT-TO-OWNER.md` §6 и §10.
 - Отчёт для независимой проверки владельцем: `FINAL-REPORT-TO-OWNER.md` (BASE_SHA, CANDIDATE_SHA, список коммитов, статусы 50 этапов, команды/числа тестов, предупреждения сборки, git diff --check, флаги COM/PRINT/DPI/UI/coverage, вердикт Qwen).
+
+## 9. Приложение 1 — хронология строгих прогонов (промежуточные результаты)
+
+Все прогоны ниже — **промежуточные**: ни один из них не является финальным
+результатом RC. Финальный результат — §7 (1590/0/0) и §3 «Coverage».
+Счётчик каждой строки (PASS/FAIL/NOT-EXECUTED) прочитан из самого артефакта
+(`ResultSummary/Counters` в TRX), SHA-256 — первые 16 hex от полного хеша
+файла; оба значения перепроверяются командой `sha256sum <файл>` и
+распаковкой `.trx.gz`. В таблице указан один репрезентативный носитель
+каждого счётчика; полный перечень — в `docs/rc-2026-11-10/evidence/runtime*/`
+(все файлы закоммичены).
+
+| Счётчик (PASS/FAIL/NOT-EXECUTED) | Артефакт | SHA-256 (16) | Этап / роль прогона |
+|---|---|---|---|
+| 1385/0/0 | `docs/rc-2026-11-10/evidence/runtime-s06/trx-debug/Nachfin_NACHFIN_2026-11-11_21_08_44.trx.gz` | `7b71b86a550f6e99` | старт строгого набора RC (S06) |
+| 1392/0/0 | `docs/rc-2026-11-10/evidence/runtime-s07/trx-debug/Nachfin_NACHFIN_2026-11-11_21_37_02.trx.gz` | `846bc0d58db49972` | S07 |
+| 1394/0/0 | `docs/rc-2026-11-10/evidence/runtime-s08/trx-debug/Nachfin_NACHFIN_2026-11-11_22_09_22.trx.gz` | `6d3bce76c99e34f3` | S08 |
+| 1395/0/0 | `docs/rc-2026-11-10/evidence/runtime-s08b/trx-debug/Nachfin_NACHFIN_2026-11-11_22_30_59.trx.gz` | `1a0c93ecf05a0dac` | S08 (после фиксов) |
+| 1398/0/0 | `docs/rc-2026-11-10/evidence/runtime-s07b/trx-debug/Nachfin_NACHFIN_2026-11-11_23_44_17.trx.gz` | `b37b386c101cb5a4` | S07 (ревью-фиксы) |
+| 1399/0/0 | `docs/rc-2026-11-10/evidence/runtime-s07b/trx2-debug/Nachfin_NACHFIN_2026-11-12_00_14_07.trx.gz` | `6f64143cb29f9b59` | закрытие Волны 2 |
+| 1402/0/0 | `docs/rc-2026-11-10/evidence/runtime-s17/trx-release/Nachfin_NACHFIN_2026-11-12_20_17_32.trx.gz` | `b309a56cefce0347` | S17 |
+| 1406/0/0 | `docs/rc-2026-11-10/evidence/runtime-s20/trx-release/Nachfin_NACHFIN_2026-11-12_20_31_19.trx.gz` | `b95a88b58466a898` | S20 |
+| 1411/0/0 | `docs/rc-2026-11-10/evidence/runtime-s21/trx-release/Nachfin_NACHFIN_2026-11-12_20_44_00.trx.gz` | `9b4ccf25a7d71fa3` | S21 |
+| 1418/0/0 | `docs/rc-2026-11-10/evidence/runtime-s22/trx-release/Nachfin_NACHFIN_2026-11-12_20_54_25.trx.gz` | `a63b767c82588fd6` | S22 |
+| 1421/0/0 | `docs/rc-2026-11-10/evidence/runtime-s24/trx-release/Nachfin_NACHFIN_2026-11-12_21_38_00.trx.gz` | `9378b9bfb10f0cf7` | S24 |
+| 1424/0/0 | `docs/rc-2026-11-10/evidence/runtime-s26/trx2-release/Nachfin_NACHFIN_2026-11-12_22_45_49.trx.gz` | `032551b45c9d030d` | S26 |
+| 1453/0/0 | `docs/rc-2026-11-10/evidence/runtime-s27/s27-debug.trx.gz` | `1e75c580c8efb05b` | S27 |
+| 1462/0/0 | `docs/rc-2026-11-10/evidence/runtime-s28/s28-debug.trx.gz` | `811a0a3f4f3c2e46` | S28 |
+| 1467/0/0 | `docs/rc-2026-11-10/evidence/runtime-s29/s29-debug.trx.gz` | `a59098c7effa34f8` | S29 |
+| 1472/0/0 | `docs/rc-2026-11-10/evidence/runtime-s27fix/s27fix-debug.trx.gz` | `9b940729ab6e3370` | S27 (ревью-фиксы) |
+| 1478/0/0 | `docs/rc-2026-11-10/evidence/runtime-s30/s30-debug.trx.gz` | `67328a4e05d78bc3` | S30 |
+| 1482/0/0 | `docs/rc-2026-11-10/evidence/runtime-s29fix/s29fix-debug.trx.gz` | `86128841074f959d` | S29 (ревью-фиксы) |
+| 1484/0/0 | `docs/rc-2026-11-10/evidence/runtime-s27r2fix/s27r2fix-debug.trx.gz` | `118c660f71fa34a4` | S27 (ревью-фиксы R2) |
+| 1493/0/0 | `docs/rc-2026-11-10/evidence/runtime-s31/s31-debug.trx.gz` | `d40fd8525952c9c8` | S31 |
+| 1499/0/0 | `docs/rc-2026-11-10/evidence/runtime-s32/s32-debug.trx.gz` | `c3d1d2f57d4164bb` | S32 |
+| 1518/0/0 | `docs/rc-2026-11-10/evidence/runtime-s34/s34-debug.trx.gz` | `b3e5f84c30150cc8` | S34 |
+| 1520/0/0 | `docs/rc-2026-11-10/evidence/runtime-s33fix/s33fix-debug.trx.gz` | `77cb38425ff54558` | S33 (ревью-фиксы) |
+| 1525/0/0 | `docs/rc-2026-11-10/evidence/runtime-s35/s35-debug.trx.gz` | `fc48cbdcc5012b0b` | S35 |
+| 1530/0/0 | `docs/rc-2026-11-10/evidence/runtime-s36/s36-debug.trx.gz` | `13c5d863393767ba` | S36 |
+| 1534/0/0 | `docs/rc-2026-11-10/evidence/runtime-s37/s37-debug.trx.gz` | `d98dbe3c90eddc1e` | S37 |
+| 1538/0/0 | `docs/rc-2026-11-10/evidence/runtime-s38/s38-debug.trx.gz` | `363c3c84965c77ba` | S38 |
+| 1539/0/0 | `docs/rc-2026-11-10/evidence/runtime-s37fix/s37fix-debug.trx.gz` | `d92c31d85f15bc20` | S37 (ревью-фиксы) |
+| 1552/0/0 | `docs/rc-2026-11-10/evidence/runtime-s39/s39-debug.trx.gz` | `5dc990bf63138dbb` | S39 |
+| 1555/0/0 | `docs/rc-2026-11-10/evidence/runtime-s40/s40-debug.trx.gz` | `35c8877eaf0c4cd3` | S40 |
+| 1561/0/0 | `docs/rc-2026-11-10/evidence/runtime-s46/s46-debug.trx.gz` | `3da3d887fd00959f` | S46 (файл побайтово идентичен артефакту S39-fix — тот же SHA-256) |
+| 1565/0/0 | `docs/rc-2026-11-10/evidence/runtime-s47/s47-debug.trx.gz` | `60d14bb0e74dcc53` | S47 |
+| 1569/0/0 | `docs/rc-2026-11-10/evidence/runtime-s39r2/s39r2-debug.trx.gz` | `d01ed4a32bb6d322` | S39 (ревью R2) |
+| 1577/0/0 | `docs/rc-2026-11-10/evidence/runtime-correction1/corr1-debug.trx.gz` | `6dcf6c6601763ca9` | корректирующий проход, прогон 1 |
+| 1582/0/0 | `docs/rc-2026-11-10/evidence/runtime-correction/corr3-debug.trx.gz` | `d6c38cd1e1caf336` | **промежуточный** прогон корректирующего прохода — коммит c4f9a7d (2026-11-14 00:47); носителей два — runtime-final/final-* и runtime-correction/corr3-* |
+| 1582/0/0 | `docs/rc-2026-11-10/evidence/runtime-final/final-debug.trx.gz` | `e9f0fcf15945b039` | **промежуточный** — второй носитель того же прогона (Release-пара — `runtime-final/final-release.trx.gz`, SHA-256 `efe6836e4a7fab33`) |
+| 1585/0/0 | `docs/rc-2026-11-10/evidence/runtime-final2/final2-debug.trx.gz` | `8870e897f51d91bb` | промежуточный прогон после закрытия R1 |
+| 1587/0/0 | `docs/rc-2026-11-10/evidence/runtime-final3/final3-debug.trx.gz` | `c01c74f021156a1f` | промежуточный прогон после закрытия R2 |
+| 1590/0/0 | `docs/rc-2026-11-10/evidence/runtime-final4/final4-debug.trx.gz` | `86a9c011d02c44b5` | **ФИНАЛЬНЫЙ** прогон RC (после закрытия R3) на коде-кандидате 09e152b |
+
+Промежуточный прогон 1582/0/0 (коммит `c4f9a7d`, 2026-11-14 00:47) — это
+**не** финальный результат RC: он был финальным только на момент своего
+коммита и был впоследствии вытеснен прогонами 1585 → 1587 → **1590**
+(код-кандидат `09e152b`, вердикт Qwen R4 = PASS).
