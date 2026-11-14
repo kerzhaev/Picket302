@@ -56,6 +56,7 @@ public static class SharedEndpoints
         SharedCatalogEndpoints.Подключить(приложение, контекст);
         SharedDetailEndpoints.Подключить(приложение, контекст);
         SharedDistributionMailEndpoint.Подключить(приложение, контекст);
+        SharedPackageEndpoints.Подключить(приложение, контекст);
         ПодключитьАдминистративные(приложение, контекст);
     }
 

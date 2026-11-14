@@ -1047,6 +1047,18 @@ public sealed class RemoteDataGateway : IDataGateway
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<TemplatePackageDto>> ПолучитьПакетыШаблоновAsync(CancellationToken токен = default)
+    {
+        var ответ = await _транспорт
+            .ВыполнитьЗапросAsync<TemplatePackageListResponse>(
+                SharedProtocol.TemplatePackagesRoute,
+                токен)
+            .ConfigureAwait(false);
+
+        return ответ.Packages;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<PrintTemplate>> ПолучитьШаблоныAsync(
         string? вид = null,
         CancellationToken токен = default)

@@ -8,6 +8,7 @@ using Picket302.Domain.Repositories;
 using Picket302.Domain.ValueObjects;
 using Picket302.Printing;
 using Picket302.Shared.Commands;
+using Picket302.Shared.Dtos;
 
 namespace Picket302.App.Shared;
 
@@ -431,6 +432,10 @@ public sealed class LocalDataGateway : IDataGateway
         long идентификаторШаблона,
         CancellationToken токен = default)
         => _данные.ПоляШаблонов.GetByTemplateAsync(идентификаторШаблона, токен);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TemplatePackageDto>> ПолучитьПакетыШаблоновAsync(CancellationToken токен = default)
+        => Task.FromResult<IReadOnlyList<TemplatePackageDto>>(Array.Empty<TemplatePackageDto>());
 
     /// <inheritdoc />
     public async Task<Result<PrintTemplate>> СохранитьШаблонAsync(

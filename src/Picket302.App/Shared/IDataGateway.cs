@@ -7,6 +7,7 @@ using Picket302.Domain.Repositories;
 using Picket302.Domain.ValueObjects;
 using Picket302.Printing;
 using Picket302.Shared.Commands;
+using Picket302.Shared.Dtos;
 
 namespace Picket302.App.Shared;
 
@@ -569,6 +570,13 @@ public interface IDataGateway
     Task<IReadOnlyList<BlankField>> ПолучитьПоляШаблонаAsync(
         long идентификаторШаблона,
         CancellationToken токен = default);
+
+    /// <summary>
+    /// Возвращает метаданные управляемых пакетов шаблонов.
+    /// </summary>
+    /// <param name="токен">Токен отмены.</param>
+    /// <returns>Список пакетов.</returns>
+    Task<IReadOnlyList<TemplatePackageDto>> ПолучитьПакетыШаблоновAsync(CancellationToken токен = default);
 
     /// <summary>
     /// Сохраняет шаблон печати.

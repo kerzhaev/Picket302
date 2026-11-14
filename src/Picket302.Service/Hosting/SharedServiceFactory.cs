@@ -3,8 +3,8 @@ using System.Security.Cryptography.X509Certificates;
 using Dapper;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Picket302.Service.Commands;
-using Picket302.Service.Configuration;
 using Picket302.Service.Data;
+using Picket302.Service.Configuration;
 using Picket302.Service.Security;
 using Picket302.Shared.Protocol;
 
@@ -41,7 +41,7 @@ public static class SharedServiceFactory
 
         var база = new ServerDatabase(параметры.DatabasePath);
 
-        var реестр = СоздатьРеестр(база);
+        var реестр = СоздатьРеестр(база, параметры.TemplatesDirectory);
 
                 var конвейер = new SharedCommandPipeline(база, реестр, журнал);
         var опознаватель = new SharedDeviceAuthenticator(база, журнал);
@@ -148,7 +148,7 @@ public static class SharedServiceFactory
     /// </summary>
     /// <param name="база">Фабрика сессий базы данных.</param>
     /// <returns>Реестр команд.</returns>
-    public static SharedCommandRegistry СоздатьРеестр(ServerDatabase база)
+    public static SharedCommandRegistry СоздатьРеестр(ServerDatabase база, string каталогПакетов)
     {
         var реестр = new SharedCommandRegistry();
 
@@ -195,6 +195,8 @@ public static class SharedServiceFactory
 
         реестр.Register(new RecordPrintEventCommand(база));
         реестр.Register(new GetPrintDataCommand(база));
+        реестр.Register(new UploadTemplatePackageCommand(база, каталогПакетов));
+        реестр.Register(new DeleteTemplatePackageCommand(база, каталогПакетов));
         реестр.Register(new WriteEmailLogCommand(база));
         реестр.Register(new ImportMergeCommand(база));
         реестр.Register(new ClearDatabaseCommand(база));

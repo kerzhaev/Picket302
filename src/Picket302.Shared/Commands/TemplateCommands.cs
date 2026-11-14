@@ -67,3 +67,16 @@ public sealed record DeleteTemplatePackageRequest(string PackageId);
 /// </summary>
 /// <param name="PackageId">Идентификатор удалённого пакета.</param>
 public sealed record DeleteTemplatePackageResponse(string PackageId);
+
+/// <summary>
+/// Запрос загрузки пакета шаблона на сервер.
+/// </summary>
+/// <param name="Name">Наименование пакета.</param>
+/// <param name="ContentBase64">
+/// Содержимое .lbk-пакета в Base64: содержимое файла идёт в теле команды,
+/// а не в пути. На сервере содержимое проверяется (ZIP, число и пути записей,
+/// обязательный blank.xml) и записывается как новая версия пакета.
+/// </param>
+public sealed record UploadTemplatePackageRequest(
+    string Name,
+    string ContentBase64);

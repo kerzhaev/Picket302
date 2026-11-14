@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Picket302.Shared.Commands;
+using Picket302.Shared.Dtos;
 using Picket302.Shared.Protocol;
 
 namespace Picket302.App.Shared;
@@ -191,6 +193,83 @@ public sealed class SharedTransport : IDisposable
         var текст = await ОтправитьAsync(сообщение, cancellationToken).ConfigureAwait(false);
 
         return Разобрать<TОтвет>(текст);
+    }
+
+    /// <summary>
+    /// Скачивает содержимое версии пакета шаблона.
+    /// </summary>
+    /// <param name="packageId">Идентификатор пакета.</param>
+    /// <param name="version">Версия пакета.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Содержимое пакета.</returns>
+    public async Task<byte[]> СкачатьПакетШаблонаAsync(
+        string packageId,
+        long version,
+        CancellationToken cancellationToken = default)
+    {
+        using var сообщение = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{SharedProtocol.TemplatePackagesRoute}/{Uri.EscapeDataString(packageId)}/content?version={version}");
+
+        HttpResponseMessage ответ;
+
+        try
+        {
+            ответ = await _клиент.SendAsync(сообщение, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ошибка)
+        {
+            _журнал($"Общая база недоступна: {ошибка.Message}");
+
+            throw new SharedModeException(
+                "network-unreachable",
+                "Общая база недоступна. Проверьте, что серверная служба запущена и что компьютер "
+                + "с ней доступен по сети. Данные на этом компьютере не изменялись.");
+        }
+
+        using (ответ)
+        {
+            if (!ответ.IsSuccessStatusCode)
+            {
+                var текст = await ответ.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                throw ПреобразоватьОшибку(ответ.StatusCode, текст);
+            }
+
+            return await ответ.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Выгружает содержимое пакета шаблона на сервер.
+    /// </summary>
+    /// <param name="name">Наименование пакета.</param>
+    /// <param name="содержимое">Содержимое .lbk-файла.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Метаданные сохранённой версии.</returns>
+    public async Task<TemplatePackageDto> ВыгрузитьПакетШаблонаAsync(
+        string name,
+        byte[] содержимое,
+        CancellationToken cancellationToken = default)
+    {
+        var тело = JsonSerializer.Serialize(
+            new UploadTemplatePackageRequest(name, Convert.ToBase64String(содержимое)),
+            SharedJson.Options);
+
+        using var сообщение = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{SharedProtocol.RoutePrefix}/commands/templates.upload-package");
+
+        сообщение.Headers.Add(SharedProtocol.OperationIdHeader, Guid.NewGuid().ToString("D"));
+        сообщение.Content = new StringContent(тело, System.Text.Encoding.UTF8, "application/json");
+
+        var текст = await ОтправитьAsync(сообщение, cancellationToken).ConfigureAwait(false);
+
+        var разобранный = JsonSerializer.Deserialize<TemplatePackageDto>(текст, SharedJson.Options);
+
+        return разобранный ?? throw new SharedModeException(
+            SharedErrorCodes.Internal,
+            "Общая база вернула ответ, который не удалось прочитать.");
     }
 
     /// <summary>
