@@ -139,7 +139,9 @@ public sealed class FormClearDatabase : Form
     {
         try
         {
-            _численность = await _состав.СлужбаСидов.GetScopeCountsAsync().ConfigureAwait(true);
+            _численность = await _состав.Данные
+                .ПолучитьСчётчикиОчисткиAsync()
+                .ConfigureAwait(true);
         }
         catch (Exception исключение) when (исключение is SqliteException or InvalidOperationException or IOException)
         {
@@ -246,7 +248,9 @@ public sealed class FormClearDatabase : Form
         {
             foreach (var область in области)
             {
-                var результат = await _состав.СлужбаСидов.ClearDatabaseAsync(область).ConfigureAwait(true);
+                var результат = await _состав.Данные
+                    .ОчиститьБазуAsync(область)
+                    .ConfigureAwait(true);
 
                 if (результат.IsFailure)
                 {

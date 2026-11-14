@@ -180,7 +180,7 @@ public sealed class MoveMailToFolderCommand : SharedDbCommand<MoveMailToFolderRe
 /// Обновление адреса получателя в непечатанных письмах.
 /// </summary>
 public sealed class UpdateDraftRecipientAddressCommand
-    : SharedDbCommand<UpdateDraftRecipientAddressRequest, VersionedResponse>
+    : SharedDbCommand<UpdateDraftRecipientAddressRequest, UpdateDraftRecipientAddressResponse>
 {
     /// <summary>Имя команды в URL.</summary>
     public const string Имя = "mails.update-draft-address";
@@ -198,7 +198,7 @@ public sealed class UpdateDraftRecipientAddressCommand
     public override string Name => Имя;
 
     /// <inheritdoc />
-    protected override async Task<VersionedResponse> ВыполнитьВнутриAsync(
+    protected override async Task<UpdateDraftRecipientAddressResponse> ВыполнитьВнутриAsync(
         SharedDbScope область,
         SharedCommandContext контекст,
         UpdateDraftRecipientAddressRequest запрос,
@@ -231,7 +231,14 @@ public sealed class UpdateDraftRecipientAddressCommand
             .UpdateUnprintedLettersAddressAsync(запрос.CounterpartyId, адрес, cancellationToken)
             .ConfigureAwait(false);
 
-        return new VersionedResponse(запрос.CounterpartyId, обновлено);
+        // Ответ несёт новую версию контрагента, а не число обновлённых
+        // писем: клиент предъявляет версию при следующем изменении, и число
+        // писем в этом поле дало бы ложный конфликт.
+        var версия = await область.Версии
+            .ПолучитьВерсиюAsync(SharedEntityKind.Counterparty, запрос.CounterpartyId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new UpdateDraftRecipientAddressResponse(обновлено, версия);
     }
 }
 

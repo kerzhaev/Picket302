@@ -1,0 +1,383 @@
+using Picket302.Domain.Common;
+using Picket302.Domain.Entities;
+using Picket302.Domain.Repositories;
+using Picket302.Printing;
+using Picket302.Shared.Commands;
+using Picket302.Shared.Dtos;
+using Picket302.Shared.Mapping;
+
+namespace Picket302.App.Shared;
+
+/// <summary>
+/// Шаблоны печати в общей базе.
+/// </summary>
+public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
+{
+    private readonly SharedTransport _транспорт;
+
+    /// <summary>
+    /// Создаёт адаптер шаблонов печати.
+    /// </summary>
+    /// <param name="транспорт">Транспорт клиента совместного режима.</param>
+    public RemotePrintTemplateRepository(SharedTransport транспорт)
+    {
+        ArgumentNullException.ThrowIfNull(транспорт);
+
+        _транспорт = транспорт;
+    }
+
+    /// <inheritdoc />
+    public async Task<long> AddAsync(PrintTemplate template, CancellationToken cancellationToken = default)
+    {
+        var ответ = await _транспорт
+            .ВыполнитьКомандуAsync<SavePrintTemplateRequest, PrintTemplateDto>(
+                "templates.save",
+                new SavePrintTemplateRequest(
+                    SharedMapping.КШаблону(template, template.Version, null),
+                    template.Version),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return ответ.Id;
+    }
+
+    /// <inheritdoc />
+    public async Task<PrintTemplate?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var шаблоны = await GetAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return шаблоны.FirstOrDefault(шаблон => шаблон.Id == id);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PrintTemplate>> GetAllAsync(
+        string? kind = null,
+        CancellationToken cancellationToken = default)
+    {
+        var шаблоны = await _транспорт
+            .ВыполнитьЗапросAsync<PrintTemplateDto[]>("/api/v1/queries/templates", cancellationToken)
+            .ConfigureAwait(false);
+
+        return шаблоны
+            .Where(шаблон => kind is null || string.Equals(шаблон.Kind, kind, StringComparison.Ordinal))
+            .Select(шаблон => new PrintTemplate
+            {
+                Id = шаблон.Id,
+                Name = шаблон.Name,
+                Kind = шаблон.Kind,
+                Format = шаблон.Format,
+                WidthMm = шаблон.WidthMm,
+                HeightMm = шаблон.HeightMm,
+                Orientation = шаблон.Orientation,
+                IsBuiltin = шаблон.IsBuiltin,
+                Country = шаблон.Country,
+                Version = шаблон.Version,
+            })
+            .ToArray();
+    }
+
+    /// <inheritdoc />
+    public async Task<int> UpdateAsync(PrintTemplate template, CancellationToken cancellationToken = default)
+    {
+        await _транспорт
+            .ВыполнитьКомандуAsync<SavePrintTemplateRequest, PrintTemplateDto>(
+                "templates.save",
+                new SavePrintTemplateRequest(
+                    SharedMapping.КШаблону(template, template.Version, null),
+                    template.Version),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return 1;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var шаблоны = await GetAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var шаблон = шаблоны.FirstOrDefault(запись => запись.Id == id);
+
+        if (шаблон is null)
+        {
+            return false;
+        }
+
+        await _транспорт
+            .ВыполнитьКомандуAsync<DeletePrintTemplateRequest, VersionedResponse>(
+                "templates.delete",
+                new DeletePrintTemplateRequest(id, шаблон.Version),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return true;
+    }
+}
+
+/// <summary>
+/// Поля бланка в общей базе.
+/// </summary>
+public sealed class RemoteBlankFieldRepository : IBlankFieldRepository
+{
+    private readonly SharedTransport _транспорт;
+
+    /// <summary>
+    /// Создаёт адаптер полей бланка.
+    /// </summary>
+    /// <param name="транспорт">Транспорт клиента совместного режима.</param>
+    public RemoteBlankFieldRepository(SharedTransport транспорт)
+    {
+        ArgumentNullException.ThrowIfNull(транспорт);
+
+        _транспорт = транспорт;
+    }
+
+    /// <inheritdoc />
+    public async Task<long> AddAsync(BlankField field, CancellationToken cancellationToken = default)
+    {
+        var ответ = await _транспорт
+            .ВыполнитьКомандуAsync<SaveBlankFieldRequest, BlankFieldDto>(
+                "template-fields.save",
+                new SaveBlankFieldRequest(
+                    SharedMapping.КПолюБланка(field, field.Version),
+                    field.Version),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return ответ.Id;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<BlankField>> GetByTemplateAsync(
+        long templateId,
+        CancellationToken cancellationToken = default)
+    {
+        var поля = await _транспорт
+            .ВыполнитьЗапросAsync<BlankFieldDto[]>(
+                "/api/v1/queries/template-fields?templateId=" + templateId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return поля
+            .Select(поле => new BlankField
+            {
+                Id = поле.Id,
+                TemplateId = поле.TemplateId,
+                Name = поле.Name,
+                Kind = поле.Kind,
+                Page = поле.Page,
+                XMm = поле.XMm,
+                YMm = поле.YMm,
+                LengthMm = поле.LengthMm,
+                HeightMm = поле.HeightMm,
+                FontName = поле.FontName,
+                FontHeightPt = поле.FontHeightPt,
+                FontHeightMinPt = поле.FontHeightMinPt,
+                FontHeightMaxPt = поле.FontHeightMaxPt,
+                IsBold = поле.IsBold,
+                IsItalic = поле.IsItalic,
+                ColorRgb = поле.ColorRgb,
+                Align = поле.Align,
+                MaxChars = поле.MaxChars,
+                IsVisible = поле.IsVisible,
+                IsPrintable = поле.IsPrintable,
+                ZoneRole = поле.ZoneRole,
+                ClipartId = поле.ClipartId,
+                Version = поле.Version,
+            })
+            .ToArray();
+    }
+
+    /// <inheritdoc />
+    public async Task<int> UpdateAsync(BlankField field, CancellationToken cancellationToken = default)
+    {
+        await _транспорт
+            .ВыполнитьКомандуAsync<SaveBlankFieldRequest, BlankFieldDto>(
+                "template-fields.save",
+                new SaveBlankFieldRequest(
+                    SharedMapping.КПолюБланка(field, field.Version),
+                    field.Version),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return 1;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var поля = await _транспорт
+            .ВыполнитьЗапросAsync<BlankFieldDto[]>("/api/v1/queries/template-fields?templateId=0", cancellationToken)
+            .ConfigureAwait(false);
+
+        var поле = поля.FirstOrDefault(запись => запись.Id == id);
+
+        if (поле is null)
+        {
+            return false;
+        }
+
+        await _транспорт
+            .ВыполнитьКомандуAsync<DeleteBlankFieldRequest, VersionedResponse>(
+                "template-fields.delete",
+                new DeleteBlankFieldRequest(id, поле.Version),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return true;
+    }
+}
+
+/// <summary>
+/// Реестр печатных сессий в общей базе.
+/// </summary>
+public sealed class RemotePrintJobRepository : IPrintJobRepository
+{
+    private readonly SharedTransport _транспорт;
+
+    /// <summary>
+    /// Создаёт адаптер реестра печатных сессий.
+    /// </summary>
+    /// <param name="транспорт">Транспорт клиента совместного режима.</param>
+    public RemotePrintJobRepository(SharedTransport транспорт)
+    {
+        ArgumentNullException.ThrowIfNull(транспорт);
+
+        _транспорт = транспорт;
+    }
+
+    /// <inheritdoc />
+    public async Task<long> AddAsync(PrintJob printJob, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(printJob);
+
+        // Сессия печати создаётся на сервере вместе с печатным событием:
+        // запись реестра и запись журнала печати должны описывать одно и то же
+        // событие на одном рабочем месте.
+        var ответ = await _транспорт
+            .ВыполнитьКомандуAsync<RecordPrintEventRequest, PrintEventResponse>(
+                "print.record-event",
+                new RecordPrintEventRequest(
+                    Array.Empty<long>(),
+                    printJob.PrinterName,
+                    printJob.Status == "SUCCESS" ? PrintEventOutcome.Spooled : PrintEventOutcome.Error,
+                    printJob.PrinterName,
+                    printJob.PaperSizeName,
+                    printJob.Copies,
+                    printJob.PrintMode,
+                    printJob.ErrorText),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return ответ.PrintJobId ?? 0;
+    }
+
+    /// <inheritdoc />
+    public async Task<PrintJob?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var страница = await _транспорт
+            .ВыполнитьЗапросAsync<PageDto<PrintJobDto>>(
+                "/api/v1/queries/print-jobs?offset=0&limit=200",
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var найденный = страница.Items.FirstOrDefault(сессия => сессия.Id == id);
+
+        if (найденный is null)
+        {
+            return null;
+        }
+
+        return new PrintJob(
+            найденный.Id,
+            найденный.CreatedAt,
+            найденный.TemplateId,
+            найденный.PrinterName,
+            найденный.PaperSizeName,
+            найденный.PaperWidthMm,
+            найденный.PaperHeightMm,
+            найденный.FontInfo,
+            найденный.Copies,
+            найденный.PrintMode,
+            найденный.Status,
+            найденный.ErrorText,
+            null);
+    }
+
+    /// <inheritdoc />
+    public async Task<Page<PrintJob>> GetPagedAsync(
+        PageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var нормализованный = request.Normalized();
+
+        var страница = await _транспорт
+            .ВыполнитьЗапросAsync<PageDto<PrintJobDto>>(
+                "/api/v1/queries/print-jobs?offset=" + нормализованный.Offset
+                + "&limit=" + нормализованный.Limit,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return new Page<PrintJob>(
+            страница.Items
+                .Select(сессия => new PrintJob(
+                    сессия.Id,
+                    сессия.CreatedAt,
+                    сессия.TemplateId,
+                    сессия.PrinterName,
+                    сессия.PaperSizeName,
+                    сессия.PaperWidthMm,
+                    сессия.PaperHeightMm,
+                    сессия.FontInfo,
+                    сессия.Copies,
+                    сессия.PrintMode,
+                    сессия.Status,
+                    сессия.ErrorText,
+                    null))
+                .ToArray(),
+            страница.Offset,
+            страница.Limit,
+            страница.TotalCount);
+    }
+}
+
+/// <summary>
+/// Данные отправлений для печати из общей базы.
+/// </summary>
+public sealed class RemotePrintDataSource : IPrintDataSource
+{
+    private readonly SharedTransport _транспорт;
+
+    /// <summary>
+    /// Создаёт адаптер данных печати.
+    /// </summary>
+    /// <param name="транспорт">Транспорт клиента совместного режима.</param>
+    public RemotePrintDataSource(SharedTransport транспорт)
+    {
+        ArgumentNullException.ThrowIfNull(транспорт);
+
+        _транспорт = транспорт;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PrintableItem>> GetItemsAsync(
+        IReadOnlyList<long> mailIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ответ = await _транспорт
+            .ВыполнитьКомандуAsync<GetPrintDataRequest, GetPrintDataResponse>(
+                "print.get-data",
+                new GetPrintDataRequest(mailIds),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return ответ.Items
+            .Select(элемент => new PrintableItem
+            {
+                Id = элемент.Id,
+                Values = элемент.Values,
+                LogoBytes = элемент.LogoBytes,
+            })
+            .ToArray();
+    }
+}

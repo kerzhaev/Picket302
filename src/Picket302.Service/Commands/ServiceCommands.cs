@@ -294,6 +294,58 @@ public sealed class DeleteBlankFieldCommand : SharedDbCommand<DeleteBlankFieldRe
 }
 
 /// <summary>
+/// Данные отправлений для печати: значения полей бланка собираются службой из
+/// общей базы.
+/// </summary>
+public sealed class GetPrintDataCommand
+    : SharedDbCommand<GetPrintDataRequest, GetPrintDataResponse>
+{
+    /// <summary>Имя команды в URL.</summary>
+    public const string Имя = "print.get-data";
+
+    /// <summary>
+    /// Создаёт команду.
+    /// </summary>
+    /// <param name="база">Фабрика сессий базы данных.</param>
+    public GetPrintDataCommand(ServerDatabase база)
+        : base(база)
+    {
+    }
+
+    /// <inheritdoc />
+    public override string Name => Имя;
+
+    /// <inheritdoc />
+    public override bool IsSafeToRetry => true;
+
+    /// <inheritdoc />
+    protected override async Task<GetPrintDataResponse> ВыполнитьВнутриAsync(
+        SharedDbScope область,
+        SharedCommandContext контекст,
+        GetPrintDataRequest запрос,
+        CancellationToken cancellationToken)
+    {
+        if (запрос.MailIds is null || запрос.MailIds.Count == 0)
+        {
+            throw new SharedValidationException("Не выбрано ни одного отправления.");
+        }
+
+        var элементы = await область.Данные.ДанныеПечати
+            .GetItemsAsync(запрос.MailIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        var данные = элементы
+            .Select(элемент => new PrintableItemDto(
+                элемент.Id,
+                элемент.Values,
+                элемент.LogoBytes))
+            .ToArray();
+
+        return new GetPrintDataResponse(данные);
+    }
+}
+
+/// <summary>
 /// Фиксация печатного события в общем журнале.
 /// </summary>
 /// <remarks>

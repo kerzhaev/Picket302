@@ -49,7 +49,7 @@ public sealed class ИзолированныйПрофильOwnershipTests
         // База удалена вместе с профилем: обращение даёт SqliteException,
         // а не ObjectDisposedException — состав неработоспособен в любом случае.
         await Assert.ThrowsAnyAsync<Exception>(
-            async () => await состав.Контрагенты.GetSendersAsync(CancellationToken.None));
+            async () => await состав.СоставДанных!.Контрагенты.GetSendersAsync(CancellationToken.None));
     }
 
     /// <summary>

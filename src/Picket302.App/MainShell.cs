@@ -2,6 +2,7 @@
 using Microsoft.Data.Sqlite;
 using System.Globalization;
 using System.Windows.Forms;
+using Picket302.App.Shared;
 using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
 using Picket302.Application.Services;
@@ -700,6 +701,55 @@ public sealed class MainShell : Form
         }
         else if (_состав is null)
         {
+            if (пути is null)
+            {
+                // Производственный запуск: сначала проверяется профиль
+                // подключения к общей базе. Сопряжённое устройство обязано
+                // подключиться к службе; недоступный сервер не подменяется
+                // местной базой — оператор решает явно.
+                var профильКлиента = new SharedClientProfile(
+                    Picket302ProfilePaths.ПоУмолчанию().DataDirectory);
+
+                var реквизиты = профильКлиента.Прочитать();
+                var секрет = профильКлиента.ПрочитатьСекрет();
+
+                if (реквизиты.Готовы && секрет is not null)
+                {
+                    try
+                    {
+                        _состав = await AppServices
+                            .СоздатьОбщийAsync(
+                                Picket302ProfilePaths.ПоУмолчанию(),
+                                реквизиты,
+                                секрет,
+                                cancellationToken)
+                            .ConfigureAwait(true);
+
+                        _составСозданоВнутри = true;
+
+                        await ИнициализироватьОбщийСоставAsync(_состав, cancellationToken)
+                            .ConfigureAwait(true);
+
+                        _инициализировано = true;
+                        ОбновитьСтрокуСостояния(_состав);
+                        ОбновитьИндикаторЛицензии(_состав);
+
+                        return;
+                    }
+                    catch (SharedModeException ошибка)
+                    {
+                        if (!ПодтвердитьЛокальныйЗапуск(ошибка.Message))
+                        {
+                            throw;
+                        }
+
+                        // Явное решение оператора продолжить локально: это не
+                        // автоматический переход, а осознанный выбор после
+                        // сообщения о недоступности общей базы.
+                    }
+                }
+            }
+
             _состав = пути is null
                 ? await AppServices
                     .СоздатьAsync(путьБазы, true, cancellationToken)
@@ -776,6 +826,55 @@ public sealed class MainShell : Form
     }
 
     /// <summary>
+    /// Обновляет оформление и загружает данные после подключения к общей базе.
+    /// Демо-наполнение в общем режиме не запускается: общая база наполняется
+    /// только решением оператора.
+    /// </summary>
+    private async Task ИнициализироватьОбщийСоставAsync(
+        AppServices состав,
+        CancellationToken cancellationToken)
+    {
+        _оформление = await состав.НастройкиОтображения.LoadAppearanceAsync(cancellationToken)
+            .ConfigureAwait(true);
+
+        GridAppearanceManager.Применить(_таблицаОтправителей, _оформление);
+        GridAppearanceManager.Применить(_таблицаПолучателей, _оформление);
+        GridAppearanceManager.Применить(_таблицаБланков, _оформление);
+        GridAppearanceManager.Применить(_таблицаРассылок, _оформление);
+        GridAppearanceManager.Применить(_таблицаОтправленных, _оформление);
+        ПрименитьАкцентыТаблиц();
+
+        await ЗагрузитьОтправителейAsync(состав, cancellationToken).ConfigureAwait(true);
+        await ЗагрузитьПолучателейAsync(состав, cancellationToken).ConfigureAwait(true);
+        await ЗагрузитьКатегорииAsync(состав, cancellationToken).ConfigureAwait(true);
+        await ЗагрузитьБланкиAsync(состав, cancellationToken).ConfigureAwait(true);
+        await ЗагрузитьРассылкиAsync(состав, cancellationToken).ConfigureAwait(true);
+        await ЗагрузитьОтправленныеAsync(состав, cancellationToken).ConfigureAwait(true);
+        await ЗагрузитьПапкиAsync(состав, cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Спрашивает оператора, продолжать ли локально, когда общая база
+    /// недоступна. Автоматического перехода нет: решение принимает человек.
+    /// </summary>
+    /// <param name="сообщение">Сообщение о недоступности.</param>
+    /// <returns><see langword="true"/>, если оператор выбрал локальный запуск.</returns>
+    private bool ПодтвердитьЛокальныйЗапуск(string сообщение)
+    {
+        var ответ = MessageBox.Show(
+            this,
+            сообщение + Environment.NewLine + Environment.NewLine
+            + "Продолжить работу с локальной базой на этом компьютере? "
+            + "Общие данные при этом не видны и не изменяются.",
+            "Общая база недоступна",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        return ответ == DialogResult.Yes;
+    }
+
+    /// <summary>
     /// Строит главное меню окна (ТЗ §7.1: «Файл Правка Вид Сервис Печать
     /// Рассылки Справка»).
     /// </summary>
@@ -832,6 +931,7 @@ public sealed class MainShell : Form
         данные.DropDownItems.Add("Загрузить данные из старой версии…", null, (_, _) => ОткрытьЗагрузкуИзСтаройВерсии());
 
         var сервис = new ToolStripMenuItem("Сервис");
+        сервис.DropDownItems.Add("Общая база…", null, (_, _) => ОткрытьПодключениеКОбщейБазе());
         сервис.DropDownItems.Add("Демо-база", null, (_, _) => НаполнитьДемоБазу());
         сервис.DropDownItems.Add("Восстановить удалённые записи", null, (_, _) => ВосстановитьУдалённые());
         сервис.DropDownItems.Add("Создать отправителя…", null, (_, _) => СоздатьОтправителя());
@@ -1748,16 +1848,18 @@ public sealed class MainShell : Form
 
         try
         {
-            var письмо = await _состав.Письма.GetByIdAsync(идентификаторПисьма).ConfigureAwait(true);
+            var письмо = await _состав.Данные
+                .ПолучитьПисьмоAsync(идентификаторПисьма)
+                .ConfigureAwait(true);
 
             if (письмо is null)
             {
                 return;
             }
 
-            письмо.FolderId = идентификаторПапки;
-
-            await _состав.Письма.UpdateAsync(письмо).ConfigureAwait(true);
+            await _состав.Данные
+                .ПеренестиПисьмоAsync(письмо, идентификаторПапки)
+                .ConfigureAwait(true);
 
             await ЗагрузитьПапкиAsync(_состав, CancellationToken.None).ConfigureAwait(true);
             await ЗагрузитьОтправленныеAsync(_состав, CancellationToken.None).ConfigureAwait(true);
@@ -1778,11 +1880,11 @@ public sealed class MainShell : Form
     /// </summary>
     private async Task ЗагрузитьПапкиAsync(AppServices состав, CancellationToken cancellationToken)
     {
-        var папки = await состав.Папки.GetAllAsync(cancellationToken).ConfigureAwait(true);
+        var папки = await состав.Данные.ПолучитьПапкиAsync(cancellationToken).ConfigureAwait(true);
 
         // Счётчики агрегатом по всем папкам (F-E21): выборка первой страницы
         // давала неполные счётчики при письмах глубже 200 записей.
-        var счётчики = await состав.Письма
+        var счётчики = await состав.Данные
             .ПолучитьСчётчикиПоПапкамAsync(cancellationToken)
             .ConfigureAwait(true);
 
@@ -2132,8 +2234,8 @@ public sealed class MainShell : Form
 
         while (true)
         {
-            var страница = await _состав.Контрагенты
-                .GetPagedAsync(new PageRequest(смещение, PageRequest.MaxLimit))
+            var страница = await _состав.Данные
+                .ПолучитьКонтрагентовAsync(new PageRequest(смещение, PageRequest.MaxLimit))
                 .ConfigureAwait(true);
 
             контрагенты.AddRange(страница.Items);
@@ -2233,7 +2335,25 @@ public sealed class MainShell : Form
             return;
         }
 
-        using var форма = new FormLegacyUpgradeWizard(new LegacyUpgradeImporter(_состав.Сессия));
+        if (_состав.ОбщийРежим)
+        {
+            // Общие данные переносятся первичным импортом на сервере
+            // (решение Р11 SOURCE-MAP): мастер пишет в живую локальную базу,
+            // которой в общем режиме нет.
+            MessageBox.Show(
+                this,
+                "Перенос данных из предыдущей версии выполняется при первичной настройке "
+                + "серверной части. В подключённом режиме общей базы мастер недоступен.",
+                "Переход с предыдущей версии",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        using var форма = new FormLegacyUpgradeWizard(
+            new LegacyUpgradeImporter(_состав.ЛокальнаяСессия!));
+
         форма.ShowDialog(this);
     }
 
@@ -2491,8 +2611,9 @@ public sealed class MainShell : Form
         var настройки = опции.Load();
         var прокси = опции.LoadProxy();
 
-        var писатель = new SqliteEmailLogWriter(_состав.Сессия);
-        var журнал = new EmailLogWriterAdapter(писатель);
+        var журнал = await _состав.Данные
+            .ПолучитьПисателяEmailAsync()
+            .ConfigureAwait(true);
 
         var клиент = new SmtpClientFacade(настройки, прокси, опции);
 
@@ -2528,8 +2649,8 @@ public sealed class MainShell : Form
 
         foreach (var идентификатор in _выбранныеПолучатели)
         {
-            var контрагент = await _состав.Контрагенты
-                .GetByIdAsync(идентификатор)
+            var контрагент = await _состав.Данные
+                .ПолучитьКонтрагентаAsync(идентификатор)
                 .ConfigureAwait(true);
 
             if (контрагент is null)
@@ -2564,8 +2685,8 @@ public sealed class MainShell : Form
             return string.Empty;
         }
 
-        var получатель = await _состав.Контрагенты
-            .GetByIdAsync(_выбранныеПолучатели[0])
+        var получатель = await _состав.Данные
+            .ПолучитьКонтрагентаAsync(_выбранныеПолучатели[0])
             .ConfigureAwait(true);
 
         return получатель?.Inn ?? string.Empty;
@@ -2576,7 +2697,7 @@ public sealed class MainShell : Form
     /// (ТЗ §8.5, функция 72: «Импорт контрагентов из выгрузок 1С:Предприятие
     /// 7.7 и 8.x»).
     /// </summary>
-    private void ИмпортИз1С()
+    private async void ИмпортИз1С()
     {
         if (_состав is null)
         {
@@ -2600,13 +2721,14 @@ public sealed class MainShell : Form
             var разбор = new Picket302.Application.Services.OneCImportParser();
             var пакет = разбор.ImportFromOneC(диалог.FileName, версия);
 
-            var сервис = new Picket302.Application.Services.ImportMergeService(_состав.Контрагенты);
-            var отчёт = сервис.MergeImported(пакет.Batch, MergePolicy.SkipExisting);
+            var отчёт = await _состав.Данные
+                .СлитьИмпортAsync(пакет.Batch, MergePolicy.SkipExisting)
+                .ConfigureAwait(true);
 
             var сообщение =
                 $"Прочитано записей: {пакет.RecordCount}.\n" +
-                $"Создано: {отчёт.Created}, обновлено: {отчёт.Updated}, " +
-                $"пропущено: {отчёт.Skipped}, конфликтов: {отчёт.Conflicts}.";
+                $"Создано: {отчёт.Создано}, обновлено: {отчёт.Обновлено}, " +
+                $"пропущено: {отчёт.Пропущено}, конфликтов: {отчёт.Конфликты}.";
 
             if (пакет.AllWarnings.Count > 0)
             {
@@ -2660,7 +2782,27 @@ public sealed class MainShell : Form
             return;
         }
 
-        var контроллер = new ImportWizardController(_состав.Контрагенты, _состав.Группы);
+        if (_состав.ОбщийРежим)
+        {
+            MessageBox.Show(
+                this,
+                "Мастер импорта в режиме общей базы временно недоступен: проверка записей "
+                + "оператором выполняется на рабочем месте, а слияние — на сервере, и этот "
+                + "путь ещё не соединён. Данные не изменены.",
+                "Мастер импорта",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        var контроллер = new ImportWizardController(
+            _состав.ЛокальнаяСессия is null
+                ? null
+                : new Picket302.Infrastructure.Repositories.CounterpartyRepository(_состав.ЛокальнаяСессия),
+            _состав.ЛокальнаяСессия is null
+                ? null
+                : new Picket302.Infrastructure.Repositories.GroupRepository(_состав.ЛокальнаяСессия));
 
         using var форма = new FormImportWizard(контроллер);
 
@@ -2680,7 +2822,22 @@ public sealed class MainShell : Form
             return;
         }
 
-        using var форма = new FormExternalDbImport(_состав.Контрагенты);
+        if (_состав.ОбщийРежим)
+        {
+            MessageBox.Show(
+                this,
+                "Импорт из внешней базы данных в режиме общей базы временно недоступен: "
+                + "слияние записей выполняется на сервере, и этот путь ещё не соединён. "
+                + "Данные не изменены.",
+                "Импорт из внешней базы",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        using var форма = new FormExternalDbImport(
+            new Picket302.Infrastructure.Repositories.CounterpartyRepository(_состав.ЛокальнаяСессия!));
 
         if (форма.ShowDialog(this) == DialogResult.OK)
         {
@@ -2749,7 +2906,8 @@ public sealed class MainShell : Form
     /// </summary>
     private async Task ЗагрузитьОтправителейAsync(AppServices состав, CancellationToken cancellationToken)
     {
-        var отправители = await состав.Контрагенты.GetSendersAsync(cancellationToken)
+        var отправители = await состав.Данные
+            .ПолучитьОтправителейAsync(cancellationToken)
             .ConfigureAwait(true);
 
         _таблицаОтправителей.Rows.Clear();
@@ -2802,8 +2960,11 @@ public sealed class MainShell : Form
             GroupId: _поиск.Группа,
             Criteria: ТекущиеКритерииФильтра());
 
-        var страница = await состав.Контрагенты
-            .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 500), фильтр, cancellationToken)
+        var страница = await состав.Данные
+            .ПолучитьКонтрагентовAsync(
+                new Picket302.Domain.Common.PageRequest(0, 500),
+                фильтр,
+                cancellationToken)
             .ConfigureAwait(true);
 
         _таблицаПолучателей.Rows.Clear();
@@ -2813,7 +2974,7 @@ public sealed class MainShell : Form
         // должен быть переснят по новой загрузке (ревью S07 F-R2-2).
         _группировкаПолучателей.СброситьСнимокПорядка();
 
-        var группы = await состав.Группы.GetAllAsync(cancellationToken).ConfigureAwait(true);
+        var группы = await состав.Данные.ПолучитьГруппыAsync(cancellationToken).ConfigureAwait(true);
 
         foreach (var получатель in страница.Items)
         {
@@ -2864,7 +3025,8 @@ public sealed class MainShell : Form
     {
         _деревоКатегорий.Nodes.Clear();
 
-        var категории = await состав.СлужбаКатегорий.GetTreeAsync(cancellationToken)
+        var категории = await состав.Данные
+            .ПолучитьДеревоКатегорийAsync(cancellationToken)
             .ConfigureAwait(true);
 
         foreach (var категория in категории.Where(сущ => сущ.ParentId is null))
@@ -2918,8 +3080,9 @@ public sealed class MainShell : Form
     /// </summary>
     private async Task ЗагрузитьБланкиAsync(AppServices состав, CancellationToken cancellationToken)
     {
-        var шаблоны = await new Picket302.Infrastructure.Repositories.PrintTemplateRepository(
-            состав.Сессия).GetAllAsync(cancellationToken: cancellationToken).ConfigureAwait(true);
+        var шаблоны = await состав.Данные
+            .ПолучитьШаблоныAsync(null, cancellationToken)
+            .ConfigureAwait(true);
 
         _таблицаБланков.Rows.Clear();
         _таблицаБланков.Columns.Clear();
@@ -2943,7 +3106,8 @@ public sealed class MainShell : Form
     /// </summary>
     private async Task ЗагрузитьРассылкиAsync(AppServices состав, CancellationToken cancellationToken)
     {
-        var рассылки = await состав.СлужбаРассылок.ListDistributionsAsync(cancellationToken: cancellationToken)
+        var рассылки = await состав.Данные
+            .ПолучитьРассылкиAsync(null, cancellationToken)
             .ConfigureAwait(true);
 
         _таблицаРассылок.Rows.Clear();
@@ -2974,8 +3138,11 @@ public sealed class MainShell : Form
     /// </summary>
     private async Task ЗагрузитьОтправленныеAsync(AppServices состав, CancellationToken cancellationToken)
     {
-        var страница = await состав.Письма
-            .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 500), cancellationToken: cancellationToken)
+        var страница = await состав.Данные
+            .ПолучитьПисьмаAsync(
+                new Picket302.Domain.Common.PageRequest(0, 500),
+                null,
+                cancellationToken)
             .ConfigureAwait(true);
 
         _таблицаОтправленных.Rows.Clear();
@@ -3065,8 +3232,8 @@ public sealed class MainShell : Form
 
         try
         {
-            var страница = await состав.Письма
-                .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 500))
+            var страница = await состав.Данные
+                .ПолучитьПисьмаAsync(new Picket302.Domain.Common.PageRequest(0, 500))
                 .ConfigureAwait(true);
 
             var выведено = 0;
@@ -3263,7 +3430,9 @@ public sealed class MainShell : Form
             return;
         }
 
-        var результат = await _состав.СлужбаКонтрагентов.SaveAsync(форма.Результат).ConfigureAwait(true);
+        var результат = await _состав.Данные
+            .СохранитьКонтрагентаAsync(форма.Результат)
+            .ConfigureAwait(true);
 
         if (результат.IsFailure)
         {
@@ -3273,9 +3442,15 @@ public sealed class MainShell : Form
 
         foreach (var (имя, значение) in форма.ПользовательскиеПоля)
         {
-            await _состав.СлужбаПолей
-                .SetCustomValueAsync(результат.Value.Id, имя, значение)
+            var запись = await _состав.Данные
+                .ЗаписатьПолеКонтрагентаAsync(результат.Value.Id, имя, значение)
                 .ConfigureAwait(true);
+
+            if (запись.IsFailure)
+            {
+                MessageBox.Show(this, запись.Error!, "Адресная книга", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
         }
 
         await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
@@ -3291,8 +3466,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var контрагент = await _состав.Контрагенты
-            .GetByIdAsync(_выбранныеПолучатели[0])
+        var контрагент = await _состав.Данные
+            .ПолучитьКонтрагентаAsync(_выбранныеПолучатели[0])
             .ConfigureAwait(true);
 
         if (контрагент is null)
@@ -3307,7 +3482,9 @@ public sealed class MainShell : Form
             return;
         }
 
-        var результат = await _состав.СлужбаКонтрагентов.SaveAsync(форма.Результат).ConfigureAwait(true);
+        var результат = await _состав.Данные
+            .СохранитьКонтрагентаAsync(форма.Результат)
+            .ConfigureAwait(true);
 
         if (результат.IsFailure)
         {
@@ -3346,7 +3523,7 @@ public sealed class MainShell : Form
             BankName = форма.Результат.BankName,
         };
 
-        var результат = await _состав.СлужбаАгентов.CreateAgentAsync(агент).ConfigureAwait(true);
+        var результат = await _состав.Данные.СоздатьОтправителяAsync(агент).ConfigureAwait(true);
 
         if (результат.IsFailure)
         {
@@ -3369,8 +3546,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var отправитель = await _состав.Контрагенты
-            .GetByIdAsync(_выбранныеОтправители[0])
+        var отправитель = await _состав.Данные
+            .ПолучитьКонтрагентаAsync(_выбранныеОтправители[0])
             .ConfigureAwait(true);
 
         if (отправитель is null)
@@ -3385,7 +3562,9 @@ public sealed class MainShell : Form
             return;
         }
 
-        var результат = await _состав.СлужбаКонтрагентов.SaveAsync(форма.Результат).ConfigureAwait(true);
+        var результат = await _состав.Данные
+            .СохранитьКонтрагентаAsync(форма.Результат)
+            .ConfigureAwait(true);
 
         if (результат.IsFailure)
         {
@@ -3418,8 +3597,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var результат = await _состав.СлужбаМенеджера
-            .FastDeleteMarkAsync(_выбранныеПолучатели)
+        var результат = await _состав.Данные
+            .ИзменитьСостояниеПоИдентификаторамAsync(_выбранныеПолучатели, false)
             .ConfigureAwait(true);
 
         if (результат.IsFailure)
@@ -3458,12 +3637,28 @@ public sealed class MainShell : Form
 
         var удалено = 0;
 
-        foreach (var идентификатор in _выбранныеПолучатели)
+        try
         {
-            if (await _состав.Контрагенты.DeleteAsync(идентификатор).ConfigureAwait(true))
+            foreach (var идентификатор in _выбранныеПолучатели)
             {
-                удалено++;
+                if (await _состав.Данные
+                    .ОкончательноУдалитьКонтрагентаAsync(идентификатор)
+                    .ConfigureAwait(true))
+                {
+                    удалено++;
+                }
             }
+        }
+        catch (SharedModeException ошибка)
+        {
+            MessageBox.Show(
+                this,
+                ошибка.Message,
+                "Адресная книга",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
         }
 
         MessageBox.Show(
@@ -3486,8 +3681,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var страница = await _состав.Контрагенты
-            .GetPagedAsync(
+        var страница = await _состав.Данные
+            .ПолучитьКонтрагентовAsync(
                 new Picket302.Domain.Common.PageRequest(0, 500),
                 new Picket302.Domain.Repositories.CounterpartyFilter(IncludeDeleted: true))
             .ConfigureAwait(true);
@@ -3500,9 +3695,14 @@ public sealed class MainShell : Form
             return;
         }
 
-        foreach (var запись in удалённые)
+        var итог = await _состав.Данные
+            .ИзменитьСостояниеКонтрагентовAsync(удалённые, true)
+            .ConfigureAwait(true);
+
+        if (итог.IsFailure)
         {
-            await _состав.Контрагенты.RestoreAsync(запись.Id).ConfigureAwait(true);
+            MessageBox.Show(this, итог.Error!, "Сервис", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
         }
 
         await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
@@ -3521,7 +3721,9 @@ public sealed class MainShell : Form
 
         foreach (var идентификатор in _выбранныеПолучатели)
         {
-            var контрагент = await _состав.Контрагенты.GetByIdAsync(идентификатор).ConfigureAwait(true);
+            var контрагент = await _состав.Данные
+                .ПолучитьКонтрагентаAsync(идентификатор)
+                .ConfigureAwait(true);
 
             if (контрагент is null)
             {
@@ -3531,7 +3733,15 @@ public sealed class MainShell : Form
             контрагент.IsSender = true;
             контрагент.UpdatedAt = DateTime.UtcNow;
 
-            await _состав.Контрагенты.UpdateAsync(контрагент).ConfigureAwait(true);
+            var сохранение = await _состав.Данные
+                .СохранитьКонтрагентаAsync(контрагент)
+                .ConfigureAwait(true);
+
+            if (сохранение.IsFailure)
+            {
+                MessageBox.Show(this, сохранение.Error!, "Адресная книга", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
         }
 
         await ЗагрузитьОтправителейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
@@ -3551,8 +3761,8 @@ public sealed class MainShell : Form
 
         try
         {
-            var исходная = await _состав.Контрагенты
-                .GetByIdAsync(_выбранныеПолучатели[0])
+            var исходная = await _состав.Данные
+                .ПолучитьКонтрагентаAsync(_выбранныеПолучатели[0])
                 .ConfigureAwait(true);
 
             if (исходная is null)
@@ -3561,8 +3771,8 @@ public sealed class MainShell : Form
             }
 
             var копия = КопироватьКонтрагента(исходная);
-            var результат = await _состав.СлужбаКонтрагентов
-                .SaveAsync(копия)
+            var результат = await _состав.Данные
+                .СохранитьКонтрагентаAsync(копия)
                 .ConfigureAwait(true);
 
             if (результат.IsFailure)
@@ -3693,7 +3903,7 @@ public sealed class MainShell : Form
             return;
         }
 
-        var категории = await _состав.СлужбаКатегорий.GetTreeAsync().ConfigureAwait(true);
+        var категории = await _состав.Данные.ПолучитьДеревоКатегорийAsync().ConfigureAwait(true);
 
         using var выбор = new Form();
         EnvelopeUiTheme.ОформитьОкно(выбор);
@@ -3749,9 +3959,15 @@ public sealed class MainShell : Form
 
         foreach (var идентификатор in _выбранныеПолучатели)
         {
-            await _состав.СлужбаКатегорий
-                .MoveCounterpartyAsync(идентификатор, категория.Id)
+            var перенос = await _состав.Данные
+                .ПеренестиКонтрагентаAsync(идентификатор, категория.Id)
                 .ConfigureAwait(true);
+
+            if (перенос.IsFailure)
+            {
+                MessageBox.Show(this, перенос.Error!, "Категории", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
         }
 
         await ЗагрузитьПолучателейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
@@ -3768,8 +3984,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var результат = await _состав.СлужбаРассылок
-            .CreateFromSelectionAsync(
+        var результат = await _состав.Данные
+            .СоздатьРассылкуИзВыборкиAsync(
                 _выбранныеПолучатели,
                 _состав.ТекущийОтправитель.CurrentSenderId,
                 "Рассылка")
@@ -3836,8 +4052,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var рассылка = await _состав.Рассылки
-            .GetByIdAsync(идентификатор.Value)
+        var рассылка = await _состав.Данные
+            .ПолучитьРассылкуAsync(идентификатор.Value)
             .ConfigureAwait(true);
 
         if (рассылка is null)
@@ -4025,8 +4241,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var результат = await _состав.СлужбаРассылок
-            .CloneForResendAsync(идентификатор.Value)
+        var результат = await _состав.Данные
+            .КлонироватьРассылкуAsync(идентификатор.Value)
             .ConfigureAwait(true);
 
         if (результат.IsFailure)
@@ -4035,14 +4251,14 @@ public sealed class MainShell : Form
             return;
         }
 
-        var текст = $"Создана копия рассылки «{результат.Value.Distribution.Name}». "
-            + $"Писем: {результат.Value.LettersCreated}.";
+        var текст = $"Создана копия рассылки «{результат.Value.Рассылка.Name}». "
+            + $"Писем: {результат.Value.СозданоПисем}.";
 
-        if (результат.Value.SkippedCounterparties.Count > 0)
+        if (результат.Value.Пропущено.Count > 0)
         {
             текст += Environment.NewLine
                 + "Пропущены удалённые контрагенты: "
-                + string.Join(", ", результат.Value.SkippedCounterparties) + ".";
+                + string.Join(", ", результат.Value.Пропущено) + ".";
         }
 
         MessageBox.Show(this, текст, "Рассылки", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -4102,8 +4318,8 @@ public sealed class MainShell : Form
 
         try
         {
-            var контрагент = await _состав.Контрагенты
-                .GetByIdAsync(идентификатор.Value)
+            var контрагент = await _состав.Данные
+                .ПолучитьКонтрагентаAsync(идентификатор.Value)
                 .ConfigureAwait(true);
 
             if (контрагент is null)
@@ -4119,7 +4335,15 @@ public sealed class MainShell : Form
 
             контрагент.Logo = диалог.ВыбранныйPng;
 
-            await _состав.Контрагенты.UpdateAsync(контрагент).ConfigureAwait(true);
+            var сохранение = await _состав.Данные
+                .СохранитьКонтрагентаAsync(контрагент)
+                .ConfigureAwait(true);
+
+            if (сохранение.IsFailure)
+            {
+                MessageBox.Show(this, сохранение.Error!, "Клипарт", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             _сЛоготипом.Checked = true;
             _состояниеПечати.Text = "Клипарт применён: логотип получателя обновлён.";
@@ -4163,8 +4387,8 @@ public sealed class MainShell : Form
 
         try
         {
-            var контрагент = await _состав.Контрагенты
-                .GetByIdAsync(идентификатор.Value)
+            var контрагент = await _состав.Данные
+                .ПолучитьКонтрагентаAsync(идентификатор.Value)
                 .ConfigureAwait(true);
 
             if (контрагент?.Logo is null || контрагент.Logo.Length == 0)
@@ -4180,7 +4404,15 @@ public sealed class MainShell : Form
 
             контрагент.Logo = null;
 
-            await _состав.Контрагенты.UpdateAsync(контрагент).ConfigureAwait(true);
+            var сохранение = await _состав.Данные
+                .СохранитьКонтрагентаAsync(контрагент)
+                .ConfigureAwait(true);
+
+            if (сохранение.IsFailure)
+            {
+                MessageBox.Show(this, сохранение.Error!, "Клипарт", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             _состояниеПечати.Text = "Логотип получателя удалён.";
         }
@@ -4250,9 +4482,17 @@ public sealed class MainShell : Form
 
         // ТЗ §8.1, функция 18: массовая правка требует предварительного
         // подтверждения, если затронуто больше порога (по умолчанию 10 записей).
-        var порог = await _состав.СлужбаПакетногоРедактирования
-            .GetConfirmationThresholdAsync()
+        var порогЗначение = await _состав.Параметры
+            .GetValueAsync(BatchEditService.ПорогПодтвержденияKey)
             .ConfigureAwait(true);
+
+        var порог = int.TryParse(
+            порогЗначение,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var разобранныйПорог) && разобранныйПорог >= 0
+            ? разобранныйПорог
+            : BatchEditService.ПорогПодтвержденияПоУмолчанию;
 
         if (BatchEditService.ТребуетсяПодтверждение(_выбранныеПолучатели.Count, порог))
         {
@@ -4269,8 +4509,8 @@ public sealed class MainShell : Form
             }
         }
 
-        var результат = await _состав.СлужбаПакетногоРедактирования
-            .BatchUpdateFieldAsync(_выбранныеПолучатели, поле!, значение.Text)
+        var результат = await _состав.Данные
+            .ИзменитьПолеПоИдентификаторамAsync(_выбранныеПолучатели, поле!, значение.Text)
             .ConfigureAwait(true);
 
         if (результат.IsFailure)
@@ -4824,8 +5064,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var контрагент = await _состав.Контрагенты
-            .GetByIdAsync(_выбранныеПолучатели[0])
+        var контрагент = await _состав.Данные
+            .ПолучитьКонтрагентаAsync(_выбранныеПолучатели[0])
             .ConfigureAwait(true);
 
         if (контрагент is null)
@@ -4853,10 +5093,6 @@ public sealed class MainShell : Form
             адрес,
             контрагент.IsVip);
 
-        письмо.OutgoingNumber = await _состав.СлужбаНумерации
-            .GenerateNextOutgoingNumberAsync()
-            .ConfigureAwait(true);
-
         // Карточка отправления: категория и вид уведомления выбираются
         // оператором до сохранения (ТЗ §8.1, функции 23 и 32).
         var параметры = ЗапроситьПараметрыОтправления();
@@ -4868,13 +5104,26 @@ public sealed class MainShell : Form
 
         ПрименитьПараметрыОтправления(письмо, параметры);
 
-        var результат = await _состав.СлужбаПисем.CreateAsync(письмо).ConfigureAwait(true);
+        var результат = await _состав.Данные.СоздатьПисьмоAsync(письмо).ConfigureAwait(true);
 
         if (результат.IsFailure)
         {
             MessageBox.Show(this, результат.Error!, "Печать", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+
+        // Номер выдаёт служба: два рабочих места не получают один номер.
+        var сНомером = await _состав.Данные
+            .ВыдатьНомерПисьмуAsync(результат.Value)
+            .ConfigureAwait(true);
+
+        if (сНомером.IsFailure)
+        {
+            MessageBox.Show(this, сНомером.Error!, "Печать", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        письмо = сНомером.Value;
 
         var итогПечати = await ВыполнитьПечатьAsync(new[] { письмо.Id }, сПредпросмотром: true)
             .ConfigureAwait(true);
@@ -4948,7 +5197,9 @@ public sealed class MainShell : Form
 
         foreach (var идентификатор in _выбранныеПолучатели)
         {
-            var контрагент = await _состав.Контрагенты.GetByIdAsync(идентификатор).ConfigureAwait(true);
+            var контрагент = await _состав.Данные
+                .ПолучитьКонтрагентаAsync(идентификатор)
+                .ConfigureAwait(true);
 
             if (контрагент is null)
             {
@@ -4970,18 +5221,28 @@ public sealed class MainShell : Form
                 адрес,
                 контрагент.IsVip);
 
-            письмо.OutgoingNumber = await _состав.СлужбаНумерации
-                .GenerateNextOutgoingNumberAsync()
-                .ConfigureAwait(true);
-
             ПрименитьПараметрыОтправления(письмо, параметры);
 
-            var результат = await _состав.СлужбаПисем.CreateAsync(письмо).ConfigureAwait(true);
+            var результат = await _состав.Данные.СоздатьПисьмоAsync(письмо).ConfigureAwait(true);
 
             if (результат.IsSuccess)
             {
-                создано++;
-                идентификаторы.Add(письмо.Id);
+                // Номер выдаёт служба в транзакции записи номера: параллельная
+                // работа пяти рабочих мест не создаёт одинаковых номеров.
+                var сНомером = await _состав.Данные
+                    .ВыдатьНомерПисьмуAsync(результат.Value)
+                    .ConfigureAwait(true);
+
+                if (сНомером.IsSuccess)
+                {
+                    создано++;
+                    идентификаторы.Add(сНомером.Value.Id);
+                }
+                else
+                {
+                    пропущенныеБезАдреса.Add(
+                        $"{контрагент.Name} (номер не выдан: {сНомером.Error})");
+                }
             }
         }
 
@@ -5754,6 +6015,34 @@ public sealed class MainShell : Form
     /// Открывает журнал входящей корреспонденции и движения документов
     /// (ТЗ §8.2, функции 29 и 30).
     /// </summary>
+    /// <summary>
+    /// Открывает диалог подключения к общей базе (совместный режим).
+    /// </summary>
+    private void ОткрытьПодключениеКОбщейБазе()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        using var форма = new FormSharedConnection(
+            new SharedClientProfile(Picket302ProfilePaths.ПоУмолчанию().DataDirectory),
+            сообщение => _состав.Журнал.LogError(new InvalidOperationException(сообщение)));
+
+        форма.ShowDialog(this);
+
+        if (форма.Результат is not null)
+        {
+            MessageBox.Show(
+                this,
+                "Устройство сопряжено. Перезапустите программу: при запуске она "
+                + "подключится к общей базе по сохранённым реквизитам.",
+                "Общая база",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+    }
+
     private void ОткрытьВходящуюКорреспонденцию()
     {
         var состав = _состав;
@@ -5762,9 +6051,25 @@ public sealed class MainShell : Form
             return;
         }
 
+        if (состав.ОбщийРежим)
+        {
+            // Сканы входящих документов хранятся в каталоге профиля рабочего
+            // места: журнал в общей базе ссылался бы на файл, которого нет на
+            // других компьютерах (решение SOURCE-MAP, сценарий 47).
+            MessageBox.Show(
+                this,
+                "Входящая корреспонденция в режиме общей базы недоступна: сканы "
+                + "хранятся на конкретном компьютере и не видны другим рабочим местам.",
+                "Входящая корреспонденция",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
         using var форма = new UI.Forms.FormIncomingMail(
-            состав.СлужбаВходящих,
-            состав.ТрекерВходящих);
+            состав.СлужбаВходящих!,
+            состав.ТрекерВходящих!);
         форма.ShowDialog(this);
     }
 
@@ -5809,9 +6114,26 @@ public sealed class MainShell : Form
             return;
         }
 
+        if (состав.ОбщийРежим)
+        {
+            // Пользовательские отчёты исполняются поверх открытого соединения
+            // SQLite; в общем базе произвольный SQL клиенту не выдаётся
+            // (решение SOURCE-MAP, сценарий 49).
+            MessageBox.Show(
+                this,
+                "Пользовательские отчёты в режиме общей базы недоступны: "
+                + "отчёты обращаются к базе напрямую, а клиенту общей базы "
+                + "произвольные запросы не передаются.",
+                "Пользовательские отчёты",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
         using var форма = new UI.Forms.FormUserReports(
-            состав.МенеджерПользовательскихОтчётов,
-            состав.ПоставщикДанныхОтчётов);
+            состав.МенеджерПользовательскихОтчётов!,
+            состав.ПоставщикДанныхОтчётов!);
         форма.ShowDialog(this);
     }
 
@@ -5834,8 +6156,8 @@ public sealed class MainShell : Form
         var идОтправителя = состав.ТекущийОтправитель.CurrentSenderId;
         var отправитель = идОтправителя is null
             ? null
-            : await состав.Контрагенты
-                .GetByIdAsync(идОтправителя.Value)
+            : await состав.Данные
+                .ПолучитьКонтрагентаAsync(идОтправителя.Value)
                 .ConfigureAwait(true);
 
         var бланк = new Infrastructure.Templates.SpecialFormsBuilder()
@@ -5975,8 +6297,8 @@ public sealed class MainShell : Form
             return;
         }
 
-        var значения = await _состав.Контрагенты
-            .GetDistinctFieldValuesAsync("post_zip")
+        var значения = await _состав.Данные
+            .ПолучитьЗначенияПоляAsync("post_zip")
             .ConfigureAwait(true);
 
         if (значения.Count == 0)

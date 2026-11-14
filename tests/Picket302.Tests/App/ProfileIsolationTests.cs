@@ -148,11 +148,11 @@ public sealed class ProfileIsolationTests
         var состав = профиль.ВзятьВладение(
             await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false));
 
-        var страница = await состав.Контрагенты
+        var страница = await состав.СоставДанных!.Контрагенты
             .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None);
 
         Assert.Equal(0, страница.TotalCount);
-        Assert.Empty(await состав.Контрагенты.GetSendersAsync(CancellationToken.None));
+        Assert.Empty(await состав.СоставДанных!.Контрагенты.GetSendersAsync(CancellationToken.None));
     }
 
     /// <summary>
@@ -168,7 +168,7 @@ public sealed class ProfileIsolationTests
 
         Assert.Equal(
             0,
-            (await составПустой.Контрагенты
+            (await составПустой.СоставДанных!.Контрагенты
                 .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None))
             .TotalCount);
 
@@ -177,7 +177,7 @@ public sealed class ProfileIsolationTests
             await AppServices.СоздатьAsync(демо.Пути, создатьДемоБазу: true));
 
         Assert.True(
-            (await составДемо.Контрагенты
+            (await составДемо.СоставДанных!.Контрагенты
                 .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 100), null, CancellationToken.None))
             .TotalCount > 0);
     }

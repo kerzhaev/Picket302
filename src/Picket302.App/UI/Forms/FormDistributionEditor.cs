@@ -307,13 +307,15 @@ public sealed class FormDistributionEditor : Form
     {
         try
         {
-            var страница = await _состав.Контрагенты
-                .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 500))
+            var страница = await _состав.Данные
+                .ПолучитьКонтрагентовAsync(new Picket302.Domain.Common.PageRequest(0, 500))
                 .ConfigureAwait(true);
 
             _всеКонтрагенты = страница.Items;
 
-            _категорииСправочника = await _состав.СлужбаКатегорий.GetTreeAsync().ConfigureAwait(true);
+            _категорииСправочника = await _состав.Данные
+                .ПолучитьДеревоКатегорийAsync()
+                .ConfigureAwait(true);
 
             _категории.Items.Clear();
             _категории.Items.Add("Все категории");
@@ -331,8 +333,8 @@ public sealed class FormDistributionEditor : Form
                 _наименование.Text = _рассылка.Name;
                 _видРассылки.SelectedIndex = _рассылка.Kind == DistributionKind.ManyToOne ? 1 : 0;
 
-                var письма = await _состав.Письма
-                    .GetByDistributionAsync(_рассылка.Id)
+                var письма = await _состав.Данные
+                    .ПолучитьПисьмаРассылкиAsync(_рассылка.Id)
                     .ConfigureAwait(true);
 
                 foreach (var письмо in письма)
@@ -657,8 +659,8 @@ public sealed class FormDistributionEditor : Form
                     CounterpartyIds = идентификаторы,
                 };
 
-                var создание = await _состав.СлужбаРассылок
-                    .GenerateDistributionAsync(план)
+                var создание = await _состав.Данные
+                    .СформироватьРассылкуAsync(план)
                     .ConfigureAwait(true);
 
                 if (создание.IsFailure)
@@ -701,8 +703,11 @@ public sealed class FormDistributionEditor : Form
                 отправительРассылки,
                 идентификаторы);
 
-            var правка = await _состав.СлужбаРассылок
-                .UpdateDistributionAsync(запрос)
+            // Версия — та, с которой рассылка была прочитана в диалоге: если
+            // её изменили на другом рабочем месте, правка отклоняется без
+            // частичной записи.
+            var правка = await _состав.Данные
+                .ИзменитьРассылкуAsync(запрос, _рассылка.Version)
                 .ConfigureAwait(true);
 
             if (правка.IsFailure)
@@ -711,18 +716,18 @@ public sealed class FormDistributionEditor : Form
                 return;
             }
 
-            if (правка.Value.SkippedCounterparties.Count > 0)
+            if (правка.Value.Пропущено.Count > 0)
             {
                 MessageBox.Show(
                     this,
                     "Пропущены контрагенты без основного адреса: "
-                    + string.Join(", ", правка.Value.SkippedCounterparties) + ".",
+                    + string.Join(", ", правка.Value.Пропущено) + ".",
                     "Рассылка",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
 
-            Результат = правка.Value.Distribution;
+            Результат = правка.Value.Рассылка;
             DialogResult = DialogResult.OK;
             Close();
         }

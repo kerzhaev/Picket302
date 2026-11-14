@@ -39,9 +39,9 @@ public sealed class MainShellCompositionTests
         // Реальная операция с базой: запись добавляется через состав,
         // созданный самой оболочкой.
         var состав = окно.ТекущийСостав!;
-        var доДобавления = (await состав.Контрагенты.GetPagedAsync(new PageRequest(0, 500))).TotalCount;
+        var доДобавления = (await состав.СоставДанных!.Контрагенты.GetPagedAsync(new PageRequest(0, 500))).TotalCount;
 
-        await состав.Контрагенты.AddAsync(new Counterparty
+        await состав.СоставДанных!.Контрагенты.AddAsync(new Counterparty
         {
             Type = CounterpartyType.LegalEntity,
             Name = "Проверка F-E1",
@@ -54,7 +54,7 @@ public sealed class MainShellCompositionTests
                 ["Проверка F-E1", "Управление делами", "ул. Тверская, 12", "корп. 2", "г. Москва", string.Empty]).Value,
         });
 
-        var поДобавлении = (await состав.Контрагенты.GetPagedAsync(new PageRequest(0, 500))).TotalCount;
+        var поДобавлении = (await состав.СоставДанных!.Контрагенты.GetPagedAsync(new PageRequest(0, 500))).TotalCount;
 
         Assert.Equal(доДобавления + 1, поДобавлении);
 

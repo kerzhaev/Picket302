@@ -21,7 +21,7 @@ public sealed class AppStartupTests
         Assert.True(File.Exists(профиль.Пути.DatabasePath));
         Assert.Equal(Path.GetFullPath(профиль.Пути.DatabasePath), состав.ПутьБазы);
 
-        var страница = await состав.Контрагенты
+        var страница = await состав.СоставДанных!.Контрагенты
             .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 50));
 
         Assert.True(страница.TotalCount > 0, "Демо-база должна содержать записи.");

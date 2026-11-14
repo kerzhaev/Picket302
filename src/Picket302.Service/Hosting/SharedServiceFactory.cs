@@ -70,12 +70,12 @@ public static class SharedServiceFactory
         var приложение = построитель.Build();
 
         // Версия протокола объявляется клиентом в заголовке и проверяется на
-        // каждом маршруте API: несовместимая версия отклоняется до обработки
-        // запроса, данные при этом не изменяются.
+        // маршрутах команд и чтения. Маршруты сопряжения и сведений о сервере
+        // освобождены от проверки: клиент узнаёт версию службы на этапе
+        // сопряжения, до того как договорился о версии.
         приложение.Use(async (http, следующий) =>
         {
-            if (http.Request.Path.StartsWithSegments(SharedProtocol.RoutePrefix)
-                && !http.Request.Path.Equals(SharedProtocol.HealthRoute, StringComparison.OrdinalIgnoreCase)
+            if (ТребуетсяВерсия(http.Request.Path)
                 && !SharedEndpoints.ВерсияПоддерживается(http))
             {
                 http.Response.StatusCode = StatusCodes.Status426UpgradeRequired;
@@ -194,12 +194,35 @@ public static class SharedServiceFactory
         реестр.Register(new DeleteBlankFieldCommand(база));
 
         реестр.Register(new RecordPrintEventCommand(база));
+        реестр.Register(new GetPrintDataCommand(база));
         реестр.Register(new WriteEmailLogCommand(база));
         реестр.Register(new ImportMergeCommand(база));
         реестр.Register(new ClearDatabaseCommand(база));
         реестр.Register(new SeedDemoCommand(база));
 
         return реестр;
+    }
+
+    /// <summary>
+    /// Определяет, обязателен ли заголовок версии протокола для маршрута.
+    /// </summary>
+    /// <param name="путь">Путь запроса.</param>
+    /// <returns><see langword="true"/>, если версия обязательна.</returns>
+    private static bool ТребуетсяВерсия(PathString путь)
+    {
+        if (!путь.StartsWithSegments(SharedProtocol.RoutePrefix))
+        {
+            return false;
+        }
+
+        if (путь.Equals(SharedProtocol.HealthRoute, StringComparison.OrdinalIgnoreCase)
+            || путь.Equals(SharedProtocol.ServerInfoRoute, StringComparison.OrdinalIgnoreCase)
+            || путь.Equals(SharedProtocol.PairRoute, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

@@ -45,8 +45,8 @@ public sealed class ClipartLogoIntegrationTests
 
         await using var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
 
-        var отправитель = await состав.Контрагенты.AddAsync(Контрагент("ООО «Отправитель»"));
-        var получатель = await состав.Контрагенты.AddAsync(Контрагент("ООО «Получатель»"));
+        var отправитель = await состав.СоставДанных!.Контрагенты.AddAsync(Контрагент("ООО «Отправитель»"));
+        var получатель = await состав.СоставДанных!.Контрагенты.AddAsync(Контрагент("ООО «Получатель»"));
 
         // 1–2. Выбор элемента каталога через диалог.
         var каталог = new ClipartLibrary();
@@ -60,17 +60,17 @@ public sealed class ClipartLogoIntegrationTests
 
         // 3. Назначение PNG выбранному контрагенту и сохранение настоящим
         // репозиторием во временную базу.
-        var карточка = await состав.Контрагенты.GetByIdAsync(получатель);
+        var карточка = await состав.СоставДанных!.Контрагенты.GetByIdAsync(получатель);
 
         Assert.NotNull(карточка);
         Assert.Null(карточка!.Logo);
 
         карточка.Logo = диалог.ВыбранныйPng;
 
-        await состав.Контрагенты.UpdateAsync(карточка);
+        await состав.СоставДанных!.Контрагенты.UpdateAsync(карточка);
 
         // 4–5. Повторное чтение: байты PNG совпадают с выбранным элементом.
-        var перечитанный = await состав.Контрагенты.GetByIdAsync(получатель);
+        var перечитанный = await состав.СоставДанных!.Контрагенты.GetByIdAsync(получатель);
 
         Assert.NotNull(перечитанный);
         Assert.NotNull(перечитанный!.Logo);
@@ -92,9 +92,9 @@ public sealed class ClipartLogoIntegrationTests
             перечитанный.GetAddress(перечитанный.AddressMainType)!);
 
         письмо.DistributionId = null;
-        var идентификаторПисьма = await состав.Письма.AddAsync(письмо);
+        var идентификаторПисьма = await состав.СоставДанных!.Письма.AddAsync(письмо);
 
-        var источник = new PrintDataSource(состав.Письма, состав.Контрагенты);
+        var источник = new PrintDataSource(состав.СоставДанных!.Письма, состав.СоставДанных!.Контрагенты);
         var элементы = await источник.GetItemsAsync([идентификаторПисьма]);
 
         var элемент = Assert.Single(элементы);
@@ -105,9 +105,9 @@ public sealed class ClipartLogoIntegrationTests
         // 8–9. Удаление логотипа: сохраняется и повторно читается пустым.
         перечитанный.Logo = null;
 
-        await состав.Контрагенты.UpdateAsync(перечитанный);
+        await состав.СоставДанных!.Контрагенты.UpdateAsync(перечитанный);
 
-        var безЛоготипа = await состав.Контрагенты.GetByIdAsync(получатель);
+        var безЛоготипа = await состав.СоставДанных!.Контрагенты.GetByIdAsync(получатель);
 
         Assert.Null(безЛоготипа!.Logo);
 

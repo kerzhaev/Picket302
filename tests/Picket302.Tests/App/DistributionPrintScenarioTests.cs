@@ -54,12 +54,12 @@ public sealed class DistributionPrintScenarioTests
         var состав = профиль.ВзятьВладение(
             await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false));
 
-        var отправитель = await состав.Контрагенты.AddAsync(Контрагент("ООО «Отправитель»"));
-        var получатель = await состав.Контрагенты.AddAsync(Контрагент("ООО «Получатель»"));
+        var отправитель = await состав.СоставДанных!.Контрагенты.AddAsync(Контрагент("ООО «Отправитель»"));
+        var получатель = await состав.СоставДанных!.Контрагенты.AddAsync(Контрагент("ООО «Получатель»"));
 
         foreach (var имя in именаРассылок)
         {
-            await состав.СлужбаРассылок.GenerateDistributionAsync(new()
+            await состав.СоставДанных!.СлужбаРассылок.GenerateDistributionAsync(new()
             {
                 Name = имя,
                 Kind = DistributionKind.OneToMany,
@@ -73,7 +73,7 @@ public sealed class DistributionPrintScenarioTests
 
     private static async Task<long> ИдентификаторРассылки(AppServices состав, string имя)
     {
-        var перечень = await состав.СлужбаРассылок.ListDistributionsAsync();
+        var перечень = await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync();
 
         return перечень.Single(рассылка => рассылка.Name == имя).Id;
     }
@@ -101,7 +101,7 @@ public sealed class DistributionPrintScenarioTests
         await using var состав = await СоставСРассылками(профиль, "Первая", "Вторая");
 
         var первая = await ИдентификаторРассылки(состав, "Первая");
-        var письмаПервой = await состав.Письма.GetByDistributionAsync(первая);
+        var письмаПервой = await состав.СоставДанных!.Письма.GetByDistributionAsync(первая);
         var fake = new ПечатьFake(ПечатьИтог.Выполнено);
 
         var итог = await DistributionPrintScenario.ВыполнитьAsync(
@@ -119,8 +119,8 @@ public sealed class DistributionPrintScenarioTests
 
         var первая = await ИдентификаторРассылки(состав, "Первая");
         var вторая = await ИдентификаторРассылки(состав, "Вторая");
-        var письмаПервой = await состав.Письма.GetByDistributionAsync(первая);
-        var письмаВторой = await состав.Письма.GetByDistributionAsync(вторая);
+        var письмаПервой = await состав.СоставДанных!.Письма.GetByDistributionAsync(первая);
+        var письмаВторой = await состав.СоставДанных!.Письма.GetByDistributionAsync(вторая);
         var fake = new ПечатьFake(ПечатьИтог.Выполнено);
 
         var итог = await DistributionPrintScenario.ВыполнитьAsync(
@@ -147,9 +147,9 @@ public sealed class DistributionPrintScenarioTests
         var сПисьмами = await ИдентификаторРассылки(состав, "С письмами");
         var пустая = await ИдентификаторРассылки(состав, "Пустая");
 
-        foreach (var письмо in await состав.Письма.GetByDistributionAsync(пустая))
+        foreach (var письмо in await состав.СоставДанных!.Письма.GetByDistributionAsync(пустая))
         {
-            await состав.Письма.DeleteAsync(письмо.Id);
+            await состав.СоставДанных!.Письма.DeleteAsync(письмо.Id);
         }
 
         var fake = new ПечатьFake(ПечатьИтог.Выполнено);
@@ -275,7 +275,7 @@ public sealed class DistributionPrintScenarioTests
         await using var состав = await СоставСРассылками(профиль, "Первая");
 
         var первая = await ИдентификаторРассылки(состав, "Первая");
-        var рассылкиДо = (await состав.СлужбаРассылок.ListDistributionsAsync()).Count;
+        var рассылкиДо = (await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync()).Count;
         var fake = new ПечатьFake(ПечатьИтог.Отменено);
 
         var итог = await DistributionPrintScenario.ВыполнитьAsync(
@@ -286,7 +286,7 @@ public sealed class DistributionPrintScenarioTests
         Assert.Null(итог.Ошибка);
 
         // Отмена ничего не меняет: записи не создаются и не удаляются.
-        Assert.Equal(рассылкиДо, (await состав.СлужбаРассылок.ListDistributionsAsync()).Count);
+        Assert.Equal(рассылкиДо, (await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync()).Count);
     }
 
     [Fact]
@@ -313,8 +313,8 @@ public sealed class DistributionPrintScenarioTests
         await using var состав = await СоставСРассылками(профиль, "Первая");
 
         var первая = await ИдентификаторРассылки(состав, "Первая");
-        var рассылкиДо = (await состав.СлужбаРассылок.ListDistributionsAsync()).Count;
-        var письмаДо = (await состав.Письма.GetByDistributionAsync(первая)).Count;
+        var рассылкиДо = (await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync()).Count;
+        var письмаДо = (await состав.СоставДанных!.Письма.GetByDistributionAsync(первая)).Count;
         var fake = new ПечатьFake(ПечатьИтог.Выполнено);
         var сообщения = new List<string?>();
 
@@ -329,7 +329,7 @@ public sealed class DistributionPrintScenarioTests
         Assert.Equal(string.Empty, сообщения.Last());
 
         // Новые записи рассылок и писем не создаются.
-        Assert.Equal(рассылкиДо, (await состав.СлужбаРассылок.ListDistributionsAsync()).Count);
-        Assert.Equal(письмаДо, (await состав.Письма.GetByDistributionAsync(первая)).Count);
+        Assert.Equal(рассылкиДо, (await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync()).Count);
+        Assert.Equal(письмаДо, (await состав.СоставДанных!.Письма.GetByDistributionAsync(первая)).Count);
     }
 }

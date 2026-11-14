@@ -672,6 +672,73 @@ public static class SharedMapping
     }
 
     /// <summary>
+    /// Преобразует доменный фильтр выборки контрагентов в контрактную форму.
+    /// </summary>
+    /// <param name="фильтр">Доменный фильтр.</param>
+    /// <returns>Фильтр контракта.</returns>
+    public static CounterpartyFilterDto? КФильтруКонтрагентовDto(CounterpartyFilter? фильтр)
+    {
+        if (фильтр is null)
+        {
+            return null;
+        }
+
+        var условия = фильтр.Criteria?.Conditions
+            .Select(условие => new FilterConditionDto(
+                условие.Field,
+                условие.Operator,
+                условие.Value))
+            .ToArray();
+
+        return new CounterpartyFilterDto(
+            фильтр.NameFragment,
+            фильтр.Inn,
+            фильтр.GroupId,
+            фильтр.IsVip,
+            фильтр.IsSender,
+            фильтр.IsActive,
+            фильтр.IncludeDeleted,
+            условия is null
+                ? null
+                : new FilterCriteriaDto(
+                    условия,
+                    фильтр.Criteria?.SortColumn,
+                    фильтр.Criteria?.SortDescending ?? false,
+                    фильтр.Criteria?.OnlyFavorites ?? false,
+                    фильтр.Criteria?.GroupId),
+            фильтр.SortColumn,
+            фильтр.SortDescending);
+    }
+
+    /// <summary>
+    /// Преобразует доменный фильтр выборки отправлений в контрактную форму.
+    /// </summary>
+    /// <param name="фильтр">Доменный фильтр.</param>
+    /// <returns>Фильтр контракта.</returns>
+    public static MailFilterDto? КФильтруОтправленийDto(MailFilter? фильтр) => фильтр is null
+        ? null
+        : new MailFilterDto(
+            фильтр.Status,
+            фильтр.CounterpartyId,
+            фильтр.SenderId,
+            фильтр.DistributionId,
+            фильтр.PostRegisterId,
+            фильтр.DateFrom,
+            фильтр.DateTo);
+
+    /// <summary>
+    /// Преобразует доменный фильтр выборки рассылок в контрактную форму.
+    /// </summary>
+    /// <param name="фильтр">Доменный фильтр.</param>
+    /// <returns>Фильтр контракта.</returns>
+    public static DistributionFilterDto? КФильтруРассылокDto(DistributionFilter? фильтр) => фильтр is null
+        ? null
+        : new DistributionFilterDto(
+            фильтр.CreatedFrom,
+            фильтр.State,
+            фильтр.SenderId);
+
+    /// <summary>
     /// Преобразует фильтр выборки отправлений в доменный.
     /// </summary>
     /// <param name="dto">DTO фильтра.</param>

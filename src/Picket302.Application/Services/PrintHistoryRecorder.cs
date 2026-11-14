@@ -15,13 +15,16 @@ namespace Picket302.Application.Services;
 /// </remarks>
 public sealed class PrintHistoryRecorder : IPrintHistoryRecorder
 {
-    private readonly MailService _письма;
+    private readonly IPrintHistoryWriter _письма;
 
     /// <summary>
     /// Создаёт регистратор истории печати.
     /// </summary>
-    /// <param name="mails">Служба почтовых отправлений.</param>
-    public PrintHistoryRecorder(MailService mails)
+    /// <param name="mails">
+    /// Служба записи печатных событий: в одиночном режиме — локальная служба
+    /// писем, в совместном — запись через серверную службу.
+    /// </param>
+    public PrintHistoryRecorder(IPrintHistoryWriter mails)
     {
         ArgumentNullException.ThrowIfNull(mails);
 
@@ -47,7 +50,11 @@ public sealed class PrintHistoryRecorder : IPrintHistoryRecorder
         foreach (var mailId in mailIds)
         {
             var результат = await _письма
-                .RegisterPrintAsync(mailId, printJobId, templateDescription, cancellationToken)
+                .RegisterPrintAsync(
+                    mailId,
+                    printJobId,
+                    templateDescription,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             if (результат.IsFailure)

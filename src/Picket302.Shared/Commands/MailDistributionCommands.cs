@@ -45,6 +45,15 @@ public sealed record UpdateDraftRecipientAddressRequest(
     long ExpectedVersion);
 
 /// <summary>
+/// Ответ каскадного обновления адреса в непечатанных письмах.
+/// </summary>
+/// <param name="Updated">Число обновлённых писем.</param>
+/// <param name="Version">Версия контрагента-получателя после изменения.</param>
+public sealed record UpdateDraftRecipientAddressResponse(
+    int Updated,
+    long Version);
+
+/// <summary>
 /// Выдача очередного регистрационного номера отправлению.
 /// </summary>
 /// <remarks>

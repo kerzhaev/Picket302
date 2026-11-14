@@ -18,6 +18,10 @@
 | `src/Picket302.Application` | Прикладных служб | `net8.0-windows` | Сценарии рассылок, конвейеры импорта/экспорта, управление печатными сессиями, калькулятор тарифов, диспетчер COM-автоматизации (`IPEProApplication`) |
 | `src/Picket302.Infrastructure` | Инфраструктуры и данных | `net8.0-windows` | Репозитории (PostgreSQL / SQLite), встроенные миграции схемы, архивирование и восстановление базы, файловый процессор бланков `.lbk`/ZIP, экспорт OpenXML/XSLT, адаптеры периферии, защищённое хранилище секретов |
 | `src/Picket302.App` | Представления | `net8.0-windows` (WinForms) | Оболочка оператора: главное окно «3+2», визуальный дизайнер бланков, контроллеры диалогов и мастеров |
+| `src/Picket302.ComAutomation` | COM-автоматизации | `net8.0-windows` | Внешний COM-сервер (`PEPro.Application`): печать конвертов и реестров из внешних программ |
+| `src/Picket302.Shared` | Контракт совместного режима | `net8.0` | Типизированные DTO, команды, коды ошибок и правила совместимости версий протокола общей базы |
+| `src/Picket302.Composition` | Общего состава данных | `net8.0-windows` | Репозитории и прикладные службы над одной сессией базы: один и тот же состав для одиночного режима и для службы |
+| `src/Picket302.Service` | Серверной службы | `net8.0-windows` | Служба совместного режима: типизированный API общей базы, идемпотентность команд, сопряжение устройств |
 | `tests/Picket302.Tests` | Тесты | `net8.0-windows` | Юнит-тесты доменных правил и инфраструктурного стека (xunit) |
 
 Порядок строк в таблице — от нижних слоёв к верхним. Оболочка и слой печати
@@ -41,7 +45,11 @@ App ─────────────► Application ───────
 | `Picket302.Printing` | `Picket302.Domain` |
 | `Picket302.Application` | `Picket302.Domain`, `Picket302.Printing` |
 | `Picket302.Infrastructure` | `Picket302.Domain`, `Picket302.Printing` |
-| `Picket302.App` | `Picket302.Application`, `Picket302.Domain`, `Picket302.Infrastructure`, `Picket302.Printing` |
+| `Picket302.Shared` | `Picket302.Domain` |
+| `Picket302.Composition` | `Picket302.Application`, `Picket302.Domain`, `Picket302.Infrastructure`, `Picket302.Printing` |
+| `Picket302.Service` | `Picket302.Application`, `Picket302.Composition`, `Picket302.Domain`, `Picket302.Infrastructure`, `Picket302.Printing`, `Picket302.Shared` |
+| `Picket302.ComAutomation` | `Picket302.Application`, `Picket302.Domain`, `Picket302.Infrastructure`, `Picket302.Printing` |
+| `Picket302.App` | `Picket302.Application`, `Picket302.ComAutomation`, `Picket302.Composition`, `Picket302.Domain`, `Picket302.Infrastructure`, `Picket302.Printing`, `Picket302.Shared` |
 | `Picket302.Tests` | все проекты решения |
 
 Обратные и «поперечные» зависимости запрещены:
@@ -49,7 +57,11 @@ App ─────────────► Application ───────
 - доменный слой не знает ни о приложении, ни о базе, ни о печати;
 - слой инфраструктуры не вызывает прикладные сценарии (композиция собирается в `App`);
 - слой печати не зависит от прикладного слоя;
-- слой представления не содержит доменных правил — только вызовы сценариев.
+- слой представления не содержит доменных правил — только вызовы сценариев;
+- контракт совместного режима (`Picket302.Shared`) опирается только на домен, чтобы
+  клиент и служба разделяли одну трактовку доменных перечислений;
+- серверная служба (`Picket302.Service`) не знает об интерфейсе программы (`App`);
+  оба собирают один и тот же состав слоя данных (`Picket302.Composition`).
 
 Матрица зависимостей проверяется автотестом
 `tests/Picket302.Tests/Architecture/LayerDependencyTests.cs`: тест читает реальные

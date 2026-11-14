@@ -160,6 +160,81 @@ public sealed class SharedWireFormatTests
     }
 
     [Fact]
+    public void Отправление_Переживает_Разбор_Сообщения_С_Независимыми_Признаками()
+    {
+        // Вид уведомления, признак «нужно уведомление» и строковое
+        // обозначение хранятся в базе независимо друг от друга; разбор
+        // сообщения не должен выводить одно из другого.
+        var dto = new MailDto(
+            Id: 7,
+            CounterpartyId: 1,
+            SenderId: 2,
+            DistributionId: null,
+            EnvelopeType: "C6",
+            NoticeType: "119",
+            NotificationType: NotificationType.None,
+            CopyCount: 1,
+            IsVip: false,
+            Note: null,
+            DeclaredValue: 0m,
+            Weight: 0m,
+            Fee: 0m,
+            Status: MailStatus.Draft,
+            NeedNotification: true,
+            NeedReturnAddress: true,
+            MailCategory: MailCategory.Simple,
+            DateCreated: new DateTime(2026, 11, 15, 10, 0, 0, DateTimeKind.Utc),
+            DatePrinted: null,
+            DateDispatched: null,
+            DateConfirmation: null,
+            DateCanceled: null,
+            IncomingNumber: null,
+            OutgoingNumber: null,
+            PostRegisterId: null,
+            RussianPostId: null,
+            RussianPostBatch: null,
+            InventoryId: null,
+            RecipientAddress: null,
+            FolderId: null,
+            Version: 4);
+
+        var текст = JsonSerializer.Serialize(dto, SharedJson.Options);
+        var разобранный = JsonSerializer.Deserialize<MailDto>(текст, SharedJson.Options)!;
+
+        Assert.Equal(dto, разобранный);
+        Assert.Equal(NotificationType.None, разобранный.NotificationType);
+        Assert.True(разобранный.NeedNotification);
+        Assert.Equal("119", разобранный.NoticeType);
+        Assert.Equal(4, разобранный.Version);
+    }
+
+    [Fact]
+    public void Сессия_Печати_Переживает_Разбор_Сообщения()
+    {
+        var dto = new PrintJobDto(
+            Id: 9,
+            CreatedAt: new DateTime(2026, 11, 15, 11, 0, 0, DateTimeKind.Utc),
+            TemplateId: 3,
+            PrinterName: "Принтер HP",
+            PaperSizeName: "A4",
+            PaperWidthMm: 210m,
+            PaperHeightMm: 297m,
+            FontInfo: null,
+            Copies: 2,
+            PrintMode: "selected",
+            Status: "SUCCESS",
+            ErrorText: null,
+            DeviceId: "устройство-1");
+
+        var текст = JsonSerializer.Serialize(dto, SharedJson.Options);
+        var разобранный = JsonSerializer.Deserialize<PrintJobDto>(текст, SharedJson.Options)!;
+
+        Assert.Equal(dto, разобранный);
+        Assert.Equal("Принтер HP", разобранный.PrinterName);
+        Assert.Equal("устройство-1", разобранный.DeviceId);
+    }
+
+    [Fact]
     public void План_Рассылки_Переживает_Разбор_Сообщения()
     {
         var запрос = new GenerateDistributionRequest(new DistributionPlan

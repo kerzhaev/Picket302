@@ -33,14 +33,14 @@ public sealed class FormDistributionEditorEditingTests
     private static async Task<(Distribution Рассылка, long Первый, long Второй, long Третий)> Подготовить(
         AppServices состав)
     {
-        var отправитель = await состав.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Отправитель»", отправитель: true));
-        var первый = await состав.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Первый»"));
-        var второй = await состав.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Второй»"));
-        var третий = await состав.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Третий»"));
+        var отправитель = await состав.СоставДанных!.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Отправитель»", отправитель: true));
+        var первый = await состав.СоставДанных!.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Первый»"));
+        var второй = await состав.СоставДанных!.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Второй»"));
+        var третий = await состав.СоставДанных!.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Третий»"));
 
         состав.ТекущийОтправитель.SetGlobalSender(отправитель);
 
-        var результат = await состав.СлужбаРассылок.GenerateDistributionAsync(new()
+        var результат = await состав.СоставДанных!.СлужбаРассылок.GenerateDistributionAsync(new()
         {
             Name = "Рассылка до правки",
             Kind = DistributionKind.OneToMany,
@@ -140,14 +140,14 @@ public sealed class FormDistributionEditorEditingTests
         await Дождаться(() => форма.Результат is not null, "Сохранение правки должно завершиться.");
 
         // Дублирующая запись не создаётся: рассылка одна, идентификатор тот же.
-        var перечень = await состав.СлужбаРассылок.ListDistributionsAsync();
+        var перечень = await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync();
         var единственная = Assert.Single(перечень);
 
         Assert.Equal(рассылка.Id, единственная.Id);
         Assert.Equal("Рассылка после правки", единственная.Name);
 
         // Состав писем: «Второй» остался, «Третий» добавлен, «Первый» удалён.
-        var письма = await состав.Письма.GetByDistributionAsync(рассылка.Id);
+        var письма = await состав.СоставДанных!.Письма.GetByDistributionAsync(рассылка.Id);
 
         Assert.Equal(2, письма.Count);
         Assert.Contains(письма, письмо => письмо.CounterpartyId == второй);
@@ -178,11 +178,11 @@ public sealed class FormDistributionEditorEditingTests
             рассылка = форма.Результат!;
         }
 
-        var перечень = await состав.СлужбаРассылок.ListDistributionsAsync();
+        var перечень = await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync();
 
         Assert.Single(перечень);
 
-        var письма = await состав.Письма.GetByDistributionAsync(рассылка.Id);
+        var письма = await состав.СоставДанных!.Письма.GetByDistributionAsync(рассылка.Id);
 
         Assert.Equal(2, письма.Count);
     }
@@ -225,14 +225,14 @@ public sealed class FormDistributionEditorEditingTests
         Assert.Equal("Правка без отправителя", форма.Результат.Name);
         Assert.Equal(рассылка.SenderId, форма.Результат.SenderId);
 
-        var перечень = await состав.СлужбаРассылок.ListDistributionsAsync();
+        var перечень = await состав.СоставДанных!.СлужбаРассылок.ListDistributionsAsync();
         var единственная = Assert.Single(перечень);
 
         Assert.Equal(рассылка.Id, единственная.Id);
         Assert.Equal(рассылка.SenderId, единственная.SenderId);
 
         // Письма не продублировались, состав прежний.
-        var письма = await состав.Письма.GetByDistributionAsync(рассылка.Id);
+        var письма = await состав.СоставДанных!.Письма.GetByDistributionAsync(рассылка.Id);
 
         Assert.Equal(2, письма.Count);
         Assert.Contains(письма, письмо => письмо.CounterpartyId == первый);

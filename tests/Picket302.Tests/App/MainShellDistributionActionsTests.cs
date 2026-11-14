@@ -84,10 +84,10 @@ public sealed class MainShellDistributionActionsTests
 
         await using var состав = await AppServices.СоздатьAsync(профиль.Пути, создатьДемоБазу: false);
 
-        var отправитель = await состав.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Отправитель»"));
-        var получатель = await состав.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Получатель»"));
+        var отправитель = await состав.СоставДанных!.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Отправитель»"));
+        var получатель = await состав.СоставДанных!.Контрагенты.AddAsync(НовыйКонтрагент("ООО «Получатель»"));
 
-        var сПисьмами = await состав.СлужбаРассылок.GenerateDistributionAsync(new()
+        var сПисьмами = await состав.СоставДанных!.СлужбаРассылок.GenerateDistributionAsync(new()
         {
             Name = "С письмами",
             Kind = DistributionKind.OneToMany,
@@ -95,7 +95,7 @@ public sealed class MainShellDistributionActionsTests
             CounterpartyIds = [получатель],
         });
 
-        var пустая = await состав.СлужбаРассылок.GenerateDistributionAsync(new()
+        var пустая = await состав.СоставДанных!.СлужбаРассылок.GenerateDistributionAsync(new()
         {
             Name = "Без писем",
             Kind = DistributionKind.OneToMany,
@@ -105,15 +105,15 @@ public sealed class MainShellDistributionActionsTests
 
         // Письма второй рассылки удаляются — рассылка остаётся «пустой»:
         // печать обязана пропустить её и сообщить об этом.
-        foreach (var письмо in await состав.Письма.GetByDistributionAsync(пустая.Value.Id))
+        foreach (var письмо in await состав.СоставДанных!.Письма.GetByDistributionAsync(пустая.Value.Id))
         {
-            await состав.Письма.DeleteAsync(письмо.Id);
+            await состав.СоставДанных!.Письма.DeleteAsync(письмо.Id);
         }
 
         var сборка = await Picket302.App.Printing.DistributionPrintScenario
             .СобратьПисьмаРассылокAsync(состав, [сПисьмами.Value.Id, пустая.Value.Id, 404L]);
 
-        var письмаРассылки = await состав.Письма.GetByDistributionAsync(сПисьмами.Value.Id);
+        var письмаРассылки = await состав.СоставДанных!.Письма.GetByDistributionAsync(сПисьмами.Value.Id);
 
         Assert.Equal(письмаРассылки.Select(письмо => письмо.Id).ToList(), сборка.MailIds.ToList());
         Assert.Equal(2, сборка.ПропущенныеРассылки.Count);

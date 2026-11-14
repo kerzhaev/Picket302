@@ -334,8 +334,8 @@ public static class DistributionPrintScenario
 
         foreach (var идентификатор in идентификаторы)
         {
-            var рассылка = await состав.Рассылки
-                .GetByIdAsync(идентификатор)
+            var рассылка = await состав.Данные
+                .ПолучитьРассылкуAsync(идентификатор)
                 .ConfigureAwait(true);
 
             if (рассылка is null)
@@ -344,8 +344,8 @@ public static class DistributionPrintScenario
                 continue;
             }
 
-            var письмаРассылки = await состав.Письма
-                .GetByDistributionAsync(идентификатор)
+            var письмаРассылки = await состав.Данные
+                .ПолучитьПисьмаРассылкиAsync(идентификатор)
                 .ConfigureAwait(true);
 
             if (письмаРассылки.Count == 0)

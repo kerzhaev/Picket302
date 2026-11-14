@@ -18,7 +18,7 @@ namespace Picket302.Application.Services;
 /// Создание отправления дополнительно ограничивается воротами лицензии
 /// (ТЗ §8.10, функция 119).
 /// </remarks>
-public sealed class MailService
+public sealed class MailService : IPrintHistoryWriter
 {
     private readonly IMailRepository _письма;
     private readonly ICounterpartyRepository _контрагенты;
