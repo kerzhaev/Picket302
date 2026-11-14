@@ -586,8 +586,14 @@ public static class КомандыРазметки
         // FINAL-01: кавычка в CSS-значении не легитимна (разрешённые свойства
         // — цвета/выравнивание/шрифты) и является попыткой прорвать атрибут
         // при сериализации; такой стиль отбрасывается целиком.
+        // FINAL2-01: CSS-комментарии и backslash-escape не легитимны в
+        // разрешённых значениях и используются для маскировки (например
+        // «expre/**/ssion»); такие стили также отбрасываются целиком.
         if (декодированное.Contains('"', StringComparison.Ordinal)
-            || декодированное.Contains('\'', StringComparison.Ordinal))
+            || декодированное.Contains('\'', StringComparison.Ordinal)
+            || декодированное.Contains("/*", StringComparison.Ordinal)
+            || декодированное.Contains("*/", StringComparison.Ordinal)
+            || декодированное.Contains('\\', StringComparison.Ordinal))
         {
             return null;
         }

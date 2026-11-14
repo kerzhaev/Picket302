@@ -345,6 +345,32 @@ public sealed class HtmlMailEditorTests
         Assert.Contains("text-align: center", очищенный, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// FINAL2-01 (финальное ревью R2): CSS-комментарий маскирует expression —
+    /// стиль с комментариями отбрасывается целиком.
+    /// </summary>
+    [Fact]
+    public void Санитизатор_СтильСКомментарием_Отбрасывается()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"font-size:expre/**/ssion(alert(1))\">x</div>");
+
+        Assert.DoesNotContain("expression", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/*", очищенный, StringComparison.Ordinal);
+        Assert.Contains("<div>x</div>", очищенный, StringComparison.Ordinal);
+    }
+
+    /// <summary>FINAL2-01: backslash-escape (\\65) тоже маскировка — reject.</summary>
+    [Fact]
+    public void Санитизатор_СтильСBackslashEscape_Отбрасывается()
+    {
+        var очищенный = КомандыРазметки.ОчиститьОпасныйHtml(
+            "<div style=\"font-size:\\\\65xpression(alert(1))\">y</div>");
+
+        Assert.DoesNotContain("expression", очищенный, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<div>y</div>", очищенный, StringComparison.Ordinal);
+    }
+
     /// <summary>Пустая разметка — без исключений.</summary>
     [Fact]
     public void ОчисткаОпасногоHtml_ПустаяСтрока()
