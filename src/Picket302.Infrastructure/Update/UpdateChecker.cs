@@ -197,8 +197,11 @@ public sealed class UpdateChecker
             : Path.Combine(Path.GetTempPath(), "Picket302Update");
         Directory.CreateDirectory(каталог);
 
-        // Разбор адреса до файловых операций (F-C8): некорректный адрес
-        // прежде падал UriFormatException либо создавал частичный файл.
+        // Разбор адреса до сетевой загрузки и создания файла пакета (F-C8):
+        // некорректный адрес прежде падал UriFormatException либо создавал
+        // частичный файл. Каталог загрузки к этому моменту уже создан
+        // (Directory.CreateDirectory выше) — отказ по HTTP гарантирует
+        // отсутствие сетевого запроса и файла пакета, но не каталога.
         // Корректирующий проход: только HTTPS — HTTP исключён из
         // production-пути (незащищённый канал недопустим для пакетов).
         if (!Uri.TryCreate(info.DownloadUrl, UriKind.Absolute, out var адресЗагрузки)
