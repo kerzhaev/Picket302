@@ -36,9 +36,9 @@ public sealed class PrintHistoryRepository : IPrintHistoryRepository
         var идентификатор = await _сессия.ExecuteScalarAsync<long>(
             """
             INSERT INTO print_history (printed_at, mail_id, recipient_address_snapshot, sender_address_snapshot,
-                copy_count, is_vip, note, template_description, print_job_id)
+                copy_count, is_vip, note, template_description, print_job_id, outcome, device_id)
             VALUES (@PrintedAt, @MailId, @RecipientAddressSnapshot, @SenderAddressSnapshot,
-                @CopyCount, @IsVip, @Note, @TemplateDescription, @PrintJobId);
+                @CopyCount, @IsVip, @Note, @TemplateDescription, @PrintJobId, @Outcome, @DeviceId);
             SELECT last_insert_rowid();
             """,
             new
@@ -52,6 +52,8 @@ public sealed class PrintHistoryRepository : IPrintHistoryRepository
                 history.Note,
                 history.TemplateDescription,
                 history.PrintJobId,
+                history.Outcome,
+                history.DeviceId,
             },
             cancellationToken).ConfigureAwait(false);
 

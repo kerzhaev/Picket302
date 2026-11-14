@@ -193,12 +193,23 @@ public sealed class MailService
     /// <param name="printJobId">Идентификатор сессии печати.</param>
     /// <param name="templateDescription">Описание шаблона печати.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
+    /// <param name="outcome">
+    /// Исход печатной операции («подготовлено», «передано в локальный спулер»,
+    /// «ошибка», «неизвестный исход после обрыва»). Пусто — исход
+    /// определяется самой программой (одиночный режим).
+    /// </param>
+    /// <param name="deviceId">
+    /// Идентификатор устройства-клиента, выполнившего печать; пусто в
+    /// одиночном режиме.
+    /// </param>
     /// <returns>Запись журнала либо текст нарушения.</returns>
     public async Task<Result<PrintHistory>> RegisterPrintAsync(
         long mailId,
         long? printJobId,
         string templateDescription,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? outcome = null,
+        string? deviceId = null)
     {
         if (string.IsNullOrWhiteSpace(templateDescription))
         {
@@ -226,6 +237,8 @@ public sealed class MailService
             Note = отправление.Note,
             TemplateDescription = templateDescription,
             PrintJobId = printJobId,
+            Outcome = outcome,
+            DeviceId = deviceId,
         };
 
         await _единицаРаботы.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);

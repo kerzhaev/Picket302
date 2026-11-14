@@ -46,6 +46,13 @@
     <!-- Контракт совместного режима: DTO, команды, коды ошибок и правила
          совместимости версий протокола. -->
     <ProjectReference Include="..\..\src\Picket302.Shared\Picket302.Shared.csproj" />
+    <!-- Серверная служба совместного режима: проверки поднимают её
+         в процессе теста на изолированном порту и в отдельном каталоге. -->
+    <ProjectReference Include="..\..\src\Picket302.Service\Picket302.Service.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Label="Платформа веб-приложения для проверок серверной службы">
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <!-- Coverlet/Cecil не может переписать Picket302.App.dll без контекста компиляции:

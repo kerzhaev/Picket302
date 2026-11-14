@@ -122,11 +122,29 @@ public sealed class MigrationCircularTests : IDisposable
                 runner.Migrations.Count,
                 await база.Connection.QuerySingleAsync<long>("SELECT COUNT(*) FROM schema_version;"));
 
-            var таблицы = await база.Connection.QueryAsync<string>(
-                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;");
-            // V009 добавила incoming_mails (S32), V010 — incoming_movements
-            // (S33): полный набор таблиц.
-            Assert.Equal(22, таблицы.Count());
+            var таблицы = (await база.Connection.QueryAsync<string>(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;")).ToArray();
+
+            // Состав таблиц восстановленной базы совпадает с составом таблиц
+            // исходной: проверяется не число (оно меняется с каждой
+            // миграцией), а сам набор. Так пропавшая при восстановлении
+            // таблица обнаруживается, а новая миграция проверку не ломает.
+            await using (var исходная = await SqliteTestDatabase.CreateFileAsync(путьБазы, сМиграциями: false))
+            {
+                var таблицыИсходной = (await исходная.Connection.QueryAsync<string>(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;")).ToArray();
+
+                Assert.Equal(таблицыИсходной, таблицы);
+            }
+
+            // Таблицы, добавленные миграциями совместного режима (V012),
+            // присутствуют: без них общий режим не работает.
+            Assert.Contains("shared_devices", таблицы);
+            Assert.Contains("shared_operations", таблицы);
+            Assert.Contains("shared_pairings", таблицы);
+            Assert.Contains("shared_row_versions", таблицы);
+            Assert.Contains("shared_service_meta", таблицы);
+            Assert.Contains("shared_template_packages", таблицы);
 
             var контрагент = await база.Connection.QuerySingleAsync<string>(
                 "SELECT name FROM counterparties;");

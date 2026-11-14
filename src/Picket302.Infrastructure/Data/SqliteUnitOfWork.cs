@@ -6,7 +6,11 @@ namespace Picket302.Infrastructure.Data;
 /// <summary>
 /// Сессия доступа к базе данных SQLite: соединение и текущая транзакция.
 /// </summary>
-public interface ISqliteSession
+/// <remarks>
+/// Сессия является и единицей работы: прикладные службы открывают транзакцию
+/// через неё, а репозитории участвуют в той же транзакции.
+/// </remarks>
+public interface ISqliteSession : IUnitOfWork
 {
     /// <summary>Соединение с базой данных.</summary>
     SqliteConnection Connection { get; }
@@ -63,7 +67,7 @@ public sealed class SqliteUnitOfWork : IUnitOfWork, ISqliteSession, IAsyncDispos
     public bool InTransaction => Transaction is not null;
 
     /// <inheritdoc />
-    public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
+    public Task BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_освобождено, this);
 
@@ -72,7 +76,15 @@ public sealed class SqliteUnitOfWork : IUnitOfWork, ISqliteSession, IAsyncDispos
             throw new InvalidOperationException("Транзакция уже открыта.");
         }
 
-        Transaction = (SqliteTransaction)await _соединение.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        // Транзакция открывается сразу как пишущая (BEGIN IMMEDIATE): блокировка
+        // записи берётся на старте, а не на первом изменении. Отложенная
+        // транзакция (BEGIN DEFERRED) в режиме WAL при чтении, а затем записи
+        // после чужой фиксации завершается ошибкой SQLITE_BUSY_SNAPSHOT —
+        // совместная работа нескольких клиентов с общей базой с такой
+        // транзакцией невозможна.
+        Transaction = (SqliteTransaction)_соединение.BeginTransaction(deferred: false);
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
