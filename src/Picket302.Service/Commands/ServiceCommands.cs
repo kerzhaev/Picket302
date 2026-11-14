@@ -57,6 +57,21 @@ public sealed class SavePrintTemplateCommand : SharedDbCommand<SavePrintTemplate
                     $"Идентификатор шаблона: {шаблон.Id}.");
             }
 
+            // Путь к файлу пакета шаблона хранится на сервере и клиенту не
+            // передаётся: пустое значение из запроса не затирает сохранённый
+            // путь, иначе шаблон потерял бы связь с пакетом.
+            var сохранённый = await область.Данные.ШаблоныПечати
+                .GetByIdAsync(шаблон.Id, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (сохранённый is null)
+            {
+                throw new SharedNotFoundException("Шаблон не найден.");
+            }
+
+            шаблон.FilePath = сохранённый.FilePath;
+            шаблон.IsBuiltin = сохранённый.IsBuiltin;
+
             var затронуто = await область.Данные.ШаблоныПечати
                 .UpdateAsync(шаблон, cancellationToken)
                 .ConfigureAwait(false);
@@ -318,12 +333,42 @@ public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRe
 
         var исход = запрос.Outcome.ToString();
 
+        // Реестр печатных сессий пополняется: принтер, формат бумаги, число
+        // экземпляров и текст ошибки относятся к печати и не должны теряться.
+        // Статус сессии выбирается из словаря схемы, а точный исход печати
+        // хранится в журнале печати (колонка outcome).
+        var статус = запрос.Outcome switch
+        {
+            PrintEventOutcome.Spooled => "SUCCESS",
+            PrintEventOutcome.Error => "FAILED",
+            _ => "ABORTED",
+        };
+
+        var сессия = new PrintJob(
+            0,
+            DateTime.UtcNow,
+            null,
+            запрос.PrinterName ?? string.Empty,
+            запрос.PaperSizeName ?? string.Empty,
+            0m,
+            0m,
+            null,
+            запрос.Copies,
+            запрос.PrintMode,
+            статус,
+            запрос.ErrorText,
+            null);
+
+        var идентификаторСессии = await область.Данные.ЖурналПечати
+            .AddAsync(сессия, cancellationToken)
+            .ConfigureAwait(false);
+
         foreach (var идентификатор in запрос.MailIds)
         {
             var результат = await область.Данные.СлужбаПисем
                 .RegisterPrintAsync(
                     идентификатор,
-                    null,
+                    идентификаторСессии,
                     запрос.TemplateDescription,
                     cancellationToken,
                     исход,
@@ -336,7 +381,7 @@ public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRe
             }
         }
 
-        return new PrintEventResponse(запрос.MailIds, null, запрос.Outcome);
+        return new PrintEventResponse(запрос.MailIds, идентификаторСессии, запрос.Outcome);
     }
 }
 

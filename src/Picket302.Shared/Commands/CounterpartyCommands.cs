@@ -63,16 +63,19 @@ public sealed record BatchUpdateCounterpartyFieldRequest(
 public sealed record SetCounterpartyFieldRequest(
     long CounterpartyId,
     string FieldName,
-    string Value);
+    string Value,
+    long ExpectedVersion);
 
 /// <summary>
 /// Удаление значения пользовательского поля контрагента.
 /// </summary>
 /// <param name="CounterpartyId">Контрагент.</param>
 /// <param name="FieldName">Имя поля.</param>
+/// <param name="ExpectedVersion">Ожидаемая версия поля.</param>
 public sealed record RemoveCounterpartyFieldRequest(
     long CounterpartyId,
-    string FieldName);
+    string FieldName,
+    long ExpectedVersion);
 
 /// <summary>
 /// Создание отправителя.

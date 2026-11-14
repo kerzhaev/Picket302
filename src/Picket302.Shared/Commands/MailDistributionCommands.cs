@@ -20,8 +20,8 @@ public sealed record CreateMailRequest(MailDto Mail);
 public sealed record TransitionMailStatusRequest(
     long Id,
     MailStatus NewStatus,
-    DateTime? Moment = null,
-    long ExpectedVersion = 0);
+    DateTime? Moment,
+    long ExpectedVersion);
 
 /// <summary>
 /// Перенос отправления в папку.
@@ -32,7 +32,7 @@ public sealed record TransitionMailStatusRequest(
 public sealed record MoveMailToFolderRequest(
     long Id,
     long FolderId,
-    long ExpectedVersion = 0);
+    long ExpectedVersion);
 
 /// <summary>
 /// Обновление адреса получателя в непечатанных письмах.
@@ -41,7 +41,8 @@ public sealed record MoveMailToFolderRequest(
 /// <param name="Address">Новый адрес.</param>
 public sealed record UpdateDraftRecipientAddressRequest(
     long CounterpartyId,
-    AddressDto Address);
+    AddressDto Address,
+    long ExpectedVersion);
 
 /// <summary>
 /// Выдача очередного регистрационного номера отправлению.
@@ -57,9 +58,9 @@ public sealed record UpdateDraftRecipientAddressRequest(
 /// <param name="ExpectedVersion">Ожидаемая версия отправления.</param>
 public sealed record AssignMailNumberRequest(
     long MailId,
-    string? TemplateMask = null,
-    DateTime? Moment = null,
-    long ExpectedVersion = 0);
+    string? TemplateMask,
+    DateTime? Moment,
+    long ExpectedVersion);
 
 /// <summary>
 /// Формирование рассылки по плану.
@@ -106,13 +107,15 @@ public sealed record CloneDistributionResponse(
 /// <param name="SenderId">Отправитель.</param>
 /// <param name="CounterpartyIds">Получатели.</param>
 /// <param name="EnvelopeType">Формат конверта.</param>
+/// <param name="ExpectedVersion">Ожидаемая версия рассылки.</param>
 public sealed record UpdateDistributionRequest(
     long DistributionId,
     string Name,
     DistributionKind Kind,
     long? SenderId,
     IReadOnlyList<long> CounterpartyIds,
-    string? EnvelopeType = null);
+    string? EnvelopeType,
+    long ExpectedVersion);
 
 /// <summary>
 /// Ответ правки рассылки.
@@ -131,7 +134,7 @@ public sealed record UpdateDistributionResponse(
 /// Перевод рассылки из черновика в сохранённую.
 /// </summary>
 /// <param name="DistributionId">Идентификатор рассылки.</param>
-public sealed record SaveDistributionRequest(long DistributionId);
+public sealed record SaveDistributionRequest(long DistributionId, long ExpectedVersion);
 
 /// <summary>
 /// Отметка рассылки как отправленной.
@@ -140,13 +143,14 @@ public sealed record SaveDistributionRequest(long DistributionId);
 /// <param name="Moment">Момент отправки; пусто — текущее время.</param>
 public sealed record MarkDistributionDispatchedRequest(
     long DistributionId,
-    DateTime? Moment = null);
+    DateTime? Moment,
+    long ExpectedVersion);
 
 /// <summary>
 /// Пересчёт требуемого числа конвертов рассылки.
 /// </summary>
 /// <param name="DistributionId">Идентификатор рассылки.</param>
-public sealed record RecalculateEnvelopesRequest(long DistributionId);
+public sealed record RecalculateEnvelopesRequest(long DistributionId, long ExpectedVersion);
 
 /// <summary>
 /// Ответ со списком рассылок.

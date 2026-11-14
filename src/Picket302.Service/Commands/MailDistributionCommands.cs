@@ -211,6 +211,22 @@ public sealed class UpdateDraftRecipientAddressCommand
             throw new SharedValidationException("Адрес получателя не задан.");
         }
 
+        var увеличено = await область.Версии
+            .УвеличитьВерсиюAsync(
+                SharedEntityKind.Counterparty,
+                запрос.CounterpartyId,
+                запрос.ExpectedVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!увеличено)
+        {
+            throw new SharedConflictException(
+                "Карточка получателя изменена на другом компьютере. Обновите данные и повторите действие.",
+                $"Идентификатор контрагента: {запрос.CounterpartyId}.");
+        }
+
+
         var обновлено = await область.Данные.СлужбаКаскада
             .UpdateUnprintedLettersAddressAsync(запрос.CounterpartyId, адрес, cancellationToken)
             .ConfigureAwait(false);
@@ -517,6 +533,21 @@ public sealed class UpdateDistributionCommand : SharedDbCommand<UpdateDistributi
         UpdateDistributionRequest запрос,
         CancellationToken cancellationToken)
     {
+        var увеличено = await область.Версии
+            .УвеличитьВерсиюAsync(
+                SharedEntityKind.Distribution,
+                запрос.DistributionId,
+                запрос.ExpectedVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!увеличено)
+        {
+            throw new SharedConflictException(
+                "Рассылка изменена на другом компьютере. Обновите данные и повторите действие.",
+                $"Идентификатор рассылки: {запрос.DistributionId}.");
+        }
+
         var результат = await область.Данные.СлужбаРассылок
             .UpdateDistributionAsync(
                 new DistributionUpdateRequest(
@@ -591,6 +622,21 @@ public sealed class SaveDistributionCommand : SharedDbCommand<SaveDistributionRe
         SaveDistributionRequest запрос,
         CancellationToken cancellationToken)
     {
+        var увеличено = await область.Версии
+            .УвеличитьВерсиюAsync(
+                SharedEntityKind.Distribution,
+                запрос.DistributionId,
+                запрос.ExpectedVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!увеличено)
+        {
+            throw new SharedConflictException(
+                "Рассылка изменена на другом компьютере. Обновите данные и повторите действие.",
+                $"Идентификатор рассылки: {запрос.DistributionId}.");
+        }
+
         var результат = await область.Данные.СлужбаРассылок
             .SaveAsync(запрос.DistributionId, cancellationToken)
             .ConfigureAwait(false);
@@ -641,6 +687,21 @@ public sealed class MarkDistributionDispatchedCommand
         MarkDistributionDispatchedRequest запрос,
         CancellationToken cancellationToken)
     {
+        var увеличено = await область.Версии
+            .УвеличитьВерсиюAsync(
+                SharedEntityKind.Distribution,
+                запрос.DistributionId,
+                запрос.ExpectedVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!увеличено)
+        {
+            throw new SharedConflictException(
+                "Рассылка изменена на другом компьютере. Обновите данные и повторите действие.",
+                $"Идентификатор рассылки: {запрос.DistributionId}.");
+        }
+
         var результат = await область.Данные.СлужбаРассылок
             .MarkDispatchedAsync(запрос.DistributionId, запрос.Moment, cancellationToken)
             .ConfigureAwait(false);
@@ -691,6 +752,21 @@ public sealed class RecalculateEnvelopesCommand
         RecalculateEnvelopesRequest запрос,
         CancellationToken cancellationToken)
     {
+        var увеличено = await область.Версии
+            .УвеличитьВерсиюAsync(
+                SharedEntityKind.Distribution,
+                запрос.DistributionId,
+                запрос.ExpectedVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!увеличено)
+        {
+            throw new SharedConflictException(
+                "Рассылка изменена на другом компьютере. Обновите данные и повторите действие.",
+                $"Идентификатор рассылки: {запрос.DistributionId}.");
+        }
+
         await область.Данные.СлужбаРассылок
             .RecalculateEnvelopesRequiredAsync(запрос.DistributionId, cancellationToken)
             .ConfigureAwait(false);

@@ -106,9 +106,10 @@ public sealed class SharedOperationStore
         string deviceId,
         string commandName,
         string requestHash,
+        DateTime моментЗапуска,
         CancellationToken cancellationToken = default)
     {
-        var сейчас = DateTime.UtcNow;
+        var сейчас = моментЗапуска;
 
         var добавлено = await _сессия.Connection.ExecuteAsync(
             new CommandDefinition(
@@ -139,9 +140,12 @@ public sealed class SharedOperationStore
 
         if (существующая is null)
         {
-            // Запись исчезла между вставкой и чтением (редкий случай гонки с
-            // очисткой журнала): считаем, что операцию можно выполнить.
-            return new SharedOperationOutcome(SharedOperationOutcomeKind.Proceed);
+            // Запись исчезла между вставкой и чтением. Выполнять команду без
+            // записи в журнале нельзя: результат не удалось бы зафиксировать,
+            // и повтор запроса выполнил бы команду второй раз.
+            return new SharedOperationOutcome(
+                SharedOperationOutcomeKind.Conflict,
+                Причина: "Запись операции в журнале недоступна: повторите действие.");
         }
 
         if (!string.Equals(существующая.RequestHash, requestHash, StringComparison.Ordinal)
@@ -207,31 +211,43 @@ public sealed class SharedOperationStore
     /// <summary>
     /// Сохраняет успешный результат операции.
     /// </summary>
+    /// <remarks>
+    /// Запись обновляется только если она всё ещё принадлежит этой попытке:
+    /// статус «выполняется» и момент начала должны совпадать. Иначе попытка
+    /// была перехвачена другой (например, после аварийного завершения службы),
+    /// и запись результата была бы неверной.
+    /// </remarks>
     /// <param name="operationId">Идентификатор операции.</param>
     /// <param name="resultJson">Результат в виде JSON.</param>
+    /// <param name="моментЗапуска">Момент начала операции (UTC).</param>
     /// <param name="cancellationToken">Токен отмены.</param>
-    /// <returns>Задача завершения.</returns>
-    public async Task СохранитьРезультатAsync(
+    /// <returns><see langword="true"/>, если результат зафиксирован.</returns>
+    public async Task<bool> СохранитьРезультатAsync(
         string operationId,
         string resultJson,
+        DateTime моментЗапуска,
         CancellationToken cancellationToken = default)
     {
-        await _сессия.Connection.ExecuteAsync(
+        var затронуто = await _сессия.Connection.ExecuteAsync(
             new CommandDefinition(
                 """
                 UPDATE shared_operations
                 SET status = @Status, result_json = @Result, completed_at = @Now
-                WHERE operation_id = @Id;
+                WHERE operation_id = @Id AND status = @Working AND created_at = @StartedAt;
                 """,
                 new
                 {
                     Id = operationId,
                     Status = СтатусЗавершена,
+                    Working = СтатусВРаботе,
                     Result = resultJson,
+                    StartedAt = Момент(моментЗапуска),
                     Now = Момент(DateTime.UtcNow),
                 },
                 _сессия.Transaction,
                 cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        return затронуто > 0;
     }
 
     /// <summary>
@@ -242,24 +258,60 @@ public sealed class SharedOperationStore
     /// <param name="errorJson">Ошибка в виде JSON.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Задача завершения.</returns>
-    public async Task СохранитьОшибкуAsync(
+    public async Task<bool> СохранитьОшибкуAsync(
         string operationId,
         string errorJson,
+        DateTime моментЗапуска,
         CancellationToken cancellationToken = default)
     {
-        await _сессия.Connection.ExecuteAsync(
+        var затронуто = await _сессия.Connection.ExecuteAsync(
             new CommandDefinition(
                 """
                 UPDATE shared_operations
                 SET status = @Status, error_json = @Error, completed_at = @Now
-                WHERE operation_id = @Id;
+                WHERE operation_id = @Id AND status = @Working AND created_at = @StartedAt;
                 """,
                 new
                 {
                     Id = operationId,
                     Status = СтатусОшибка,
+                    Working = СтатусВРаботе,
                     Error = errorJson,
+                    StartedAt = Момент(моментЗапуска),
                     Now = Момент(DateTime.UtcNow),
+                },
+                _сессия.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        return затронуто > 0;
+    }
+
+    /// <summary>
+    /// <summary>
+    /// Удаляет завершённые операции старше указанного срока.
+    /// </summary>
+    /// <remarks>
+    /// Журнал идемпотентности нужен, пока операция может быть повторена.
+    /// Через месяц повтор той же операции уже не ожидается, поэтому запись
+    /// удаляется: иначе журнал растёт без ограничения.
+    /// </remarks>
+    /// <param name="срок">Срок хранения завершённых операций.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Число удалённых записей.</returns>
+    public async Task<int> УдалитьУстаревшиеAsync(
+        TimeSpan срок,
+        CancellationToken cancellationToken = default)
+    {
+        return await _сессия.Connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                DELETE FROM shared_operations
+                WHERE created_at < @Граница AND status <> @Working;
+                """,
+                new
+                {
+                    Граница = Момент(DateTime.UtcNow - срок),
+                    Working = СтатусВРаботе,
                 },
                 _сессия.Transaction,
                 cancellationToken: cancellationToken)).ConfigureAwait(false);

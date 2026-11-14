@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Picket302.Service.Configuration;
@@ -17,29 +18,39 @@ namespace Picket302.Tests.Shared;
 /// <remarks>
 /// Стенд поднимает настоящую службу в процессе проверки: отдельный
 /// временный каталог данных, отдельный файл базы, произвольный свободный
-/// порт. Файлы пользователя, его база и настройки не затрагиваются.
+/// порт, собственный самоподписанный сертификат и настоящее TLS-соединение.
+/// Файлы пользователя, его база и настройки не затрагиваются.
 /// </remarks>
 public sealed class SharedServiceTestHost : IAsyncDisposable
 {
     private readonly WebApplication _приложение;
     private readonly string _каталог;
 
-    private SharedServiceTestHost(WebApplication приложение, string каталог, int порт, List<string> записи)
+    private SharedServiceTestHost(
+        WebApplication приложение,
+        string каталог,
+        int порт,
+        X509Certificate2 сертификат,
+        List<string> записи)
     {
         _приложение = приложение;
         _каталог = каталог;
         Порт = порт;
+        Сертификат = сертификат;
         ЗаписиЖурнала = записи;
     }
-
-    /// <summary>Записи журнала службы, собранные за время работы стенда.</summary>
-    public List<string> ЗаписиЖурнала { get; }
 
     /// <summary>Порт службы на стенде.</summary>
     public int Порт { get; }
 
+    /// <summary>Сертификат сервера на стенде.</summary>
+    public X509Certificate2 Сертификат { get; }
+
+    /// <summary>Записи журнала службы, собранные за время работы стенда.</summary>
+    public List<string> ЗаписиЖурнала { get; }
+
     /// <summary>Базовый адрес службы.</summary>
-    public string БазовыйАдрес => $"http://127.0.0.1:{Порт}";
+    public string БазовыйАдрес => $"https://127.0.0.1:{Порт}";
 
     /// <summary>Каталог данных стенда.</summary>
     public string КаталогДанных => _каталог;
@@ -69,16 +80,21 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
         var база = new ServerDatabase(параметры.DatabasePath);
         await база.ПодготовитьAsync(cancellationToken).ConfigureAwait(false);
 
+        var сертификат = SharedCertificateFactory.Создать(
+            "Picket302 Shared Service",
+            new[] { "localhost" },
+            new[] { "127.0.0.1" });
+
         var записи = new List<string>();
 
         var приложение = SharedServiceFactory.Создать(
             параметры,
             записи.Add,
-            сертификат: null);
+            сертификат);
 
         await приложение.StartAsync(cancellationToken).ConfigureAwait(false);
 
-        return new SharedServiceTestHost(приложение, каталог, порт, записи);
+        return new SharedServiceTestHost(приложение, каталог, порт, сертификат, записи);
     }
 
     /// <summary>
@@ -94,10 +110,7 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
         var админТокен = new Picket302.Service.Security.SharedAdminToken(_каталог)
             .ПолучитьИлиСоздать();
 
-        using var админский = new HttpClient
-        {
-            BaseAddress = new Uri(БазовыйАдрес),
-        };
+        using var админский = СоздатьHttpClient();
 
         админский.DefaultRequestHeaders.Add("X-Picket302-Admin-Token", админТокен);
 
@@ -112,16 +125,11 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
             await ответКода.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false),
             SharedJson.Options)!;
 
-        // Клиент не освобождается здесь: он передаётся вызывающему коду
-        // вместе с секретом устройства.
-        var клиент = new HttpClient
-        {
-            BaseAddress = new Uri(БазовыйАдрес),
-        };
+        var клиент = СоздатьHttpClient();
 
         using var ответ = await клиент.PostAsJsonAsync(
             SharedProtocol.PairRoute,
-            new PairRequest(код.Code, код.Nonce, имя),
+            new PairRequest(код.Code, имя),
             SharedJson.Options,
             cancellationToken).ConfigureAwait(false);
 
@@ -132,6 +140,34 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
             SharedJson.Options)!;
 
         return new SharedTestClient(клиент, сопряжение.DeviceId, сопряжение.Secret, имя);
+    }
+
+    /// <summary>
+    /// Создаёт HTTP-клиент, доверяющий только сертификату стенда.
+    /// </summary>
+    /// <returns>Готовый HTTP-клиент.</returns>
+    public HttpClient СоздатьHttpClient()
+    {
+        var обработчик = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (_, сертификат, _, _) =>
+                сертификат is not null
+                && string.Equals(
+                    SharedFingerprint.ВычислитьОтпечаток(сертификат),
+                    SharedFingerprint.ВычислитьОтпечаток(Сертификат),
+                    StringComparison.OrdinalIgnoreCase),
+        };
+
+        var клиент = new HttpClient(обработчик)
+        {
+            BaseAddress = new Uri(БазовыйАдрес),
+        };
+
+        клиент.DefaultRequestHeaders.Add(
+            SharedProtocol.ProtocolVersionHeader,
+            SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        return клиент;
     }
 
     /// <summary>
@@ -159,6 +195,8 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
     {
         await _приложение.StopAsync().ConfigureAwait(false);
         await _приложение.DisposeAsync().ConfigureAwait(false);
+
+        Сертификат.Dispose();
 
         try
         {
@@ -196,7 +234,13 @@ public sealed class SharedTestClient : IDisposable
         Имя = имя;
 
         _клиент.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", секрет);
-        _клиент.DefaultRequestHeaders.Add(SharedProtocol.ProtocolVersionHeader, SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        // Заголовок версии мог быть уже задан: повторное добавление дало бы
+        // несколько значений, и служба не смогла бы разобрать заголовок.
+        _клиент.DefaultRequestHeaders.Remove(SharedProtocol.ProtocolVersionHeader);
+        _клиент.DefaultRequestHeaders.Add(
+            SharedProtocol.ProtocolVersionHeader,
+            SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>Идентификатор устройства.</summary>
@@ -284,7 +328,7 @@ public sealed class SharedTestCommandException : Exception
     /// Создаёт исключение.
     /// </summary>
     /// <param name="код">Код ошибки протокола.</param>
-    /// <param name="тело">Тело ответа.</param>
+    /// <param name="тело">Тело ответа службы.</param>
     /// <param name="сообщение">Сообщение службы.</param>
     public SharedTestCommandException(string код, string тело, string? сообщение)
         : base($"{код}: {сообщение ?? тело}")

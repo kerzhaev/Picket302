@@ -230,7 +230,7 @@ public sealed class SharedCommandRegistryTests
         реестр.TryGet(ПробнаяКоманда.Имя, out var описание);
 
         var результат = await описание.InvokeAsync(
-            new SharedCommandContext("оп-1", "устройство-1", "ПК оператора"),
+            new SharedCommandContext("оп-1", "устройство-1", "ПК оператора", DateTime.UtcNow),
             new ПробнаяКоманда.Запрос("значение"),
             CancellationToken.None);
 

@@ -1,4 +1,5 @@
 using Picket302.Service.Data;
+using Picket302.Application.Services;
 using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
@@ -45,6 +46,14 @@ public sealed class SaveCounterpartyCommand
     {
         var новая = запрос.Counterparty.Id <= 0;
         var контрагент = SharedMapping.ИзКонтрагента(запрос.Counterparty);
+
+        if (новая)
+        {
+            // Идентификатор и версия новой записи назначает служба: клиент не
+            // может навязать ни идентификатор, ни версию.
+            контрагент.Id = 0;
+            контрагент.Version = 0;
+        }
 
         if (!новая)
         {
@@ -268,6 +277,20 @@ public sealed class BatchUpdateCounterpartyFieldCommand
             throw new SharedValidationException("Не выбрано ни одной записи.");
         }
 
+        if (запрос.Items.Count > SharedProtocol.MaxIdListLength)
+        {
+            throw new SharedValidationException("Слишком много записей в одном запросе.");
+        }
+
+        // Имя поля ограничено тем же списком, что и в прикладной службе:
+        // произвольное имя в запросе не должно превращаться в запись в
+        // произвольную колонку.
+        if (!BatchEditService.EditableProperties.Contains(запрос.PropertyName))
+        {
+            throw new SharedValidationException(
+                $"Поле «{запрос.PropertyName}» не изменяется пакетно.");
+        }
+
         var идентификаторы = запрос.Items.Select(з => з.Id).ToArray();
 
         foreach (var запись in запрос.Items)
@@ -330,6 +353,40 @@ public sealed class SetCounterpartyFieldCommand
         SetCounterpartyFieldRequest запрос,
         CancellationToken cancellationToken)
     {
+        // Поле может быть новым (версия 0) или уже существующим: при
+        // существующем поле версия должна совпасть, иначе перезапись чужого
+        // значения отклоняется.
+        var существующее = await область.Данные.ПоляКонтрагентов
+            .GetByCounterpartyAsync(запрос.CounterpartyId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var прежнее = существующее
+            .FirstOrDefault(поле => поле.FieldName == запрос.FieldName);
+
+        if (прежнее is not null)
+        {
+            var увеличено = await область.Версии
+                .УвеличитьВерсиюAsync(
+                    SharedEntityKind.CounterpartyField,
+                    прежнее.Id,
+                    запрос.ExpectedVersion,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!увеличено)
+            {
+                throw new SharedConflictException(
+                    "Значение поля изменено на другом компьютере. Обновите данные и повторите действие.",
+                    $"Поле «{запрос.FieldName}» контрагента {запрос.CounterpartyId}.");
+            }
+        }
+        else if (запрос.ExpectedVersion != 0)
+        {
+            throw new SharedConflictException(
+                "Поле не найдено на сервере: возможно, его удалили на другом компьютере.",
+                $"Поле «{запрос.FieldName}» контрагента {запрос.CounterpartyId}.");
+        }
+
         var результат = await область.Данные.СлужбаПолей
             .SetCustomValueAsync(
                 запрос.CounterpartyId,
@@ -392,6 +449,32 @@ public sealed class RemoveCounterpartyFieldCommand
         RemoveCounterpartyFieldRequest запрос,
         CancellationToken cancellationToken)
     {
+        var поля = await область.Данные.ПоляКонтрагентов
+            .GetByCounterpartyAsync(запрос.CounterpartyId, cancellationToken)
+            .ConfigureAwait(false);
+
+        var прежнее = поля.FirstOrDefault(поле => поле.FieldName == запрос.FieldName);
+
+        if (прежнее is null)
+        {
+            throw new SharedNotFoundException("Значение пользовательского поля не найдено.");
+        }
+
+        var увеличено = await область.Версии
+            .УвеличитьВерсиюAsync(
+                SharedEntityKind.CounterpartyField,
+                прежнее.Id,
+                запрос.ExpectedVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!увеличено)
+        {
+            throw new SharedConflictException(
+                "Значение поля изменено на другом компьютере. Обновите данные и повторите действие.",
+                $"Поле «{запрос.FieldName}» контрагента {запрос.CounterpartyId}.");
+        }
+
         var удалено = await область.Данные.СлужбаПолей
             .RemoveCustomValueAsync(запрос.CounterpartyId, запрос.FieldName, cancellationToken)
             .ConfigureAwait(false);

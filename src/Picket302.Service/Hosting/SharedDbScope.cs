@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Picket302.Composition;
-using Picket302.Service.Data;
 using Picket302.Shared.Protocol;
+using Picket302.Service.Data;
 
 namespace Picket302.Service.Hosting;
 
@@ -110,12 +110,22 @@ public sealed class SharedDbScope : IAsyncDisposable
     public async Task СохранитьРезультатAsync<T>(
         string operationId,
         T результат,
+        DateTime моментЗапуска,
         CancellationToken cancellationToken = default)
     {
         var json = JsonSerializer.Serialize(результат, SharedJson.Options);
 
-        await Операции.СохранитьРезультатAsync(operationId, json, cancellationToken)
+        var зафиксировано = await Операции
+            .СохранитьРезультатAsync(operationId, json, моментЗапуска, cancellationToken)
             .ConfigureAwait(false);
+
+        if (!зафиксировано)
+        {
+            // Запись операции перехвачена другой попыткой: результат этой
+            // попытки сохранять нельзя, команда откатывается целиком.
+            throw new SharedOperationTakenException(
+                "Операция была перехвачена другой попыткой. Повторите действие.");
+        }
     }
 
     /// <inheritdoc />

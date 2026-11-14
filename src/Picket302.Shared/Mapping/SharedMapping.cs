@@ -391,7 +391,21 @@ public static class SharedMapping
             FolderId = dto.FolderId,
         };
 
-        письмо.SelectNotificationForm(dto.NotificationType);
+        // Вид уведомления и признак «нужно уведомление» хранятся в базе
+        // независимо друг от друга: колонка notice_type задаёт вид, отдельный
+        // столбец — признак. Вызов SelectNotificationForm выводил бы признак
+        // из вида и затирал сохранённое значение, поэтому вид восстанавливается
+        // напрямую, а признак переносится как есть.
+        if (!string.IsNullOrWhiteSpace(dto.NoticeType))
+        {
+            письмо.NoticeType = dto.NoticeType;
+        }
+        else if (dto.NotificationType != NotificationType.None)
+        {
+            письмо.SelectNotificationForm(dto.NotificationType);
+        }
+
+        письмо.NeedNotification = dto.NeedNotification;
 
         return письмо;
     }
@@ -559,6 +573,27 @@ public static class SharedMapping
     };
 
     /// <summary>
+    /// Преобразует сессию печати в контрактную форму.
+    /// </summary>
+    /// <param name="сессия">Сессия печати.</param>
+    /// <param name="устройство">Идентификатор устройства-клиента.</param>
+    /// <returns>DTO сессии печати.</returns>
+    public static PrintJobDto КСессииПечати(PrintJob сессия, string? устройство) => new(
+        сессия.Id,
+        сессия.CreatedAt,
+        сессия.TemplateId,
+        сессия.PrinterName,
+        сессия.PaperSizeName,
+        сессия.PaperWidthMm,
+        сессия.PaperHeightMm,
+        сессия.FontInfo,
+        сессия.Copies,
+        сессия.PrintMode,
+        сессия.Status,
+        сессия.ErrorText,
+        устройство);
+
+    /// <summary>
     /// Преобразует запись журнала печати в контрактную форму.
     /// </summary>
     /// <param name="запись">Запись журнала.</param>
@@ -575,7 +610,8 @@ public static class SharedMapping
         запись.Note,
         запись.TemplateDescription,
         запись.PrintJobId,
-        устройство);
+        устройство,
+        запись.Outcome);
 
     /// <summary>
     /// Преобразует фильтр выборки контрагентов в доменный.

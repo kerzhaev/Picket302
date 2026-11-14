@@ -10,9 +10,10 @@
 -- Маркеры версий общих сущностей. Отдельная таблица, а не колонка в строках
 -- сущностей: существующие репозитории и одиночный режим остаются
 -- неизменными, а проверка версии работает только там, где она нужна.
--- Сравнение и увеличение версии выполняются одной командой
--- (INSERT … ON CONFLICT … DO UPDATE … WHERE version = @Expected RETURNING …),
--- поэтому две одновременные правки не могут обе завершиться успешно.
+-- Сравнение и увеличение версии выполняются в одной транзакции команды:
+-- сначала UPDATE с условием «версия равна предъявленной», затем — вставка
+-- первой версии, если записи ещё нет. Две одновременные правки не могут обе
+-- завершиться успешно: вторая увидит увеличенную версию.
 CREATE TABLE IF NOT EXISTS shared_row_versions (
     entity_kind INTEGER NOT NULL,
     entity_id   INTEGER NOT NULL,
@@ -51,19 +52,21 @@ CREATE TABLE IF NOT EXISTS shared_devices (
 
 -- Одноразовые коды сопряжения. Код нельзя получить удалённым запросом:
 -- таблица заполняется локальным экраном администратора. Хранится отпечаток
--- кода, а не сам код.
+-- секретной части кода, а не сам код. Фрагмент отпечатка сервера связывает
+-- код с ключом сервера: клиент сверяет его с предъявленным сертификатом и
+-- не отправляет секретную часть, если сервер не тот.
 CREATE TABLE IF NOT EXISTS shared_pairings (
     pairing_id TEXT NOT NULL PRIMARY KEY,
-    code_hash  TEXT NOT NULL,
-    nonce      TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    max_uses   INTEGER NOT NULL DEFAULT 1,
-    attempts   INTEGER NOT NULL DEFAULT 0,
-    used_at    TEXT NULL,
-    created_at TEXT NOT NULL
+    secret_hash TEXT NOT NULL,
+    fragment    TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    max_uses    INTEGER NOT NULL DEFAULT 1,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    used_at     TEXT NULL,
+    created_at  TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_shared_pairings_nonce ON shared_pairings (nonce);
+CREATE INDEX IF NOT EXISTS idx_shared_pairings_secret ON shared_pairings (secret_hash);
 
 -- Управляемые пакеты шаблонов (.lbk): содержимое хранится на сервере
 -- вместе с версией и SHA-256, клиент получает конкретную версию.

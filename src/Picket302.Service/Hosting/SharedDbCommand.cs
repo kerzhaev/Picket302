@@ -71,7 +71,11 @@ public abstract class SharedDbCommand<TRequest, TResponse> : SharedCommand<TRequ
                 cancellationToken).ConfigureAwait(false);
 
             await область
-                .СохранитьРезультатAsync(context.OperationId, результат, cancellationToken)
+                .СохранитьРезультатAsync(
+                    context.OperationId,
+                    результат,
+                    context.StartedAt,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             await область.ЗафиксироватьAsync(cancellationToken).ConfigureAwait(false);

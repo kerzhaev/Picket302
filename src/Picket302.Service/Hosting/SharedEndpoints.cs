@@ -53,6 +53,7 @@ public static class SharedEndpoints
         ПодключитьСопряжение(приложение, контекст);
         ПодключитьКоманды(приложение, контекст);
         ПодключитьЗапросы(приложение, контекст);
+        SharedCatalogEndpoints.Подключить(приложение, контекст);
         ПодключитьАдминистративные(приложение, контекст);
     }
 
@@ -65,7 +66,7 @@ public static class SharedEndpoints
     {
         приложение.MapGet(SharedProtocol.HealthRoute, async (CancellationToken токен) =>
         {
-            var устройства = await ПеречислитьУстройстваAsync(контекст, токен).ConfigureAwait(false);
+            var устройств = await ПодсчитатьУстройстваAsync(контекст, токен).ConfigureAwait(false);
 
             return Results.Json(
                 new HealthResponse(
@@ -78,14 +79,14 @@ public static class SharedEndpoints
 
         приложение.MapGet(SharedProtocol.ServerInfoRoute, async (CancellationToken токен) =>
         {
-            var устройства = await ПеречислитьУстройстваAsync(контекст, токен).ConfigureAwait(false);
+            var устройств = await ПодсчитатьУстройстваAsync(контекст, токен).ConfigureAwait(false);
 
             return Results.Json(
                 new ServerInfoResponse(
                     контекст.ИдентификаторСервера,
                     SharedProtocol.Version,
                     контекст.ОтпечатокСервера,
-                    устройства.Count),
+                    устройств),
                 SharedJson.Options);
         });
     }
@@ -102,9 +103,21 @@ public static class SharedEndpoints
             HttpContext http,
             CancellationToken токен) =>
         {
-            if (запрос is null
-                || string.IsNullOrWhiteSpace(запрос.Code)
-                || string.IsNullOrWhiteSpace(запрос.Nonce))
+            if (запрос is null || string.IsNullOrWhiteSpace(запрос.Code))
+            {
+                return Ошибка(
+                    SharedErrorCodes.ValidationFailed,
+                    "Код сопряжения не задан.",
+                    http);
+            }
+
+            // Код состоит из фрагмента отпечатка сервера и одноразового
+            // секрета. Фрагмент позволяет клиенту убедиться, что он говорит
+            // с тем сервером, который показал код; секретная часть ищется в
+            // базе по своему отпечатку.
+            var (фрагмент, секрет) = SharedSecrets.РазделитьКодСопряжения(запрос.Code);
+
+            if (секрет.Length == 0)
             {
                 return Ошибка(
                     SharedErrorCodes.ValidationFailed,
@@ -116,12 +129,36 @@ public static class SharedEndpoints
             await using var освобождение = сессия.ConfigureAwait(false);
             var сопряжения = new SharedPairingStore(сессия);
 
+            // Предел попыток проверяется до проверки кода: после исчерпания
+            // предела ни верный, ни неверный код не принимается.
+            if (await сопряжения.ПревышенПределПопытокAsync(токен).ConfigureAwait(false))
+            {
+                контекст.Журнал(
+                    $"Попытка сопряжения отклонена: число попыток исчерпано "
+                    + $"(устройство «{запрос.DeviceName}»).");
+
+                return Ошибка(
+                    SharedErrorCodes.Unauthorized,
+                    "Число попыток сопряжения исчерпано. Обратитесь к администратору сервера.",
+                    http);
+            }
+
             var проверка = await сопряжения
-                .ПроверитьAsync(запрос.Code, запрос.Nonce, токен)
+                .ПроверитьAsync(
+                    SharedSecrets.ВычислитьОтпечатокСекретаКода(секрет),
+                    фрагмент,
+                    токен)
                 .ConfigureAwait(false);
 
             if (!проверка.Успешно)
             {
+                // Каждая неудачная попытка учитывается, в том числе та, при
+                // которой секретная часть кода не найдена: иначе перебор
+                // секрета ничем не ограничивался бы.
+                await сопряжения
+                    .ЗарегистрироватьНеудачнуюПопыткуAsync(токен)
+                    .ConfigureAwait(false);
+
                 контекст.Журнал(
                     $"Неудачная попытка сопряжения: {проверка.Причина} "
                     + $"(устройство «{запрос.DeviceName}»).");
@@ -133,14 +170,14 @@ public static class SharedEndpoints
             }
 
             var устройство = Guid.NewGuid().ToString("D");
-            var секрет = SharedSecrets.СоздатьСекретУстройства();
+            var секретУстройства = SharedSecrets.СоздатьСекретУстройства();
 
             var устройства = new SharedDeviceStore(сессия);
 
             await устройства.ЗарегистрироватьAsync(
                 устройство,
                 string.IsNullOrWhiteSpace(запрос.DeviceName) ? "Клиент" : запрос.DeviceName,
-                SharedSecrets.ВычислитьОтпечатокСекрета(секрет),
+                SharedSecrets.ВычислитьОтпечатокСекрета(секретУстройства),
                 токен).ConfigureAwait(false);
 
             контекст.Журнал($"Сопряжено устройство «{запрос.DeviceName}» ({устройство}).");
@@ -148,7 +185,7 @@ public static class SharedEndpoints
             return Results.Json(
                 new PairResponse(
                     устройство,
-                    секрет,
+                    секретУстройства,
                     контекст.ИдентификаторСервера,
                     контекст.ОтпечатокСервера),
                 SharedJson.Options);
@@ -594,8 +631,24 @@ public static class SharedEndpoints
                     http);
             }
 
-            var код = SharedSecrets.СоздатьКодСопряжения();
-            var nonce = Guid.NewGuid().ToString("N");
+            // Код состоит из фрагмента отпечатка сервера и одноразового
+            // секрета: клиент сверяет фрагмент с сертификатом сервера и
+            // отправляет секрет только настоящему серверу.
+            var фрагмент = SharedSecrets.ПолучитьФрагментОтпечатка(контекст.ОтпечатокСервера);
+
+            if (фрагмент.Length < SharedSecrets.ДлинаФрагмента)
+            {
+                контекст.Журнал(
+                    "Сопряжение невозможно: у службы не задан сертификат сервера.");
+
+                return Ошибка(
+                    SharedErrorCodes.ServiceUnavailable,
+                    "Служба не настроена: не задан сертификат сервера. Обратитесь к администратору.",
+                    http);
+            }
+
+            var код = SharedSecrets.СоздатьКодСопряжения(фрагмент);
+            var (полученныйФрагмент, секрет) = SharedSecrets.РазделитьКодСопряжения(код);
             var истечение = DateTime.UtcNow.Add(SharedSecrets.СрокКодаСопряжения);
 
             var сессия = контекст.База.СоздатьСессию();
@@ -607,8 +660,8 @@ public static class SharedEndpoints
                 await new SharedPairingStore(сессия)
                     .СоздатьAsync(
                         Guid.NewGuid().ToString("D"),
-                        SharedSecrets.ВычислитьОтпечатокКода(код, nonce),
-                        nonce,
+                        SharedSecrets.ВычислитьОтпечатокСекретаКода(секрет),
+                        полученныйФрагмент,
                         истечение,
                         токен)
                     .ConfigureAwait(false);
@@ -626,7 +679,6 @@ public static class SharedEndpoints
             return Results.Json(
                 new AdminPairingCodeResponse(
                     код,
-                    nonce,
                     истечение,
                     контекст.ОтпечатокСервера),
                 SharedJson.Options);
@@ -688,13 +740,26 @@ public static class SharedEndpoints
     }
 
     /// <summary>
+    /// Проверяет, что клиент объявил поддерживаемую версию протокола.
+    /// </summary>
+    /// <param name="http">Контекст запроса.</param>
+    /// <returns><see langword="true"/>, если версия поддерживается.</returns>
+    internal static bool ВерсияПоддерживается(HttpContext http)
+    {
+        var версия = http.Request.Headers[SharedProtocol.ProtocolVersionHeader].ToString();
+
+        return int.TryParse(версия, out var разобранная)
+            && SharedProtocol.IsSupported(разобранная);
+    }
+
+    /// <summary>
     /// Опознаёт устройство-клиента по заголовку авторизации.
     /// </summary>
     /// <param name="контекст">Служебное состояние службы.</param>
     /// <param name="http">Контекст запроса.</param>
     /// <param name="токен">Токен отмены.</param>
     /// <returns>Сведения об устройстве либо <see langword="null"/>.</returns>
-    private static async Task<SharedDevice?> ОпознатьУстройствоAsync(
+    internal static async Task<SharedDevice?> ОпознатьУстройствоAsync(
         SharedServiceContext контекст,
         HttpContext http,
         CancellationToken токен)
@@ -725,6 +790,25 @@ public static class SharedEndpoints
     }
 
     /// <summary>
+    /// Подсчитывает сопряжённые устройства, не читая строки устройств.
+    /// </summary>
+    /// <param name="контекст">Служебное состояние службы.</param>
+    /// <param name="токен">Токен отмены.</param>
+    /// <returns>Число сопряжённых устройств.</returns>
+    private static async Task<int> ПодсчитатьУстройстваAsync(
+        SharedServiceContext контекст,
+        CancellationToken токен)
+    {
+        var сессия = контекст.База.СоздатьСессию();
+
+        await using var освобождение = сессия.ConfigureAwait(false);
+
+        return await new SharedDeviceStore(сессия)
+            .ПодсчитатьУстройстваAsync(токен)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Перечисляет сопряжённые устройства.
     /// </summary>
     /// <param name="контекст">Служебное состояние службы.</param>
@@ -748,8 +832,6 @@ public static class SharedEndpoints
     /// <returns>Тело запроса либо <see langword="null"/>, если размер превышен.</returns>
     private static async Task<string?> ПрочитатьТелоAsync(HttpContext http, CancellationToken токен)
     {
-        http.Request.ContentLength = http.Request.ContentLength;
-
         var ограничение = new MemoryStream();
 
         var буфер = new byte[8192];
@@ -784,12 +866,36 @@ public static class SharedEndpoints
     /// <param name="имя">Имя параметра.</param>
     /// <param name="поУмолчанию">Значение по умолчанию.</param>
     /// <returns>Значение параметра.</returns>
-    private static int ЧитатьЦелое(HttpContext http, string имя, int поУмолчанию)
+    internal static int ЧитатьЦелое(HttpContext http, string имя, int поУмолчанию)
     {
         var значение = http.Request.Query[имя].ToString();
 
         return int.TryParse(значение, out var результат) ? результат : поУмолчанию;
     }
+
+    /// <summary>
+    /// Читает длинное целое значение параметра запроса.
+    /// </summary>
+    /// <param name="http">Контекст запроса.</param>
+    /// <param name="имя">Имя параметра.</param>
+    /// <returns>Значение параметра; 0 — параметр не задан или не разобран.</returns>
+    internal static long ПрочитатьДлинное(HttpContext http, string имя)
+    {
+        var значение = http.Request.Query[имя].ToString();
+
+        return long.TryParse(значение, out var результат) ? результат : 0;
+    }
+
+    /// <summary>
+    /// Формирует ответ с отказом в доступе.
+    /// </summary>
+    /// <param name="http">Контекст запроса.</param>
+    /// <returns>Результат ответа.</returns>
+    internal static IResult ОшибкаОтказа(HttpContext http)
+        => Ошибка(
+            SharedErrorCodes.Unauthorized,
+            "Устройство не сопряжено или доступ отозван.",
+            http);
 
     /// <summary>
     /// Читает фильтр выборки контрагентов из строки запроса.

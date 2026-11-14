@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Picket302.Shared.Protocol;
 
 namespace Picket302.Service.Security;
 
@@ -15,14 +16,23 @@ namespace Picket302.Service.Security;
 /// </remarks>
 public static class SharedSecrets
 {
-    /// <summary>Длина кода сопряжения в знаках (без разделителей).</summary>
-    public const int ДлинаКода = 12;
+    /// <summary>Число знаков в части кода сопряжения, несущей отпечаток сервера.</summary>
+    public const int ДлинаФрагмента = 8;
+
+    /// <summary>Число знаков в одноразовой части кода сопряжения.</summary>
+    public const int ДлинаСекрета = 16;
+
+    /// <summary>Число знаков в одной группе кода сопряжения (для чтения вслух).</summary>
+    public const int ЗнаковВГруппе = 4;
 
     /// <summary>Срок действия кода сопряжения.</summary>
     public static readonly TimeSpan СрокКодаСопряжения = TimeSpan.FromMinutes(10);
 
     /// <summary>Предельное число попыток сопряжения по одному коду.</summary>
     public const int МаксимумПопытокСопряжения = 5;
+
+    /// <summary>Алфавит кода сопряжения: без похожих знаков (0/O, 1/I).</summary>
+    private const string Алфавит = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
     /// <summary>
     /// Создаёт случайный секрет устройства.
@@ -50,40 +60,65 @@ public static class SharedSecrets
             .ToLowerInvariant();
 
     /// <summary>
-    /// Создаёт код сопряжения: последовательность знаков, читаемая вслух.
+    /// Вычисляет отпечаток открытого ключа сертификата сервера (SPKI,
+    /// SHA-256): клиент закрепляет это значение и сверяет его при каждом
+    /// подключении.
     /// </summary>
-    /// <returns>Код сопряжения.</returns>
-    public static string СоздатьКодСопряжения()
-    {
-        // Алфавит без похожих знаков (0/O, 1/I): код диктует оператор.
-        const string алфавит = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-        var байты = RandomNumberGenerator.GetBytes(ДлинаКода);
-        var символы = new char[ДлинаКода];
-
-        for (var i = 0; i < ДлинаКода; i++)
-        {
-            символы[i] = алфавит[байты[i] % алфавит.Length];
-        }
-
-        return new string(символы);
-    }
+    /// <param name="сертификат">Сертификат сервера.</param>
+    /// <returns>Шестнадцатеричный SHA-256 открытого ключа.</returns>
+    public static string ВычислитьОтпечатокСервера(
+        System.Security.Cryptography.X509Certificates.X509Certificate2 сертификат)
+        => SharedFingerprint.ВычислитьОтпечаток(сертификат);
 
     /// <summary>
-    /// Вычисляет отпечаток кода сопряжения в привязке к одноразовому
-    ///challenge-значению: код без этого значения недействителен, даже если
-    /// кто-то его перехватил.
+    /// Вычисляет фрагмент отпечатка сервера: короткую часть, которая входит
+    /// в код сопряжения и позволяет клиенту опознать сервер до отправки
+    /// одноразового секрета.
+    /// </summary>
+    /// <param name="отпечаток">Полный отпечаток открытого ключа.</param>
+    /// <returns>Фрагмент отпечатка в алфавите кода сопряжения.</returns>
+    public static string ПолучитьФрагментОтпечатка(string отпечаток)
+        => SharedFingerprint.ПолучитьФрагмент(отпечаток);
+
+    /// <summary>
+    /// Создаёт код сопряжения: фрагмент отпечатка сервера и одноразовый
+    /// секрет в одной строке.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Код одноразовый и ограничен по времени: его секретная часть хранится
+    /// на сервере только в виде отпечатка и действует ровно для одного
+    /// подключения.
+    /// </para>
+    /// <para>
+    /// Фрагмент отпечатка связывает код с ключом сервера: клиент сверяет его
+    /// с сертификатом, который предъявил сервер, и принимает соединение только
+    /// при совпадении. Поэтому секретная часть кода не передаётся тому, кто
+    /// не является настоящим сервером, и проверка сертификата не отключается
+    /// ни на одном шаге.
+    /// </para>
+    /// </remarks>
+    /// <param name="фрагмент">Фрагмент отпечатка сервера.</param>
+    /// <returns>Код сопряжения в виде групп через дефис.</returns>
+    public static string СоздатьКодСопряжения(string фрагмент)
+        => SharedFingerprint.СоздатьКод(фрагмент, СоздатьСлучайныйКод(ДлинаСекрета));
+
+    /// <summary>
+    /// Разделяет код сопряжения на фрагмент отпечатка и одноразовый секрет.
     /// </summary>
     /// <param name="код">Код сопряжения.</param>
-    /// <param name="nonce">Одноразовое значение вызова.</param>
-    /// <returns>Шестнадцатеричный SHA-256.</returns>
-    public static string ВычислитьОтпечатокКода(string код, string nonce)
-    {
-        var материал = Encoding.UTF8.GetBytes(
-            (код ?? string.Empty).Trim().ToUpperInvariant() + ":" + (nonce ?? string.Empty));
+    /// <returns>Фрагмент и секрет.</returns>
+    public static (string Фрагмент, string Секрет) РазделитьКодСопряжения(string код)
+        => SharedFingerprint.РазделитьКод(код);
 
-        return Convert.ToHexString(SHA256.HashData(материал)).ToLowerInvariant();
-    }
+    /// <summary>
+    /// Вычисляет отпечаток одноразовой части кода сопряжения.
+    /// </summary>
+    /// <param name="секрет">Секретная часть кода.</param>
+    /// <returns>Шестнадцатеричный SHA-256 секрета.</returns>
+    public static string ВычислитьОтпечатокСекретаКода(string секрет)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(секрет ?? string.Empty)))
+            .ToLowerInvariant();
 
     /// <summary>
     /// Сравнивает две строки за постоянное время.
@@ -100,40 +135,30 @@ public static class SharedSecrets
     }
 
     /// <summary>
-    /// Вычисляет отпечаток открытого ключа сертификата сервера (SPKI,
-    /// SHA-256): клиент закрепляет это значение и сверяет его при каждом
-    /// подключении.
-    /// </summary>
-    /// <param name="сертификат">Сертификат сервера.</param>
-    /// <returns>Шестнадцатеричный SHA-256 открытого ключа.</returns>
-    public static string ВычислитьОтпечатокСервера(System.Security.Cryptography.X509Certificates.X509Certificate2 сертификат)
-    {
-        ArgumentNullException.ThrowIfNull(сертификат);
-
-        return Convert.ToHexString(SHA256.HashData(сертификат.PublicKey.EncodedKeyValue.RawData))
-            .ToLowerInvariant();
-    }
-
-    /// <summary>
     /// Приводит отпечаток к короткому виду «A1:B2:C3:…» для показа
     /// оператору.
     /// </summary>
     /// <param name="отпечаток">Полный отпечаток.</param>
     /// <returns>Короткая запись отпечатка.</returns>
     public static string СократитьОтпечаток(string отпечаток)
+        => SharedFingerprint.СократитьОтпечаток(отпечаток);
+
+    /// <summary>
+    /// Создаёт случайный код заданной длины.
+    /// </summary>
+    /// <param name="длина">Число знаков.</param>
+    /// <returns>Случайный код.</returns>
+    private static string СоздатьСлучайныйКод(int длина)
     {
-        if (string.IsNullOrWhiteSpace(отпечаток))
+        var байты = RandomNumberGenerator.GetBytes(длина);
+        var символы = new char[длина];
+
+        for (var i = 0; i < длина; i++)
         {
-            return string.Empty;
+            символы[i] = Алфавит[байты[i] % Алфавит.Length];
         }
 
-        var разделители = new List<string>();
-
-        for (var i = 0; i + 1 < отпечаток.Length; i += 2)
-        {
-            разделители.Add(отпечаток.Substring(i, 2));
-        }
-
-        return string.Join(":", разделители);
+        return new string(символы);
     }
+
 }

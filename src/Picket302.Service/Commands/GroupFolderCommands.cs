@@ -440,6 +440,21 @@ public sealed class MoveCounterpartyCommand : SharedDbCommand<MoveCounterpartyRe
         MoveCounterpartyRequest запрос,
         CancellationToken cancellationToken)
     {
+        var увеличено = await область.Версии
+            .УвеличитьВерсиюAsync(
+                SharedEntityKind.Counterparty,
+                запрос.CounterpartyId,
+                запрос.ExpectedVersion,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!увеличено)
+        {
+            throw new SharedConflictException(
+                "Контрагент изменён на другом компьютере. Обновите данные и повторите действие.",
+                $"Идентификатор контрагента: {запрос.CounterpartyId}.");
+        }
+
         var результат = await область.Данные.СлужбаКатегорий
             .MoveCounterpartyAsync(запрос.CounterpartyId, запрос.CategoryId, cancellationToken)
             .ConfigureAwait(false);

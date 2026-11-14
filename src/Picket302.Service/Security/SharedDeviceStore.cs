@@ -169,6 +169,22 @@ public sealed class SharedDeviceStore
     }
 
     /// <summary>
+    /// Подсчитывает сопряжённые устройства: строки устройств при этом не
+    /// читаются, поэтому отпечатки секретов в память не попадают.
+    /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Число сопряжённых устройств.</returns>
+    public async Task<int> ПодсчитатьУстройстваAsync(CancellationToken cancellationToken = default)
+    {
+        return await _сессия.Connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(
+                "SELECT COUNT(*) FROM shared_devices;",
+                null,
+                _сессия.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Отзывает доступ отдельного устройства.
     /// </summary>
     /// <param name="deviceId">Идентификатор устройства.</param>

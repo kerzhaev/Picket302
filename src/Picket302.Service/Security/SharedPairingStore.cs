@@ -33,6 +33,15 @@ public sealed record SharedPairingResult(
 /// </remarks>
 public sealed class SharedPairingStore
 {
+    /// <summary>Ключ счётчика неудачных попыток сопряжения.</summary>
+    private const string ИмяСчётчика = "pairing-failures";
+
+    /// <summary>Ключ момента последней неудачной попытки.</summary>
+    private const string ИмяПоследнейПопытки = "pairing-failures-at";
+
+    /// <summary>Окно, за пределами которого счётчик неудачных попыток сбрасывается.</summary>
+    private static readonly TimeSpan ОкноПопыток = TimeSpan.FromMinutes(10);
+
     private readonly ISqliteSession _сессия;
 
     /// <summary>
@@ -50,15 +59,15 @@ public sealed class SharedPairingStore
     /// Создаёт одноразовый код сопряжения.
     /// </summary>
     /// <param name="pairingId">Идентификатор записи сопряжения.</param>
-    /// <param name="codeHash">Отпечаток кода.</param>
-    /// <param name="nonce">Одноразовое значение вызова.</param>
+    /// <param name="secretHash">Отпечаток секретной части кода.</param>
+    /// <param name="fragment">Фрагмент отпечатка сервера, входящий в код.</param>
     /// <param name="expiresAt">Момент истечения кода (UTC).</param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Задача завершения.</returns>
     public async Task СоздатьAsync(
         string pairingId,
-        string codeHash,
-        string nonce,
+        string secretHash,
+        string fragment,
         DateTime expiresAt,
         CancellationToken cancellationToken = default)
     {
@@ -66,14 +75,14 @@ public sealed class SharedPairingStore
             new CommandDefinition(
                 """
                 INSERT INTO shared_pairings
-                    (pairing_id, code_hash, nonce, expires_at, max_uses, attempts, created_at)
-                VALUES (@Id, @Hash, @Nonce, @Expires, 1, 0, @Now);
+                    (pairing_id, secret_hash, fragment, expires_at, max_uses, attempts, created_at)
+                VALUES (@Id, @Hash, @Fragment, @Expires, 1, 0, @Now);
                 """,
                 new
                 {
                     Id = pairingId,
-                    Hash = codeHash,
-                    Nonce = nonce,
+                    Hash = secretHash,
+                    Fragment = fragment,
                     Expires = Момент(expiresAt),
                     Now = Момент(DateTime.UtcNow),
                 },
@@ -84,27 +93,28 @@ public sealed class SharedPairingStore
     /// <summary>
     /// Проверяет код сопряжения и отмечает его использованным.
     /// </summary>
-    /// <param name="code">Предъявленный код.</param>
-    /// <param name="nonce">Одноразовое значение вызова.</param>
+    /// <param name="secretHash">Отпечаток секретной части предъявленного кода.</param>
+    /// <param name="fragment">Фрагмент отпечатка, предъявленный клиентом.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Результат проверки.</returns>
     public async Task<SharedPairingResult> ПроверитьAsync(
-        string code,
-        string nonce,
+        string secretHash,
+        string fragment,
         CancellationToken cancellationToken = default)
     {
         var строка = await _сессия.Connection.QueryFirstOrDefaultAsync<СтрокаСопряжения>(
             new CommandDefinition(
                 """
                 SELECT pairing_id AS PairingId,
-                       code_hash AS CodeHash,
+                       secret_hash AS SecretHash,
+                       fragment AS Fragment,
                        expires_at AS ExpiresAt,
                        attempts AS Attempts,
                        used_at AS UsedAt
                 FROM shared_pairings
-                WHERE nonce = @Nonce;
+                WHERE secret_hash = @Hash;
                 """,
-                new { Nonce = nonce },
+                new { Hash = secretHash },
                 _сессия.Transaction,
                 cancellationToken: cancellationToken)).ConfigureAwait(false);
 
@@ -144,11 +154,11 @@ public sealed class SharedPairingStore
             return new SharedPairingResult(false, "Срок действия кода сопряжения истёк.");
         }
 
-        var отпечаток = SharedSecrets.ВычислитьОтпечатокКода(code, nonce);
-
-        if (!SharedSecrets.СравнитьПостоянно(отпечаток, строка.CodeHash))
+        if (!SharedSecrets.СравнитьПостоянно(fragment, строка.Fragment))
         {
-            return new SharedPairingResult(false, "Код сопряжения неверный.");
+            return new SharedPairingResult(
+                false,
+                "Код сопряжения выдан другому серверу.");
         }
 
         var отмечено = await _сессия.Connection.ExecuteAsync(
@@ -171,6 +181,97 @@ public sealed class SharedPairingStore
         }
 
         return new SharedPairingResult(true, null, строка.PairingId);
+    }
+
+    /// <summary>
+    /// Регистрирует неудачную попытку сопряжения и сообщает, не превышен ли
+    /// предел.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Попытки, при которых секретная часть кода не найдена, тоже учитываются:
+    /// иначе перебор секрета не ограничивался бы ничем.
+    /// </para>
+    /// <para>
+    /// Счётчик сбрасывается, если последняя неудача была давно: после
+    /// перерыва в попытках попытка честного оператора не должна отклоняться
+    /// из-за чужих старых попыток.
+    /// </para>
+    /// </remarks>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns><see langword="true"/>, если предел попыток превышен.</returns>
+    public async Task<bool> ПревышенПределПопытокAsync(CancellationToken cancellationToken = default)
+    {
+        var сейчас = DateTime.UtcNow;
+
+        var последняя = await _сессия.Connection.QueryFirstOrDefaultAsync<string>(
+            new CommandDefinition(
+                "SELECT value FROM shared_service_meta WHERE name = @Name;",
+                new { Name = ИмяПоследнейПопытки },
+                _сессия.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        var давность = DateTime.TryParse(
+            последняя,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+            out var разобранное)
+            ? сейчас - разобранное
+            : TimeSpan.MaxValue;
+
+        if (давность > ОкноПопыток)
+        {
+            // Давняя неудача не должна влиять на нынешние попытки.
+            await _сессия.Connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
+                    INSERT INTO shared_service_meta (name, value) VALUES (@Name, '0')
+                    ON CONFLICT (name) DO UPDATE SET value = '0';
+                    """,
+                    new { Name = ИмяСчётчика },
+                    _сессия.Transaction,
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+        }
+
+        var счётчик = await _сессия.Connection.ExecuteScalarAsync<long>(
+            new CommandDefinition(
+                """
+                SELECT CAST(value AS INTEGER) FROM shared_service_meta WHERE name = @Name;
+                """,
+                new { Name = ИмяСчётчика },
+                _сессия.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        return счётчик >= SharedSecrets.МаксимумПопытокСопряжения;
+    }
+
+    /// <summary>
+    /// Учитывает неудачную попытку сопряжения.
+    /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Задача завершения.</returns>
+    public async Task ЗарегистрироватьНеудачнуюПопыткуAsync(CancellationToken cancellationToken = default)
+    {
+        await _сессия.Connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                INSERT INTO shared_service_meta (name, value) VALUES (@Name, '1')
+                ON CONFLICT (name) DO UPDATE SET
+                    value = CAST(CAST(value AS INTEGER) + 1 AS TEXT);
+                """,
+                new { Name = ИмяСчётчика },
+                _сессия.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        await _сессия.Connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                INSERT INTO shared_service_meta (name, value) VALUES (@Name, @Now)
+                ON CONFLICT (name) DO UPDATE SET value = @Now;
+                """,
+                new { Name = ИмяПоследнейПопытки, Now = Момент(DateTime.UtcNow) },
+                _сессия.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -208,7 +309,9 @@ public sealed class SharedPairingStore
     {
         public string PairingId { get; init; } = string.Empty;
 
-        public string CodeHash { get; init; } = string.Empty;
+        public string SecretHash { get; init; } = string.Empty;
+
+        public string Fragment { get; init; } = string.Empty;
 
         public string ExpiresAt { get; init; } = string.Empty;
 

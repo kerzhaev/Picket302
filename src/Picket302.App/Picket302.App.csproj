@@ -14,10 +14,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Picket302.Application\Picket302.Application.csproj" />
+    <!-- Общий состав слоя данных: тот же набор репозиториев и прикладных
+         служб, что и в серверной службе совместного режима. -->
+    <ProjectReference Include="..\Picket302.Composition\Picket302.Composition.csproj" />
     <ProjectReference Include="..\Picket302.ComAutomation\Picket302.ComAutomation.csproj" />
     <ProjectReference Include="..\Picket302.Domain\Picket302.Domain.csproj" />
     <ProjectReference Include="..\Picket302.Infrastructure\Picket302.Infrastructure.csproj" />
     <ProjectReference Include="..\Picket302.Printing\Picket302.Printing.csproj" />
+    <!-- Контракт совместного режима: типы сообщений протокола. -->
+    <ProjectReference Include="..\Picket302.Shared\Picket302.Shared.csproj" />
   </ItemGroup>
 
   <!-- Шаблон письма по умолчанию и стили редактора писем поставляются файлами

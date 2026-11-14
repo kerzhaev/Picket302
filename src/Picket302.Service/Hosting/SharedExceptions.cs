@@ -91,3 +91,19 @@ public sealed class SharedInsufficientSpaceException : SharedCommandException
     {
     }
 }
+
+/// <summary>
+/// Операция была перехвачена другой попыткой: запись в журнале идемпотентности
+/// уже принадлежит другому исполнителю.
+/// </summary>
+public sealed class SharedOperationTakenException : SharedCommandException
+{
+    /// <summary>
+    /// Создаёт ошибку перехвата операции.
+    /// </summary>
+    /// <param name="сообщение">Сообщение оператору.</param>
+    public SharedOperationTakenException(string сообщение)
+        : base(SharedErrorCodes.OperationInProgress, сообщение)
+    {
+    }
+}

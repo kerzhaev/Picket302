@@ -32,7 +32,7 @@ public sealed class SharedServiceIntegrationTests
     {
         await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
 
-        using var клиент = new HttpClient { BaseAddress = new Uri(стенд.БазовыйАдрес) };
+        using var клиент = стенд.СоздатьHttpClient();
 
         using var ответ = await клиент.GetAsync(SharedProtocol.HealthRoute);
 
@@ -253,7 +253,7 @@ public sealed class SharedServiceIntegrationTests
         var админТокен = new Picket302.Service.Security.SharedAdminToken(стенд.КаталогДанных)
             .ПолучитьИлиСоздать();
 
-        using var админский = new HttpClient { BaseAddress = new Uri(стенд.БазовыйАдрес) };
+        using var админский = стенд.СоздатьHttpClient();
         админский.DefaultRequestHeaders.Add("X-Picket302-Admin-Token", админТокен);
 
         using var ответОтзыва = await админский.PostAsync(
@@ -297,10 +297,13 @@ public sealed class SharedServiceIntegrationTests
     {
         await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
 
-        using var без_сопряжения = new HttpClient { BaseAddress = new Uri(стенд.БазовыйАдрес) };
+        using var без_сопряжения = стенд.СоздатьHttpClient();
 
         без_сопряжения.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "foreign-secret-value");
-        без_сопряжения.DefaultRequestHeaders.Add(SharedProtocol.ProtocolVersionHeader, SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        без_сопряжения.DefaultRequestHeaders.Remove(SharedProtocol.ProtocolVersionHeader);
+        без_сопряжения.DefaultRequestHeaders.Add(
+            SharedProtocol.ProtocolVersionHeader,
+            SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         using var сообщение = new HttpRequestMessage(
             HttpMethod.Post,

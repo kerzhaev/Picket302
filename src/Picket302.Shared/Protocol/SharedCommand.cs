@@ -9,10 +9,16 @@ namespace Picket302.Shared.Protocol;
 /// </param>
 /// <param name="DeviceId">Идентификатор сопряжённого устройства-клиента.</param>
 /// <param name="DeviceName">Имя устройства, показанное администратору.</param>
+/// <param name="StartedAt">
+/// Момент начала операции (UTC). Служба сверяет его с записью в журнале
+/// идемпотентности: результат фиксируется только если запись всё ещё
+/// принадлежит этой попытке, а не была перехвачена другой.
+/// </param>
 public sealed record SharedCommandContext(
     string OperationId,
     string DeviceId,
-    string DeviceName);
+    string DeviceName,
+    DateTime StartedAt);
 
 /// <summary>
 /// Команда совместного режима: именованная типизированная операция.

@@ -25,17 +25,19 @@ public static class SharedServiceFactory
     /// <param name="параметры">Настройки службы.</param>
     /// <param name="журнал">Приёмник записей журнала службы.</param>
     /// <param name="сертификат">
-    /// Сертификат сервера для TLS. Пусто — служба поднимается без
-    /// шифрования (используется только в проверках на локальном адресе).
+    /// Сертификат сервера для TLS. Обязателен: без него служба не
+    /// принимает подключения, потому что секрет устройства не должен
+    /// передаваться по открытому каналу.
     /// </param>
     /// <returns>Готовое веб-приложение.</returns>
     public static WebApplication Создать(
         ServiceOptions параметры,
         Action<string> журнал,
-        X509Certificate2? сертификат = null)
+        X509Certificate2 сертификат)
     {
         ArgumentNullException.ThrowIfNull(параметры);
         ArgumentNullException.ThrowIfNull(журнал);
+        ArgumentNullException.ThrowIfNull(сертификат);
 
         var база = new ServerDatabase(параметры.DatabasePath);
 
@@ -50,15 +52,13 @@ public static class SharedServiceFactory
         построитель.Logging.ClearProviders();
         построитель.WebHost.ConfigureKestrel(настройки =>
         {
-            настройки.ListenAnyIP(параметры.Port, узел =>
-            {
-                if (сертификат is not null)
-                {
-                    узел.UseHttps(сертификат);
-                }
-            });
+            настройки.ListenAnyIP(параметры.Port, узел => узел.UseHttps(сертификат));
 
             настройки.AddServerHeader = false;
+
+            // Предел тела задаётся на уровне сервера: слишком большой запрос
+            // отклоняется до того, как команда будет разобрана.
+            настройки.Limits.MaxRequestBodySize = SharedProtocol.MaxRequestBodyBytes;
         });
 
         построитель.Services.AddSingleton(база);
@@ -69,8 +69,26 @@ public static class SharedServiceFactory
 
         var приложение = построитель.Build();
 
+        // Версия протокола объявляется клиентом в заголовке и проверяется на
+        // каждом маршруте API: несовместимая версия отклоняется до обработки
+        // запроса, данные при этом не изменяются.
         приложение.Use(async (http, следующий) =>
         {
+            if (http.Request.Path.StartsWithSegments(SharedProtocol.RoutePrefix)
+                && !http.Request.Path.Equals(SharedProtocol.HealthRoute, StringComparison.OrdinalIgnoreCase)
+                && !SharedEndpoints.ВерсияПоддерживается(http))
+            {
+                http.Response.StatusCode = StatusCodes.Status426UpgradeRequired;
+
+                await http.Response.WriteAsJsonAsync(
+                    new SharedError(
+                        SharedErrorCodes.VersionIncompatible,
+                        "Версия протокола клиента не поддерживается службой."),
+                    SharedJson.Options);
+
+                return;
+            }
+
             try
             {
                 await следующий(http).ConfigureAwait(false);

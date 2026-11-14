@@ -25,6 +25,24 @@ public sealed class LayerDependencyTests
     /// <summary>
     /// Допустимые зависимости: имя сборки слоя — список сборок, на которые слой вправе ссылаться.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>Picket302.Shared</c> — контракт совместного режима: типизированные
+    /// сообщения протокола. Слой опирается только на доменный, чтобы клиент и
+    /// служба разделяли одну и ту же трактовку доменных перечислений.
+    /// </para>
+    /// <para>
+    /// <c>Picket302.Composition</c> — общий состав слоя данных: репозитории и
+    /// прикладные службы над одной сессией базы. Слой существует, чтобы
+    /// одиночный режим и серверная служба выполняли одни и те же доменные
+    /// правила.
+    /// </para>
+    /// <para>
+    /// <c>Picket302.Service</c> — серверная служба совместного режима: она
+    /// собирает состав поверх общего контракта и не знает об интерфейсе
+    /// программы.
+    /// </para>
+    /// </remarks>
     private static readonly IReadOnlyDictionary<string, string[]> ДопустимыеЗависимости =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
@@ -32,13 +50,31 @@ public sealed class LayerDependencyTests
             ["Picket302.Printing"] = new[] { "Picket302.Domain" },
             ["Picket302.Application"] = new[] { "Picket302.Domain", "Picket302.Printing" },
             ["Picket302.Infrastructure"] = new[] { "Picket302.Domain", "Picket302.Printing" },
+            ["Picket302.Shared"] = new[] { "Picket302.Domain" },
+            ["Picket302.Composition"] = new[]
+            {
+                "Picket302.Application",
+                "Picket302.Domain",
+                "Picket302.Infrastructure",
+                "Picket302.Printing",
+            },
+            ["Picket302.Service"] = new[]
+            {
+                "Picket302.Application",
+                "Picket302.Composition",
+                "Picket302.Domain",
+                "Picket302.Infrastructure",
+                "Picket302.Shared",
+            },
             ["Picket302.App"] = new[]
             {
                 "Picket302.Application",
                 "Picket302.ComAutomation",
+                "Picket302.Composition",
                 "Picket302.Domain",
                 "Picket302.Infrastructure",
                 "Picket302.Printing",
+                "Picket302.Shared",
             },
             ["Picket302.ComAutomation"] = new[]
             {

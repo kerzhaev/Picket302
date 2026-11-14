@@ -14,9 +14,11 @@ namespace Picket302.Service.Hosting;
 /// команды остановки.
 /// </para>
 /// <para>
-/// Служба работает в отдельном процессе без интерактивного окна и
-/// переживает выход сотрудника из учётной записи: её выполняет собственная
-/// учётная запись службы.
+/// <b>Жизненный цикл.</b> SCM ограничивает время ожидания запуска службы
+/// примерно тридцатью секундами, поэтому состояние «запускается» не может
+/// длиться дольше этого срока, а состояние «работает» наступает сразу после
+/// того, как хост поднят. Состояние «остановлена» наступает после того, как
+/// хост действительно остановился, а не сразу после команды остановки.
 /// </para>
 /// </remarks>
 internal static class WindowsServiceRunner
@@ -48,12 +50,12 @@ internal static class WindowsServiceRunner
     /// <summary>Команда выключения компьютера.</summary>
     private const uint SERVICE_CONTROL_SHUTDOWN = 0x00000005;
 
-    /// <summary>Код службы, снятой с выполнения.</summary>
-    private const uint ERROR_SERVICE_DISABLED = 0x00000420;
+    /// <summary>Предельное время ожидания запуска, миллисекунды.</summary>
+    private const uint StartTimeoutMilliseconds = 30000;
 
     /// <summary>
-    /// Делегат обработчика состояния службы: SCM вызывает его при старте и
-    /// при командах управления.
+    /// Делегат обработчика состояния службы: SCM вызывает его при командах
+    /// управления.
     /// </summary>
     /// <param name="управление">Команда управления.</param>
     /// <param name="параметр">Параметр команды.</param>
@@ -90,22 +92,20 @@ internal static class WindowsServiceRunner
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool SetServiceStatus(IntPtr hServiceStatus, ref SERVICE_STATUS lpServiceStatus);
 
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern IntPtr GetLastError();
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr LocalAlloc(uint uFlags, uint dwBytes);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr LocalFree(IntPtr hMem);
-
-    private const uint LMEM_ZEROINIT = 0x00000040;
-
-    private static Action? _запуск;
-    private static Action? _останов;
+    private static Action? _старт;
+    private static Func<Task>? _ожиданиеОстановки;
     private static CancellationTokenSource? _отмена;
     private static IntPtr _дескрипторСостояния = IntPtr.Zero;
-    private static uint _текущееСостояние = SERVICE_STOPPED;
+
+    /// <summary>Имя службы, под которым она зарегистрирована в SCM.</summary>
+    public const string ИмяСлужбы = "Picket302Service";
+
+    // Делегаты P/Invoke должны оставаться живыми всё время работы службы:
+    // сборщик мусора не должен собрать их между вызовом SCM и обработкой
+    // команды управления.
+    private static readonly ОбработчикУправления Обработчик = ОбработчикУправленияСлужбы;
+
+    private static readonly Action ОбработчикГлавный = ГлавныйОбработчик;
 
     /// <summary>
     /// Пытается передать управление диспетчеру служб Windows.
@@ -116,18 +116,26 @@ internal static class WindowsServiceRunner
     /// приложение (используется при проверках и запуске вручную).
     /// </remarks>
     /// <param name="имяСлужбы">Системное имя службы.</param>
-    /// <param name="запуск">
-    /// Действие запуска службы; получает отменяющий токен остановки.
+    /// <param name="старт">
+    /// Запускает хост и возвращает управление, когда хост поднят. Токен
+    /// отменяется по команде остановки.
+    /// </param>
+    /// <param name="ожиданиеОстановки">
+    /// Ожидает фактической остановки хоста.
     /// </param>
     /// <returns><see langword="true"/>, если служба запущена через SCM.</returns>
-    public static bool ЗапуститьКакСлужбу(string имяСлужбы, Action<CancellationToken> запуск)
+    public static bool ЗапуститьКакСлужбы(
+        string имяСлужбы,
+        Func<CancellationToken, Task> старт,
+        Func<Task> ожиданиеОстановки)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(имяСлужбы);
-        ArgumentNullException.ThrowIfNull(запуск);
+        ArgumentNullException.ThrowIfNull(старт);
+        ArgumentNullException.ThrowIfNull(ожиданиеОстановки);
 
         _отмена = new CancellationTokenSource();
-        _запуск = () => запуск(_отмена!.Token);
-        _останов = () => _отмена?.Cancel();
+        _старт = () => старт(_отмена!.Token).GetAwaiter().GetResult();
+        _ожиданиеОстановки = ожиданиеОстановки;
 
         var имя = Marshal.StringToHGlobalUni(имяСлужбы);
 
@@ -157,8 +165,7 @@ internal static class WindowsServiceRunner
     }
 
     /// <summary>
-    /// Обработчик состояния службы: SCM вызывает его при старте и при
-    /// командах управления.
+    /// Обработчик состояния службы: SCM вызывает его при командах управления.
     /// </summary>
     /// <param name="управление">Команда управления.</param>
     /// <param name="параметр">Параметр команды.</param>
@@ -169,8 +176,11 @@ internal static class WindowsServiceRunner
             case SERVICE_CONTROL_STOP:
             case SERVICE_CONTROL_SHUTDOWN:
                 УстановитьСостояние(SERVICE_STOP_PENDING, 0, 0);
-                _останов?.Invoke();
-                УстановитьСостояние(SERVICE_STOPPED, 0, 0);
+
+                // Отмена токена инициирует остановку хоста; состояние
+                // «остановлена» наступает после того, как хост действительно
+                // остановился.
+                _отмена?.Cancel();
                 break;
 
             default:
@@ -181,24 +191,26 @@ internal static class WindowsServiceRunner
     /// <summary>
     /// Точка входа службы для SCM.
     /// </summary>
-    /// <param name="аргументов">Число аргументов запуска.</param>
-    /// <param name="аргументы">Аргументы запуска.</param>
-    private static void ОбработчикГлавный(uint аргументов, IntPtr аргументы)
+    private static void ГлавныйОбработчик()
     {
-        var дескриптор = RegisterServiceCtrlHandlerExW(
+        _дескрипторСостояния = RegisterServiceCtrlHandlerExW(
             ИмяСлужбы,
             Marshal.GetFunctionPointerForDelegate(Обработчик),
             IntPtr.Zero);
 
-        _дескрипторСостояния = дескриптор;
-
-        УстановитьСостояние(SERVICE_START_PENDING, 0, 30000);
+        УстановитьСостояние(SERVICE_START_PENDING, 0, StartTimeoutMilliseconds);
 
         try
         {
-            _запуск?.Invoke();
+            // Хост поднимается и возвращает управление: после этого служба
+            // считается работающей, а ожидание остановки идёт отдельным шагом.
+            _старт?.Invoke();
 
             УстановитьСостояние(SERVICE_RUNNING, SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN, 0);
+
+            _ожиданиеОстановки?.Invoke()?.GetAwaiter().GetResult();
+
+            УстановитьСостояние(SERVICE_STOPPED, 0, 0);
         }
         catch (Exception)
         {
@@ -206,13 +218,6 @@ internal static class WindowsServiceRunner
             throw;
         }
     }
-
-    /// <summary>
-    /// Имя службы, под которым она зарегистрирована в SCM.
-    /// </summary>
-    public const string ИмяСлужбы = "Picket302Service";
-
-    private static readonly ОбработчикУправления Обработчик = ОбработчикУправленияСлужбы;
 
     /// <summary>
     /// Сообщает SCM о текущем состоянии службы.
@@ -234,13 +239,5 @@ internal static class WindowsServiceRunner
         };
 
         SetServiceStatus(_дескрипторСостояния, ref статус);
-
-        _текущееСостояние = состояние;
     }
-
-    /// <summary>
-    /// Код последней ошибки Windows.
-    /// </summary>
-    /// <returns>Код ошибки.</returns>
-    public static uint ПоследняяОшибка() => (uint)GetLastError();
 }

@@ -81,9 +81,11 @@ public sealed record DeleteCategoryRequest(
 /// </summary>
 /// <param name="CounterpartyId">Контрагент.</param>
 /// <param name="CategoryId">Категория назначения.</param>
+/// <param name="ExpectedVersion">Ожидаемая версия контрагента.</param>
 public sealed record MoveCounterpartyRequest(
     long CounterpartyId,
-    long CategoryId);
+    long CategoryId,
+    long ExpectedVersion);
 
 /// <summary>
 /// Создание папки отправлений.

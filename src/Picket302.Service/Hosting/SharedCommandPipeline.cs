@@ -128,6 +128,11 @@ public sealed class SharedCommandPipeline
 
         var отпечаток = SharedOperationStore.ВычислитьОтпечаток(телоЗапроса);
 
+        // Момент начала операции фиксируется один раз и используется при
+        // фиксации результата: так проверяется, что запись в журнале всё ещё
+        // принадлежит этой попытке.
+        var моментЗапуска = DateTime.UtcNow;
+
         // Шаг 1. Журнал идемпотентности: отдельная короткая транзакция, чтобы
         // параллельный повтор запроса увидел занятый идентификатор.
         var начало = await НачатьОперациюAsync(
@@ -135,6 +140,7 @@ public sealed class SharedCommandPipeline
             deviceId,
             имяКоманды,
             отпечаток,
+            моментЗапуска,
             cancellationToken).ConfigureAwait(false);
 
         switch (начало.Вид)
@@ -163,7 +169,11 @@ public sealed class SharedCommandPipeline
         // обе операции фиксируются вместе.
         try
         {
-            var контекст = new SharedCommandContext(operationId, deviceId, deviceName);
+            var контекст = new SharedCommandContext(
+                operationId,
+                deviceId,
+                deviceName,
+                моментЗапуска);
             var результат = await описание
                 .InvokeAsync(контекст, запрос, cancellationToken)
                 .ConfigureAwait(false);
@@ -180,7 +190,7 @@ public sealed class SharedCommandPipeline
                 operationId,
                 ошибка.Подробности);
 
-            await СохранитьОшибкуAsync(operationId, ошибкаПротокола, cancellationToken)
+            await СохранитьОшибкуAsync(operationId, ошибкаПротокола, моментЗапуска, cancellationToken)
                 .ConfigureAwait(false);
 
             return new SharedPipelineResult(false, КодСостояния(ошибкаПротокола), Ошибка: ошибкаПротокола);
@@ -193,7 +203,7 @@ public sealed class SharedCommandPipeline
                 operationId,
                 ошибка.Message);
 
-            await СохранитьОшибкуAsync(operationId, ошибкаПротокола, cancellationToken)
+            await СохранитьОшибкуAsync(operationId, ошибкаПротокола, моментЗапуска, cancellationToken)
                 .ConfigureAwait(false);
 
             return new SharedPipelineResult(
@@ -215,7 +225,7 @@ public sealed class SharedCommandPipeline
                 "Внутренняя ошибка службы. Операция не выполнена.",
                 operationId);
 
-            await СохранитьОшибкуAsync(operationId, ошибкаПротокола, cancellationToken)
+            await СохранитьОшибкуAsync(operationId, ошибкаПротокола, моментЗапуска, cancellationToken)
                 .ConfigureAwait(false);
 
             return new SharedPipelineResult(
@@ -240,6 +250,7 @@ public sealed class SharedCommandPipeline
         string deviceId,
         string имяКоманды,
         string отпечаток,
+        DateTime моментЗапуска,
         CancellationToken cancellationToken)
     {
         var сессия = _база.СоздатьСессию();
@@ -250,7 +261,13 @@ public sealed class SharedCommandPipeline
         try
         {
             var исход = await new SharedOperationStore(сессия, _журнал)
-                .НачатьAsync(operationId, deviceId, имяКоманды, отпечаток, cancellationToken)
+                .НачатьAsync(
+                    operationId,
+                    deviceId,
+                    имяКоманды,
+                    отпечаток,
+                    моментЗапуска,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             await сессия.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -275,6 +292,7 @@ public sealed class SharedCommandPipeline
     private async Task СохранитьОшибкуAsync(
         string operationId,
         SharedError ошибка,
+        DateTime моментЗапуска,
         CancellationToken cancellationToken)
     {
         try
@@ -288,6 +306,7 @@ public sealed class SharedCommandPipeline
                 .СохранитьОшибкуAsync(
                     operationId,
                     JsonSerializer.Serialize(ошибка, SharedJson.Options),
+                    моментЗапуска,
                     cancellationToken)
                 .ConfigureAwait(false);
 

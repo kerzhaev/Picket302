@@ -114,6 +114,12 @@ public sealed record BlankFieldDto(
 /// <param name="Status">Статус печатной операции.</param>
 /// <param name="ErrorText">Текст ошибки.</param>
 /// <param name="DeviceId">Устройство-клиент, выполнившее печать.</param>
+/// <remarks>
+/// Снимок настроек принтера (<c>DevmodeSnapshot</c>) в общий журнал не
+/// передаётся: это содержимое памяти драйвера принтера конкретного рабочего
+/// места, оно не имеет смысла на другом компьютере и может содержать данные
+/// о принтере. Снимок остаётся в локальном журнале рабочего места.
+/// </remarks>
 public sealed record PrintJobDto(
     long Id,
     DateTime CreatedAt,
@@ -143,6 +149,10 @@ public sealed record PrintJobDto(
 /// <param name="TemplateDescription">Описание использованного шаблона.</param>
 /// <param name="PrintJobId">Реестр печатных сессий.</param>
 /// <param name="DeviceId">Устройство-клиент, выполнившее печать.</param>
+/// <param name="Outcome">
+/// Исход печатной операции: «Prepared», «Spooled», «Error» или «Unknown».
+/// Пусто — исход определялся самой программой (одиночный режим).
+/// </param>
 public sealed record PrintHistoryDto(
     long Id,
     DateTime PrintedAt,
@@ -154,7 +164,8 @@ public sealed record PrintHistoryDto(
     string? Note,
     string TemplateDescription,
     long? PrintJobId,
-    string? DeviceId);
+    string? DeviceId,
+    string? Outcome = null);
 
 /// <summary>
 /// Данные отправления для печати.

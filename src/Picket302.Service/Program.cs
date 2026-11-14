@@ -1,6 +1,8 @@
 using System.Globalization;
 using Picket302.Service.Configuration;
+using Picket302.Service.Data;
 using Picket302.Service.Hosting;
+using Picket302.Service.Security;
 
 namespace Picket302.Service;
 
@@ -11,15 +13,19 @@ namespace Picket302.Service;
 /// <para>
 /// Служба запускается либо диспетчером служб Windows (тогда она работает в
 /// фоне без окна и переживает выход сотрудника из учётной записи), либо как
-/// обычное консольное приложение — второй режим нужен для проверок и
-/// запуска вручную.
+/// обычное консольное приложение — второй режим нужен для проверок и запуска
+/// вручную.
+/// </para>
+/// <para>
+/// <b>Служба работает только по защищённому каналу.</b> Без сертификата
+/// сервера служба не запускается: секрет устройства не должен передаваться
+/// по открытой сети.
 /// </para>
 /// <para>
 /// Аргументы командной строки:
 /// <list type="bullet">
 /// <item><description><c>--data &lt;каталог&gt;</c> — каталог данных службы;</description></item>
 /// <item><description><c>--port &lt;номер&gt;</c> — порт TCP;</description></item>
-/// <item><description><c>--console</c> — запуск в консольном режиме без SCM.</description></item>
 /// </list>
 /// </para>
 /// </remarks>
@@ -29,7 +35,7 @@ internal static class Program
     /// Запускает службу.
     /// </summary>
     /// <param name="args">Аргументы командной строки.</param>
-    /// <returns>Задача завершения работы службы.</returns>
+    /// <returns>Код завершения.</returns>
     private static async Task<int> Main(string[] args)
     {
         var параметры = ПрочитатьПараметры(args);
@@ -41,12 +47,20 @@ internal static class Program
 
         var сертификат = SharedServiceFactory.НайтиСертификат(параметры.CertificateThumbprint);
 
-        if (сертификат is null && !string.IsNullOrWhiteSpace(параметры.CertificateThumbprint))
+        if (сертификат is null)
         {
-            журнал($"Сертификат с отпечатком {параметры.CertificateThumbprint} не найден.");
+            журнал(
+                "Служба не запущена: не задан сертификат сервера. Секрет устройства "
+                + "не должен передаваться по открытому каналу.");
+
+            Console.Error.WriteLine(
+                "Служба Picket302 не может работать без сертификата сервера. "
+                + "Запустите установку серверной части.");
+
+            return 2;
         }
 
-        var база = new Data.ServerDatabase(параметры.DatabasePath);
+        var база = new ServerDatabase(параметры.DatabasePath);
 
         try
         {
@@ -61,15 +75,28 @@ internal static class Program
         }
 #pragma warning restore CA1031
 
+        SharedDataDirectoryProtection.Применить(параметры.DataDirectory, журнал);
+
+        // Журнал идемпотентности и просроченные коды сопряжения чистятся при
+        // старте: иначе они растут без ограничения.
+        await ОчиститьЖурналы(база, журнал).ConfigureAwait(false);
+
         журнал(
             $"Служба совместного режима запущена: порт {параметры.Port}, "
             + $"каталог данных {параметры.DataDirectory}.");
 
         var отмена = new CancellationTokenSource();
+        var приложение = SharedServiceFactory.Создать(параметры, журнал, сертификат);
 
-        var подSCM = WindowsServiceRunner.ЗапуститьКакСлужбу(
+        var подSCM = WindowsServiceRunner.ЗапуститьКакСлужбы(
             WindowsServiceRunner.ИмяСлужбы,
-            токен => ЗапуститьАсинхронно(параметры, сертификат, журнал, токен).GetAwaiter().GetResult());
+            async токен =>
+            {
+                await приложение.StartAsync(токен).ConfigureAwait(false);
+
+                токен.Register(() => _ = приложение.StopAsync());
+            },
+            () => приложение.WaitForShutdownAsync());
 
         if (!подSCM)
         {
@@ -82,9 +109,14 @@ internal static class Program
             using var регистрация = System.Runtime.InteropServices.PosixSignalRegistration
                 .Create(System.Runtime.InteropServices.PosixSignal.SIGINT, _ => отмена.Cancel());
 
-            await ЗапуститьАсинхронно(параметры, сертификат, журнал, отмена.Token)
-                .ConfigureAwait(false);
+            await приложение.StartAsync(отмена.Token).ConfigureAwait(false);
+
+            отмена.Token.Register(() => _ = приложение.StopAsync());
+
+            await приложение.WaitForShutdownAsync().ConfigureAwait(false);
         }
+
+        await приложение.DisposeAsync().ConfigureAwait(false);
 
         журнал("Служба совместного режима остановлена.");
 
@@ -92,22 +124,35 @@ internal static class Program
     }
 
     /// <summary>
-    /// Запускает веб-приложение службы.
+    /// Удаляет завершённые операции старше месяца и просроченные коды
+    /// сопряжения.
     /// </summary>
-    /// <param name="параметры">Настройки службы.</param>
-    /// <param name="сертификат">Сертификат сервера либо <see langword="null"/>.</param>
-    /// <param name="журнал">Приёмник записей журнала.</param>
-    /// <param name="токен">Токен отмены.</param>
-    /// <returns>Задача завершения работы.</returns>
-    private static async Task ЗапуститьАсинхронно(
-        ServiceOptions параметры,
-        System.Security.Cryptography.X509Certificates.X509Certificate2? сертификат,
-        Action<string> журнал,
-        CancellationToken токен)
+    /// <param name="база">Фабрика сессий базы данных.</param>
+    /// <param name="журнал">Приёмник записей журнала службы.</param>
+    /// <returns>Задача завершения.</returns>
+    private static async Task ОчиститьЖурналы(ServerDatabase база, Action<string> журнал)
     {
-        var приложение = SharedServiceFactory.Создать(параметры, журнал, сертификат);
+        try
+        {
+            var сессия = база.СоздатьСессию();
 
-        await приложение.RunAsync(токен).ConfigureAwait(false);
+            await using var освобождение = сессия.ConfigureAwait(false);
+
+            var удалено = await new Picket302.Service.Data.SharedOperationStore(сессия)
+                .УдалитьУстаревшиеAsync(TimeSpan.FromDays(30))
+                .ConfigureAwait(false);
+
+            if (удалено > 0)
+            {
+                журнал($"Из журнала идемпотентности удалено завершённых записей: {удалено}.");
+            }
+        }
+#pragma warning disable CA1031 // Неудачная очистка журнала не должна останавливать службу.
+        catch (Exception ошибка)
+        {
+            журнал($"Не удалось очистить журнал идемпотентности: {ошибка}");
+        }
+#pragma warning restore CA1031
     }
 
     /// <summary>

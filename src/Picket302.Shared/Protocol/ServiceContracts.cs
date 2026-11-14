@@ -3,12 +3,15 @@ namespace Picket302.Shared.Protocol;
 /// <summary>
 /// Запрос сопряжения клиентского устройства.
 /// </summary>
-/// <param name="Code">Одноразовый код сопряжения, показанный администратором.</param>
-/// <param name="Nonce">Одноразовое значение вызова.</param>
+/// <param name="Code">
+/// Одноразовый код сопряжения, показанный администратором. Код состоит из
+/// фрагмента отпечатка сервера и одноразового секрета: клиент сверяет
+/// фрагмент с предъявленным сертификатом и отправляет запрос только при
+/// совпадении.
+/// </param>
 /// <param name="DeviceName">Имя устройства для показа администратору.</param>
 public sealed record PairRequest(
     string Code,
-    string Nonce,
     string DeviceName);
 
 /// <summary>
@@ -60,12 +63,10 @@ public sealed record HealthResponse(
 /// Одноразовый код сопряжения, выданный локальной консолью администратора.
 /// </summary>
 /// <param name="Code">Код сопряжения.</param>
-/// <param name="Nonce">Одноразовое значение вызова.</param>
 /// <param name="ExpiresAt">Момент истечения кода (UTC).</param>
 /// <param name="ServerFingerprint">Отпечаток открытого ключа сервера.</param>
 public sealed record AdminPairingCodeResponse(
     string Code,
-    string Nonce,
     DateTime ExpiresAt,
     string ServerFingerprint);
 
