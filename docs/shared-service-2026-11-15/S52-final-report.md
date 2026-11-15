@@ -142,12 +142,21 @@ UX-артефакты, graphify-out/) не затронуты и не комми
    административный токен создаётся при запуске службы (раньше создавался
    лениво — консоль первого запуска всегда падала).
 
+Обновление поверх установленной копии: работающая служба останавливается
+**до** замены файлов (шаг ssInstall), при неустановке за отведённое время
+установка прерывается с понятным сообщением; код 1056 «уже запущена» и
+отсутствие правила брандмауэра на удалении не считаются отказами.
+
 Сборка: Inno Setup 6.7.3, .NET SDK 8.0.420, публикация
 `win-x64 --self-contained false`.
-**EXE**: `dist\picket302-server-setup.exe`,
-SHA-256 `442f43154749e0b0e1d4da8929a53a40e653a6e90d0737eb1925697c27463c8a`.
+**EXE (финальный, с исправлениями ревью)**:
+`dist\picket302-server-setup.exe`,
+SHA-256 `93bcd1c6976456aba9e445d3773f6dc91644853aabb98782742d926a961b4c52`.
 **INSTALL_BUILD_VERIFIED = true**; установка выполнена на реальном
 Windows-компьютере (не чистой ВМ): `CLEAN_VM_INSTALL_VERIFIED = NOT_RUN`.
+Обновление поверх **работающей** службы выполнено на реальной машине
+финальным пакетом: выход 0, служба остановлена до замены файлов и снова
+работает после.
 
 ## 5. Этап 3: реальная служба и локальная сеть (коммит 79e5fa3)
 
@@ -267,14 +276,14 @@ HKCU-лицензия и производственные проверки не 
 в MachineIdentity, LicenseStore и автомат; производственный профиль —
 без изменений (ветка HKCU, срок 10 дней, ворота — не ослаблены).
 
-**LICENSE_TEST_VERIFIED = true**: полный набор Debug **1784/1784**,
-Release **1784/1784** (BASE 1639: 1623 pass / 16 fail; dc1ceb4: 1755,
-16 fail — те же). Все 16 исторических падений проходят:
+**LICENSE_TEST_VERIFIED = true**: полный набор Debug **1784/1784** и
+Release **1784/1784**, оба прогона обеспечены TRX-артефактами
+(`tests/Picket302.Tests/TestResults/debug-final.trx`,
+`release-final.trx`). BASE 1639: 1623 pass / 16 fail; dc1ceb4: 1755,
+16 fail — те же. Все 16 исторических падений проходят:
 11 DistributionPrintScenarioTests, 4 FormDistributionEditorEditingTests,
-1 MainShellDistributionActionsTests (полный список имён — в TRX
-`tests/Picket302.Tests/TestResults/wave2.trx` и `debug2.trx`).
-Один разовый сбой Debug в параллельном прогоне не воспроизвёлся повторным
-полным прогоном (1784/1784).
+1 MainShellDistributionActionsTests (состав имён — в `wave2.trx`).
+
 
 ## 7. Изменённые файлы
 
@@ -285,14 +294,15 @@ Release **1784/1784** (BASE 1639: 1623 pass / 16 fail; dc1ceb4: 1755,
 | `29212f4` | Импорт через серверные команды (IImportMerger, мастер и внешний импорт в общем режиме, пустой пакет, расширенный ответ), отказ COM в общем режиме (SharedWorkstationMode), 11 тестов |
 | `79e5fa3` | Установка доводит службу до рабочего состояния (подготовка каталога данных, токен при старте, ASCII-заполнитель сопряжения, скомпилированный валидатор сертификата консоли, README про ключ), проверено на реальной машине |
 | `cf4afef` | Изоляция состояния лицензии для непроизводственных профилей (файловый реестр, машинная идентичность, автомат), доказательство причины 16 падений |
-| *(этот коммит)* | Отчёт S52 + обновление S50 (устаревшее утверждение о merge/push) |
+| `0ea40c0` | Отчёт S52 + обновление S50 (устаревшее утверждение о merge/push) |
+| *(исправления ревью)* | W2-01: остановка службы до замены файлов (ssInstall) + честный отказ при таймауте; W2-03..05: код 1056 «уже запущена» = успех при RUNNING, отсутствие правила брандмауэра = успех удаления, StopService возвращает False по таймауту; W2-06: реестр лицензирования — файл профиля (удаляется с профилем); W2-07: реестр продётся в СоздатьОбщийAsync; W2-08: формулировка комментария; финальные TRX Debug+Release; обновление §4/§8/§12 отчёта |
 
 ## 8. Команды, версии, результаты
 
 | Действие | Команда | Результат |
 |---|---|---|
 | Сборка | `dotnet build Picket302.sln -c Debug` / `-c Release` | 0 ошибок (2 исторических warning CS0168, есть на BASE) |
-| Тесты Debug | `dotnet test tests/Picket302.Tests/Picket302.Tests.csproj -c Debug` | **1784 total / 1784 pass / 0 fail / 0 skip** |
+| Тесты Debug | `dotnet test … -c Debug --logger "trx;LogFileName=debug-final.trx"` | **1784 total / 1784 pass / 0 fail / 0 skip** |
 | Тесты Release | то же с `-c Release` | **1784 total / 1784 pass / 0 fail / 0 skip** |
 | Публикация службы | `dotnet publish src/Picket302.Service -c Release -r win-x64 --self-contained false` | `bin\x64\Release\net8.0-windows\win-x64\publish` |
 | Сборка пакета | `ISCC installer\picket302-server.iss` (Inno Setup 6.7.3) | `dist\picket302-server-setup.exe`, exit 0 |
@@ -351,7 +361,7 @@ In-process (синтетические) результаты: все Shared-ин
 |---|---|---|
 | SOURCE_VERIFIED | true | карта S52 §2–§6 по первоисточнику; ревью волны — см. §14 |
 | BUILD_DEBUG_VERIFIED / BUILD_RELEASE_VERIFIED | true | 0 ошибок, обе конфигурации |
-| TEST_VERIFIED | true | Debug 1784/1784, Release 1784/1784 |
+| TEST_VERIFIED | true | Debug 1784/1784 (`debug-final.trx`), Release 1784/1784 (`release-final.trx`) |
 | INSTALL_BUILD_VERIFIED | **true** | пакет собран, SHA-256 в §9 |
 | CLEAN_VM_INSTALL_VERIFIED | NOT_RUN | чистой ВМ нет (внешний блокер) |
 | SCM_RUNTIME_VERIFIED | true | реальный SCM: регистрация, запуск, остановка, состояние, NetworkService, AUTO_START; выход оператора не тестировался фактически |

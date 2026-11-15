@@ -165,7 +165,9 @@ begin
     Sleep(1000);
   end;
 
-  Result := True;
+  { Служба не остановилась за отведённое время: вызывающий код обязан
+    сообщить об этом и прервать установку. }
+  Result := False;
 end;
 
 { Снимает регистрацию службы. Отсутствие службы считается успехом. }
@@ -222,6 +224,18 @@ function RemoveFirewallRule(var Text: String): Boolean;
 var
   Code: Integer;
 begin
+  { Правило может отсутствовать (чистая машина или уже удалено): show rule
+    возвращает ненулевой код, когда правило не найдено, — в этом случае
+    удалять нечего и удаление считается выполненным. }
+  if RunCommand('netsh.exe', 'advfirewall firewall show rule name="' + '{#FirewallRuleName}' + '"', Code) then
+  begin
+    if Code <> 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+
   Result := RunCommand('netsh.exe', 'advfirewall firewall delete rule name="' + '{#FirewallRuleName}'
     + '"', Code);
 
@@ -269,7 +283,9 @@ begin
 
     if State = 'RUNNING' then
     begin
-      Result := Text = '';
+      { Служба работает: ненулевой код sc start (например 1056 «уже
+        запущена» на пути обновления) отказом не считается. }
+      Result := True;
       Exit;
     end;
 
@@ -286,13 +302,30 @@ begin
   Result := False;
 end;
 
-{ Установка: регистрация службы, правило брандмауэра, первый запуск. }
+{ Установка: остановка работающей службы, регистрация, правило
+  брандмауэра, первый запуск. }
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Code: Integer;
   Text: String;
   State: String;
 begin
+  if CurStep = ssInstall then
+  begin
+    { Обновление поверх установленной копии: служба останавливается ДО
+      замены файлов, иначе заблокированный исполняемый файл делает
+      копирование невозможным. Отсутствие службы — норма чистой машины. }
+    if not StopService then
+    begin
+      MsgBox('Не удалось остановить службу {#ServiceName} для обновления файлов.' + #13#10#13#10 +
+        'Остановите службу вручную (sc.exe stop {#ServiceName}) и повторите установку.',
+        mbError, MB_OK);
+      RaiseException('Служба не остановлена перед заменой файлов.');
+    end;
+
+    Exit;
+  end;
+
   if CurStep <> ssPostInstall then
   begin
     Exit;

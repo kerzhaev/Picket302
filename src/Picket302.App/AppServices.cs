@@ -715,7 +715,8 @@ public sealed class AppServices : IAsyncDisposable
         string секрет,
         CancellationToken cancellationToken = default,
         PrinterManager? службаПринтеров = null,
-        bool реестрОтправителяИзолирован = false)
+        bool реестрОтправителяИзолирован = false,
+        Picket302.Infrastructure.Licensing.LicensingRegistry? реестрЛицензирования = null)
     {
         ArgumentNullException.ThrowIfNull(пути);
         ArgumentNullException.ThrowIfNull(реквизиты);
@@ -746,7 +747,8 @@ public sealed class AppServices : IAsyncDisposable
             профильКлиента,
             службаПринтеров,
             реестрОтправителяИзолирован,
-            незавершённые);
+            незавершённые,
+            реестрЛицензирования);
     }
 
     /// <summary>

@@ -42,6 +42,10 @@ public sealed class ИзолированныйПрофиль : IDisposable
         Корень = корень ?? Path.Combine(Path.GetTempPath(), "Picket302Tests", Guid.NewGuid().ToString("N"));
         Пути = Picket302ProfilePaths.ДляКорня(Корень);
 
+        // Реестр лицензирования — файл этого профиля: удаляется вместе с
+        // профилем, состояние не переживает тест.
+        РеестрЛицензирования = Picket302.Infrastructure.Licensing.LicensingRegistry.File(Пути.DataDirectory);
+
         ГардПрофиля.ГарантироватьИзоляцию(Пути);
 
         // Полная структура профиля создаётся сразу: журналы Serilog и
@@ -75,9 +79,8 @@ public sealed class ИзолированныйПрофиль : IDisposable
     /// периода пишется в файл временного профиля, а не в реальный
     /// HKCU\Software\Picket302\Licensing рабочей машины.
     /// </summary>
-    public Picket302.Infrastructure.Licensing.LicensingRegistry РеестрЛицензирования { get; } =
-        Picket302.Infrastructure.Licensing.LicensingRegistry.File(
-            Picket302ProfilePaths.ДляКорня(Guid.NewGuid().ToString("N")).DataDirectory);
+    public Picket302.Infrastructure.Licensing.LicensingRegistry РеестрЛицензирования { get; private set; }
+        = null!;
 
     /// <summary>
     /// Передаёт профилю владение составом, созданным вызывающим кодом:
