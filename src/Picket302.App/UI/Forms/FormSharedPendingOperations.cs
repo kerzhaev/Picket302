@@ -204,6 +204,20 @@ public sealed class FormSharedPendingOperations : Form
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                 }
+                catch (SharedModeException ошибка) when (
+                    ошибка.Код == SharedErrorCodes.PendingHistoryUnavailable)
+                {
+                    // История недоступна (блокировка или отказ записи):
+                    // исход этой операции неизвестен либо известен, но
+                    // сведения остались — строка не удаляется, повтор
+                    // безопасен позже.
+                    MessageBox.Show(
+                        this,
+                        ошибка.Message,
+                        "Незавершённые операции",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
                 catch (SharedModeException ошибка)
                 {
                     // Служба ответила содержательным отказом: исход известен,

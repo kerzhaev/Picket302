@@ -6166,6 +6166,18 @@ public sealed class MainShell : Form
             return;
         }
 
+        if (_состав.НезавершённыеОперацииStore?.Заблокировано == true)
+        {
+            MessageBox.Show(
+                this,
+                _состав.НезавершённыеОперацииStore.ПричинаБлокировки!,
+                "Незавершённые операции",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
         if (!_состав.Данные.ОбщийРежим)
         {
             MessageBox.Show(

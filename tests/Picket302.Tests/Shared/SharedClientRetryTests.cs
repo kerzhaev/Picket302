@@ -294,7 +294,8 @@ public sealed class SharedClientRetryTests
     }
 
     [Fact]
-    public async Task Окно_Выполнения_На_Сервере_Сохраняет_Незавершённую_Операцию()    {
+    public async Task Окно_Выполнения_На_Сервере_Сохраняет_Незавершённую_Операцию()
+    {
         await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
         var каталог = КаталогПроверки();
 
