@@ -35,13 +35,22 @@ Source: "..\src\Picket302.Service\bin\Release\net8.0-windows\win-x64\publish\*";
 
 [Dirs]
 ; Каталог данных службы: ProgramData, не профиль сотрудника и не рядом с EXE.
-Name: "{commonappdata}\Picket302\Service"; Permissions: users-modify
+; Права группам пользователей НЕ выдаются: при каждом старте служба
+; ограничивает права каталога и всех вложенных объектов (SYSTEM,
+; Администраторы, фактическая учётная запись службы) и отказывается
+; запускаться (код выхода 4), если ограничить или проверить права не
+; удалось. Право users-modify, выданное прежней версией установщика,
+; убирается при первом старте службы.
+Name: "{commonappdata}\Picket302\Service"
 Name: "{commonappdata}\Picket302\Service\backups"
 
 [Run]
 ; Регистрация службы под учётной записью с минимальными правами.
 Filename: "{app}\Picket302.Service.exe"; Parameters: "--install"; Flags: runhidden waituntilterminated
 ; Правило брандмауэра для локальной сети: входящий TCP на порт 30242.
+; Правило создаётся для порта по умолчанию. Нестандартный порт
+; (service.json, ServiceOptions.Port) требует отдельного ручного правила —
+; автоматическая настройка брандмауэра под кастомный порт не поддерживается.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Picket302 Service"" dir=in action=allow protocol=TCP localport=30242 profile=private"; Flags: runhidden
 ; Первый запуск службы.
 Filename: "{sys}\sc.exe"; Parameters: "start {#ServiceName}"; Flags: runhidden

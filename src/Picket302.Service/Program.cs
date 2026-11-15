@@ -73,12 +73,29 @@ internal static class Program
             return 3;
         }
 
-        var параметры = ПрочитатьПараметры(args);
+        var параметры = ПрочитатьАргументы(args);
 
         Directory.CreateDirectory(параметры.DataDirectory);
         Directory.CreateDirectory(параметры.LogsDirectory);
 
         var журнал = СоздатьЖурнал(параметры.LogsDirectory);
+
+        // Защита каталога данных обязательна до всего: до чтения service.json,
+        // до подготовки базы, до создания административного токена и до
+        // открытия порта. Отказ защиты останавливает запуск: база и токен
+        // не должны быть доступны посторонним учётным записям.
+        if (!SharedDataDirectoryProtection.Применить(параметры.DataDirectory, журнал))
+        {
+            Console.Error.WriteLine(
+                "Служба Picket302 не запущена: не удалось ограничить права на каталог "
+                + "данных. Диагностика — в журнале службы. Сеть службой не открывалась.");
+
+            return 4;
+        }
+
+        // Настройки из service.json читаются после защиты каталога: файл не
+        // должен быть доступен на изменение посторонним учётным записям.
+        СлитьНастройки(параметры);
 
         var сертификат = SharedServiceFactory.НайтиСертификат(параметры.CertificateThumbprint);
 
@@ -109,8 +126,6 @@ internal static class Program
             return 2;
         }
 #pragma warning restore CA1031
-
-        SharedDataDirectoryProtection.Применить(параметры.DataDirectory, журнал);
 
         // Журнал идемпотентности и просроченные коды сопряжения чистятся при
         // старте: иначе они растут без ограничения.
@@ -209,14 +224,15 @@ internal static class Program
     }
 
     /// <summary>
-    /// Читает настройки из файла и из аргументов командной строки.
+    /// Читает каталог данных и порт из аргументов командной строки, не
+    /// трогая файл настроек: он читается после защиты каталога данных.
     /// </summary>
     /// <param name="args">Аргументы командной строки.</param>
-    /// <returns>Настройки службы.</returns>
-    private static ServiceOptions ПрочитатьПараметры(string[] args)
+    /// <returns>Настройки с каталогом и портом из аргументов.</returns>
+    private static ServiceOptions ПрочитатьАргументы(string[] args)
     {
         var каталог = ServiceOptions.КаталогДанныхПоУмолчанию();
-        var порт = ServiceOptions.DefaultPort;
+        int? портИзАргументов = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -230,7 +246,7 @@ internal static class Program
                     if (int.TryParse(args[++i], NumberStyles.Integer, CultureInfo.InvariantCulture, out var разобранный)
                         && разобранный is > 0 and <= 65535)
                     {
-                        порт = разобранный;
+                        портИзАргументов = разобранный;
                     }
 
                     break;
@@ -240,13 +256,32 @@ internal static class Program
             }
         }
 
-        var путьНастроек = Path.Combine(каталог, ServiceOptions.SettingsFileName);
-        var параметры = ServiceOptions.Прочитать(путьНастроек);
+        return new ServiceOptions
+        {
+            DataDirectory = каталог,
+            Port = портИзАргументов ?? ServiceOptions.DefaultPort,
+        };
+    }
 
-        параметры.DataDirectory = каталог;
-        параметры.Port = порт;
+    /// <summary>
+    /// Дополняет параметры файлом настроек <c>service.json</c>: порт из
+    /// файла используется, если порт не задан аргументом командной строки.
+    /// </summary>
+    /// <remarks>
+    /// Аргумент командной строки имеет приоритет над файлом; недопустимый
+    /// порт в файле (вне диапазона 1–65535) игнорируется.
+    /// </remarks>
+    /// <param name="параметры">Настройки из аргументов командной строки.</param>
+    private static void СлитьНастройки(ServiceOptions параметры)
+    {
+        var путьНастроек = Path.Combine(параметры.DataDirectory, ServiceOptions.SettingsFileName);
+        var изФайла = ServiceOptions.Прочитать(путьНастроек);
 
-        return параметры;
+        if (параметры.Port == ServiceOptions.DefaultPort
+            && изФайла.Port is > 0 and <= 65535)
+        {
+            параметры.Port = изФайла.Port;
+        }
     }
 
     /// <summary>

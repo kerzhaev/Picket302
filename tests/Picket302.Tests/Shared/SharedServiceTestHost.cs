@@ -59,15 +59,30 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
     /// Поднимает службу на свободном порту в изолированном каталоге.
     /// </summary>
     /// <param name="cancellationToken">Токен отмены.</param>
+    /// <param name="каталогДанных">
+    /// Заранее подготовленный каталог данных; пусто — создаётся временный.
+    /// Порядок подъёма как в <c>Program.Main</c>: защита каталога — до
+    /// подготовки базы, до административного токена и до открытия порта.
+    /// </param>
     /// <returns>Готовый стенд.</returns>
     public static async Task<SharedServiceTestHost> ПоднятьAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? каталогДанных = null)
     {
-        var каталог = Path.Combine(
+        var каталог = каталогДанных ?? Path.Combine(
             Path.GetTempPath(),
             "Picket302SharedTest_" + Guid.NewGuid().ToString("N"));
 
         Directory.CreateDirectory(каталог);
+
+        // Защита каталога обязательна к применению: отказ останавливает
+        // подъём до подготовки базы и до открытия порта.
+        if (!Picket302.Service.Security.SharedDataDirectoryProtection.Применить(каталог, _ => { }))
+        {
+            throw new InvalidOperationException(
+                "Стенд не поднят: не удалось ограничить права на каталог данных "
+                + $"({каталог}). Сеть не открывалась.");
+        }
 
         var порт = НайтиСвободныйПорт();
 
