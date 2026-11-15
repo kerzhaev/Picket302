@@ -366,7 +366,7 @@ In-process (синтетические) результаты: все Shared-ин
 | SOURCE_VERIFIED | true | карта S52 §2–§6 по первоисточнику; ревью волны — см. §14 |
 | BUILD_DEBUG_VERIFIED / BUILD_RELEASE_VERIFIED | true | 0 ошибок, обе конфигурации |
 | TEST_VERIFIED | true | Debug 1784/1784 (`debug-final.trx`), Release 1784/1784 (`release-final.trx`) |
-| INSTALL_BUILD_VERIFIED | **true** | пакет собран, SHA-256 `5c95790f…b4c52` (§9) |
+| INSTALL_BUILD_VERIFIED | **true** | пакет собран, SHA-256 `5c95790f…74683` (§9) |
 | CLEAN_VM_INSTALL_VERIFIED | NOT_RUN | чистой ВМ нет (внешний блокер) |
 | SCM_RUNTIME_VERIFIED | true | реальный SCM: регистрация, запуск, остановка, состояние, NetworkService, AUTO_START; выход оператора не тестировался фактически |
 | REBOOT_VERIFIED | NOT_RUN | окно обслуживания не согласовывалось |
