@@ -739,6 +739,14 @@ public sealed class AppServices : IAsyncDisposable
 
         await счётчик.ОбновитьAsync(cancellationToken).ConfigureAwait(false);
 
+        // Изоляция лицензирования общего состава — по тем же правилам, что
+        // и одиночного: у непроизводственного профиля состояние пробного
+        // периода живёт в файле профиля, у производственного — в реестре
+        // Windows (см. СоздатьЯдроAsync).
+        реестрЛицензирования ??= ИзолированныйПрофиль(пути.DataDirectory)
+            ? Picket302.Infrastructure.Licensing.LicensingRegistry.File(пути.DataDirectory)
+            : null;
+
         return new AppServices(
             пути,
             удалённый,
