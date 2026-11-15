@@ -76,34 +76,133 @@ Add-Type -AssemblyName System.Net.Http
 
 $ОжидаемыйОтпечаток = $Сертификат.Thumbprint
 
-$ПроверитьСертификат = {
-    param($запрос, $предъявленный, $цепочка, $ошибки)
+# Проверка сертификата выполняется скомпилированным делегатом, а не
+# скриптовым блоком PowerShell: обработчик вызывается .NET из фонового
+# потока, где пространства выполнения PowerShell нет, и скриптовый блок
+# приводит к ошибке «нет доступного пространства выполнения».
+$ИсходникВалидатора = @'
+using System;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 
-    if ($null -eq $предъявленный) {
-        return $false
+public static class Picket302CertificatePin
+{
+    public static string Expected = string.Empty;
+
+    private static bool Совпадает(X509Certificate сертификат)
+    {
+        if (сертификат == null)
+        {
+            return false;
+        }
+
+        using (var cert = new X509Certificate2(сертификат))
+        {
+            return string.Equals(cert.Thumbprint, Expected, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
-    $проверяемый = $предъявленный -as [System.Security.Cryptography.X509Certificates.X509Certificate2]
-
-    if ($null -eq $проверяемый) {
-        return $false
+    public static bool ValidateRemote(
+        object отправитель,
+        X509Certificate сертификат,
+        X509Chain цепочка,
+        SslPolicyErrors ошибки)
+    {
+        return Совпадает(сертификат);
     }
 
-    return ($проверяемый.Thumbprint -eq $ОжидаемыйОтпечаток)
+    public static RemoteCertificateValidationCallback RemoteCallback
+    {
+        get { return ValidateRemote; }
+    }
 }
+'@
+
+# Делегат объявляется в C#: приведение ссылки на метод в PowerShell к типу
+# делегата не поддерживается.
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
+
+Add-Type -TypeDefinition $ИсходникВалидатора
+
+[Picket302CertificatePin]::Expected = $ОжидаемыйОтпечаток
+
+# TLS 1.2 задаётся всегда: версия протокола не должна зависеть от настроек
+# системы по умолчанию.
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
+# Глобальный обработчик: работает в .NET Framework и вызывается из фонового
+# потока. Доверия «любому сертификату» нет — принимается ровно сертификат с
+# указанным в service.json отпечатком.
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [Picket302CertificatePin]::RemoteCallback
 
 $Обработчик = [System.Net.Http.HttpClientHandler]::new()
 
-if ($null -ne ($Обработчик | Get-Member -Name ServerCertificateCustomValidationCallback -ErrorAction SilentlyContinue)) {
-    # .NET Framework 4.7.1+ / PowerShell 7: проверка сертификата на самом
-    # обработчике.
-    $Обработчик.ServerCertificateCustomValidationCallback = $ПроверитьСертификат
+$ИсходникОбработчика = @'
+using System;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+
+public static class Picket302CertificatePinHttp
+{
+    public static string Expected = string.Empty;
+
+    private static bool Совпадает(X509Certificate сертификат)
+    {
+        if (сертификат == null)
+        {
+            return false;
+        }
+
+        using (var cert = new X509Certificate2(сертификат))
+        {
+            return string.Equals(cert.Thumbprint, Expected, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public static bool Validate2(
+        HttpRequestMessage запрос,
+        X509Certificate2 сертификат,
+        X509Chain цепочка,
+        SslPolicyErrors ошибки)
+    {
+        return Совпадает(сертификат);
+    }
+
+    public static Func<HttpRequestMessage, X509Certificate2, X509Chain, SslPolicyErrors, bool> Callback2
+    {
+        get { return Validate2; }
+    }
+
+    public static bool Validate1(
+        HttpRequestMessage запрос,
+        X509Certificate сертификат,
+        X509Chain цепочка,
+        SslPolicyErrors ошибки)
+    {
+        return Совпадает(сертификат);
+    }
+
+    public static Func<HttpRequestMessage, X509Certificate, X509Chain, SslPolicyErrors, bool> Callback1
+    {
+        get { return Validate1; }
+    }
 }
-else {
-    # Windows PowerShell с .NET Framework ниже 4.7.1: глобальный обратный
-    # вызов ServicePointManager применяется и к HttpClientHandler.
-    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
-    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $ПроверитьСертификат
+'@
+
+try {
+    Add-Type -TypeDefinition $ИсходникОбработчика -ReferencedAssemblies 'System.Net.Http'
+    [Picket302CertificatePinHttp]::Expected = $ОжидаемыйОтпечаток
+
+    try {
+        $Обработчик.ServerCertificateCustomValidationCallback = [Picket302CertificatePinHttp]::Callback2
+    }
+    catch {
+        $Обработчик.ServerCertificateCustomValidationCallback = [Picket302CertificatePinHttp]::Callback1
+    }
+}
+catch {
+    # .NET Framework: глобальный обработчик ServicePointManager уже действует.
 }
 
 $Клиент = [System.Net.Http.HttpClient]::new($Обработчик)

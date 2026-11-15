@@ -201,7 +201,10 @@ public sealed class SharedTransport : IDisposable
                 string.Empty,
                 string.Empty,
                 фрагмент),
-            "сопряжение",
+            // Заголовок Authorization должен состоять только из ASCII:
+            // HttpClient отклоняет не-ASCII значения заголовков, и запрос
+            // сопряжения с таким значением не уходит вовсе.
+            "pairing",
             журнал);
 
         return транспорт;

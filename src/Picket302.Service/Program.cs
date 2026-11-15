@@ -49,14 +49,33 @@ internal static class Program
 
             var ошибка = Hosting.ServiceInstaller.Установить(путьСлужбы);
 
-            if (ошибка is null)
+            if (ошибка is not null)
             {
-                Console.WriteLine($"Служба {WindowsServiceRunner.ИмяСлужбы} установлена.");
-                return 0;
+                Console.Error.WriteLine($"Служба не установлена: {ошибка}");
+                return 3;
             }
 
-            Console.Error.WriteLine($"Служба не установлена: {ошибка}");
-            return 3;
+            // Каталог данных готовится сразу при регистрации: владельцем
+            // становится учётная запись службы. Иначе сама служба не сможет
+            // ограничить права каталога и остановится с кодом выхода 4 —
+            // установка была бы внешне успешной, а служба нерабочей.
+            var (параметрыУстановки, _) = ПрочитатьАргументы(args);
+
+            ошибка = Security.SharedDataDirectoryPreparation.Подготовить(
+                параметрыУстановки.DataDirectory,
+                Hosting.ServiceInstaller.УчётнаяЗапись);
+
+            if (ошибка is not null)
+            {
+                Console.Error.WriteLine(
+                    $"Каталог данных не подготовлен: {ошибка}. Служба не сможет "
+                    + "ограничить права и не запустится.");
+
+                return 4;
+            }
+
+            Console.WriteLine($"Служба {WindowsServiceRunner.ИмяСлужбы} установлена.");
+            return 0;
         }
 
         if (args.Contains("--uninstall", StringComparer.Ordinal))
@@ -113,6 +132,24 @@ internal static class Program
         }
 
         var база = new ServerDatabase(параметры.DatabasePath);
+
+        // Административный токен создаётся при запуске службы: локальная
+        // консоль администратора читает его из защищённого каталога данных и
+        // использует для выдачи кода сопряжения. Без токена служебные
+        // маршруты недоступны, а удалённо код сопряжения получить нельзя.
+        // Сам токен в журнал не попадает.
+        try
+        {
+            new Security.SharedAdminToken(параметры.DataDirectory).ПолучитьИлиСоздать();
+
+            журнал("Административный токен подготовлен в каталоге данных службы.");
+        }
+        catch (Exception ошибка)
+        {
+            журнал($"Не удалось подготовить административный токен: {ошибка.Message}");
+
+            return 4;
+        }
 
         try
         {

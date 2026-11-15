@@ -78,16 +78,17 @@ Name: "{commonappdata}\Picket302\Service\backups"
 
 { Выполняет команду и возвращает её код возврата. Команда передаётся целиком:
   путь с пробелами заключается в кавычки вызывающим кодом. }
-function RunCommand(const Command: String; var Code: Integer): Boolean;
+function RunCommand(const Command: String; const Params: String; var Code: Integer): Boolean;
 begin
-  Result := Exec(Command, '', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := Exec(Command, Params, '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
-{ Путь к исполняемому файлу службы с кавычками: каталог установки содержит
-  пробел. }
+{ Путь к исполняемому файлу службы. Кавычки вокруг пути НЕ добавляются:
+  Exec сам заключает программу в кавычки, а путь с кавычками в параметре
+  приводит к ошибке запуска (код 87 «неверный параметр»). }
 function ServiceExePath: String;
 begin
-  Result := '"' + ExpandConstant('{app}\') + '{#ServiceExe}' + '"';
+  Result := ExpandConstant('{app}\') + '{#ServiceExe}';
 end;
 
 { Состояние службы по данным диспетчера: RUNNING, STOPPED, NOT_INSTALLED
@@ -97,7 +98,7 @@ function QueryServiceState: String;
 var
   Code: Integer;
 begin
-  if not RunCommand('sc.exe query "' + '{#ServiceName}' + '"', Code) then
+  if not RunCommand('sc.exe', 'query "' + '{#ServiceName}' + '"', Code) then
   begin
     Result := 'UNKNOWN';
     Exit;
@@ -110,14 +111,14 @@ begin
     Exit;
   end;
 
-  if RunCommand('cmd.exe /C sc.exe query "' + '{#ServiceName}' + '" | find /I "RUNNING"', Code)
+  if RunCommand('cmd.exe', '/C sc.exe query "' + '{#ServiceName}' + '" | find /I "RUNNING"', Code)
     and (Code = 0) then
   begin
     Result := 'RUNNING';
     Exit;
   end;
 
-  if RunCommand('cmd.exe /C sc.exe query "' + '{#ServiceName}' + '" | find /I "STOPPED"', Code)
+  if RunCommand('cmd.exe', '/C sc.exe query "' + '{#ServiceName}' + '" | find /I "STOPPED"', Code)
     and (Code = 0) then
   begin
     Result := 'STOPPED';
@@ -158,7 +159,7 @@ begin
 
     if Attempt = 1 then
     begin
-      RunCommand('sc.exe stop "' + '{#ServiceName}' + '"', Code);
+      RunCommand('sc.exe', 'stop "' + '{#ServiceName}' + '"', Code);
     end;
 
     Sleep(1000);
@@ -172,7 +173,7 @@ function UnregisterService(var Text: String): Boolean;
 var
   Code: Integer;
 begin
-  Result := RunCommand(ServiceExePath + ' --uninstall', Code);
+  Result := RunCommand(ServiceExePath, '--uninstall', Code);
 
   if Result and (Code = 0) then
   begin
@@ -196,7 +197,7 @@ function AddFirewallRule(var Text: String): Boolean;
 var
   Code: Integer;
 begin
-  Result := RunCommand('netsh.exe advfirewall firewall add rule name="' + '{#FirewallRuleName}'
+  Result := RunCommand('netsh.exe', 'advfirewall firewall add rule name="' + '{#FirewallRuleName}'
     + '" dir=in action=allow protocol=TCP localport=' + '{#DefaultPort}' + ' profile=private', Code);
 
   if Result and (Code = 0) then
@@ -221,7 +222,7 @@ function RemoveFirewallRule(var Text: String): Boolean;
 var
   Code: Integer;
 begin
-  Result := RunCommand('netsh.exe advfirewall firewall delete rule name="' + '{#FirewallRuleName}'
+  Result := RunCommand('netsh.exe', 'advfirewall firewall delete rule name="' + '{#FirewallRuleName}'
     + '"', Code);
 
   if Result and (Code = 0) then
@@ -250,7 +251,7 @@ begin
   State := '';
   Text := '';
 
-  if not RunCommand('sc.exe start "' + '{#ServiceName}' + '"', Code) then
+  if not RunCommand('sc.exe', 'start "' + '{#ServiceName}' + '"', Code) then
   begin
     Text := 'не удалось запустить sc.exe start';
     Result := False;
@@ -301,7 +302,7 @@ begin
 
   { 1. Регистрация службы. Повторная установка (обновление) поддержана:
      --install перенастраивает уже зарегистрированную службу. }
-  if not RunCommand(ServiceExePath + ' --install', Code) then
+  if not RunCommand(ServiceExePath, '--install', Code) then
   begin
     Text := 'не удалось запустить регистрацию службы';
   end
@@ -315,7 +316,8 @@ begin
   begin
     { Наполовину созданная служба не остаётся: регистрация снимается. }
     UnregisterService(Text);
-    MsgBox('Установка не завершена.' + #13#10 + 'Причина: ' + Text + #13#10#13#10 +
+    if not WizardSilent then
+      MsgBox('Установка не завершена.' + #13#10 + 'Причина: ' + Text + #13#10#13#10 +
       'Служба не зарегистрирована. Данные и каталог ' +
       ExpandConstant('{commonappdata}\Picket302\Service') + ' не изменены.',
       mbError, MB_OK);
@@ -327,7 +329,8 @@ begin
      ручного правила. }
   if not AddFirewallRule(Text) then
   begin
-    MsgBox('Установка не завершена.' + #13#10 + 'Причина: правило брандмауэра не создано: ' +
+    if not WizardSilent then
+      MsgBox('Установка не завершена.' + #13#10 + 'Причина: правило брандмауэра не создано: ' +
       Text + #13#10#13#10 + 'Служба зарегистрирована, но порт ' + '{#DefaultPort}' +
       ' открыт не будет. Данные не изменены.',
       mbError, MB_OK);
@@ -339,7 +342,8 @@ begin
      честно, не выдавая неудачный запуск за успешный. }
   if not StartServiceAndWait(State, Text) then
   begin
-    MsgBox('Служба зарегистрирована и правило брандмауэра создано, но служба не запущена' +
+    if not WizardSilent then
+      MsgBox('Служба зарегистрирована и правило брандмауэра создано, но служба не запущена' +
       (#13#10 + 'состояние службы: ' + State) + '.' + #13#10#13#10 +
       'Причина: ' + Text + #13#10#13#10 +
       'Проверьте сертификат сервера по installer\README.md (раздел «Подготовка сертификата»)' + #13#10 +
@@ -349,7 +353,8 @@ begin
   end
   else
   begin
-    MsgBox('Серверная служба Picket302 установлена и запущена.' + #13#10#13#10 +
+    if not WizardSilent then
+      MsgBox('Серверная служба Picket302 установлена и запущена.' + #13#10#13#10 +
       'Дальше: installer\first-run.ps1 — проверка здоровья и выдача кода сопряжения.' + #13#10#13#10 +
       'Каталог данных: ' + ExpandConstant('{commonappdata}\Picket302\Service'),
       mbInformation, MB_OK);
@@ -371,14 +376,16 @@ begin
 
   if not UnregisterService(Text) then
   begin
-    MsgBox('Не удалось снять регистрацию службы: ' + Text + #13#10#13#10 +
+    if not WizardSilent then
+      MsgBox('Не удалось снять регистрацию службы: ' + Text + #13#10#13#10 +
       'Проверьте состояние службы командой: sc.exe query ' + '{#ServiceName}',
       mbError, MB_OK);
   end;
 
   if not RemoveFirewallRule(Text) then
   begin
-    MsgBox('Не удалось удалить правило брандмауэра: ' + Text + #13#10#13#10 +
+    if not WizardSilent then
+      MsgBox('Не удалось удалить правило брандмауэра: ' + Text + #13#10#13#10 +
       'Правило можно удалить вручную: netsh advfirewall firewall delete rule name="' + '{#FirewallRuleName}'
       + '"',
       mbError, MB_OK);
