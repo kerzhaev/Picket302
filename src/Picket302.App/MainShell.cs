@@ -2894,27 +2894,21 @@ public sealed class MainShell : Form
             return;
         }
 
-        if (_состав.ОбщийРежим)
-        {
-            MessageBox.Show(
-                this,
-                "Мастер импорта в режиме общей базы временно недоступен: проверка записей "
-                + "оператором выполняется на рабочем месте, а слияние — на сервере, и этот "
-                + "путь ещё не соединён. Данные не изменены.",
-                "Мастер импорта",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
-            return;
-        }
-
-        var контроллер = new ImportWizardController(
-            _состав.ЛокальнаяСессия is null
-                ? null
-                : new Picket302.Infrastructure.Repositories.CounterpartyRepository(_состав.ЛокальнаяСессия),
-            _состав.ЛокальнаяСессия is null
-                ? null
-                : new Picket302.Infrastructure.Repositories.GroupRepository(_состав.ЛокальнаяСессия));
+        // Совместный режим: разбор файла, сопоставление столбцов и проверка
+        // записей выполняются на рабочем месте, а слияние — серверной командой
+        // import.merge в одной транзакции. Категория адресной книги выбирается
+        // и создаётся в общей базе.
+        var контроллер = _состав.ОбщийРежим
+            ? new ImportWizardController(
+                слиятель: new Picket302.App.Shared.GatewayImportMerger(_состав.Данные),
+                шлюз: _состав.Данные)
+            : new ImportWizardController(
+                _состав.ЛокальнаяСессия is null
+                    ? null
+                    : new Picket302.Infrastructure.Repositories.CounterpartyRepository(_состав.ЛокальнаяСессия),
+                _состав.ЛокальнаяСессия is null
+                    ? null
+                    : new Picket302.Infrastructure.Repositories.GroupRepository(_состав.ЛокальнаяСессия));
 
         using var форма = new FormImportWizard(контроллер);
 
@@ -2934,22 +2928,13 @@ public sealed class MainShell : Form
             return;
         }
 
-        if (_состав.ОбщийРежим)
-        {
-            MessageBox.Show(
-                this,
-                "Импорт из внешней базы данных в режиме общей базы временно недоступен: "
-                + "слияние записей выполняется на сервере, и этот путь ещё не соединён. "
-                + "Данные не изменены.",
-                "Импорт из внешней базы",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
-            return;
-        }
-
-        using var форма = new FormExternalDbImport(
-            new Picket302.Infrastructure.Repositories.CounterpartyRepository(_состав.ЛокальнаяСессия!));
+        // Совместный режим: чтение внешней базы выполняется на рабочем
+        // месте, а слияние записей — серверной командой import.merge.
+        using var форма = _состав.ОбщийРежим
+            ? new FormExternalDbImport(
+                слиятель: new Picket302.App.Shared.GatewayImportMerger(_состав.Данные))
+            : new FormExternalDbImport(
+                new Picket302.Infrastructure.Repositories.CounterpartyRepository(_состав.ЛокальнаяСессия!));
 
         if (форма.ShowDialog(this) == DialogResult.OK)
         {

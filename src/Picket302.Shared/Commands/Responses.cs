@@ -72,11 +72,15 @@ public enum PrintEventOutcome
 /// <param name="Updated">Число обновлённых записей.</param>
 /// <param name="Skipped">Число пропущенных записей.</param>
 /// <param name="Conflicts">Число записей с конфликтами слияния.</param>
+/// <param name="Errors">Число записей, записанных с ошибками проверки.</param>
+/// <param name="Unverified">Число записей, не подтверждённых оператором.</param>
 public sealed record ImportMergeResponse(
     int Created,
     int Updated,
     int Skipped,
-    int Conflicts);
+    int Conflicts,
+    int Errors = 0,
+    int Unverified = 0);
 
 /// <summary>
 /// Ответ команды сохранения пользовательского поля.

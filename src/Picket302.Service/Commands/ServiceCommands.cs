@@ -606,6 +606,15 @@ public sealed class ImportMergeCommand : SharedDbCommand<ImportMergeRequest, Imp
             Records = запрос.Records.ToList(),
         };
 
+        if (пакет.Records.Count == 0)
+        {
+            // Пустой пакет — не результат импорта, а ошибка оператора:
+            // молчаливое «успешно, ничего не импортировано» скрывает
+            // неверный выбор файла или сбой разбора.
+            throw new SharedValidationException(
+                "Пакет импорта пуст: не выбрано ни одной записи для слияния.");
+        }
+
         var слияние = new ImportMergeService(
             область.Данные.Контрагенты,
             область.Данные.ПоляКонтрагентов);
@@ -617,6 +626,8 @@ public sealed class ImportMergeCommand : SharedDbCommand<ImportMergeRequest, Imp
         var созданных = 0;
         var обновлённых = 0;
         var конфликтов = 0;
+        var ошибок = 0;
+        var непроверенных = 0;
 
         foreach (var исход in исходы)
         {
@@ -641,9 +652,25 @@ public sealed class ImportMergeCommand : SharedDbCommand<ImportMergeRequest, Imp
 
                     break;
             }
+
+            if (исход.Record.Status == ImportRecordStatus.HasErrors)
+            {
+                ошибок++;
+            }
+
+            if (исход.Record.Status == ImportRecordStatus.Unverified)
+            {
+                непроверенных++;
+            }
         }
 
-        return new ImportMergeResponse(созданных, обновлённых, исходы.Count - созданных - обновлённых, конфликтов);
+        return new ImportMergeResponse(
+            созданных,
+            обновлённых,
+            исходы.Count - созданных - обновлённых,
+            конфликтов,
+            ошибок,
+            непроверенных);
     }
 }
 

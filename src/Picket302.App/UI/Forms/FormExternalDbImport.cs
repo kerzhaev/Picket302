@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
 
+using Picket302.Application.Import;
 using Picket302.Application.Services;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Repositories;
@@ -24,7 +25,8 @@ namespace Picket302.App.UI.Forms;
 /// </remarks>
 public sealed class FormExternalDbImport : Form
 {
-    private readonly ICounterpartyRepository _контрагенты;
+    private readonly ICounterpartyRepository? _контрагенты;
+    private readonly IImportMerger? _слиятель;
     private readonly ExternalDbImporter _импортёр;
     private readonly DpapiSecretStore _секреты = new();
 
@@ -44,13 +46,28 @@ public sealed class FormExternalDbImport : Form
     /// <summary>
     /// Создаёт диалог импорта из внешней базы данных.
     /// </summary>
-    /// <param name="контрагенты">Репозиторий контрагентов адресной книги.</param>
+    /// <param name="контрагенты">
+    /// Репозиторий контрагентов адресной книги (одиночный режим).
+    /// </param>
+    /// <param name="слиятель">
+    /// Слиятель пакета импорта (совместный режим): записи сливает серверная
+    /// служба одной командой в одной транзакции.
+    /// </param>
     /// <param name="импортёр">Импортёр внешней базы; при отсутствии — создаётся по умолчанию.</param>
     public FormExternalDbImport(
-        ICounterpartyRepository контрагенты,
+        ICounterpartyRepository? контрагенты = null,
+        IImportMerger? слиятель = null,
         ExternalDbImporter? импортёр = null)
     {
-        _контрагенты = контрагенты ?? throw new ArgumentNullException(nameof(контрагенты));
+        if (контрагенты is null && слиятель is null)
+        {
+            throw new ArgumentException(
+                "Задан либо репозиторий контрагентов, либо слиятель импорта.",
+                nameof(контрагенты));
+        }
+
+        _контрагенты = контрагенты;
+        _слиятель = слиятель;
         _импортёр = импортёр ?? new ExternalDbImporter();
 
         Text = "Импорт из внешней БД";
@@ -243,7 +260,7 @@ public sealed class FormExternalDbImport : Form
         _импортировать.Size = new Size(120, 24);
         _импортировать.Location = new Point(460, 420);
         _импортировать.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-        _импортировать.Click += (_, _) => ВыполнитьИмпорт();
+        _импортировать.Click += async (_, _) => await ВыполнитьИмпортAsync();
 
         _отмена.Text = "Закрыть";
         _отмена.Size = new Size(100, 24);
@@ -363,7 +380,7 @@ public sealed class FormExternalDbImport : Form
     /// <summary>
     /// Выполняет импорт контрагентов из внешней базы данных.
     /// </summary>
-    private void ВыполнитьИмпорт()
+    private async Task ВыполнитьИмпортAsync()
     {
         var строка = СобратьСтрокуПодключения();
 
@@ -406,8 +423,27 @@ public sealed class FormExternalDbImport : Form
                 return;
             }
 
-            var сервис = new ImportMergeService(_контрагенты);
-            Отчёт = сервис.MergeImported(пакет.Value, ВыбраннаяПолитика());
+            if (_слиятель is not null)
+            {
+                // Совместный режим: пакет применяет серверная служба одной
+                // командой в одной транзакции.
+                var итог = await _слиятель
+                    .СлитьAsync(пакет.Value, ВыбраннаяПолитика())
+                    .ConfigureAwait(true);
+
+                Отчёт = new MergeReport
+                {
+                    Created = итог.Created,
+                    Updated = итог.Updated,
+                    Skipped = итог.Skipped,
+                    Conflicts = итог.Conflicts,
+                };
+            }
+            else
+            {
+                var сервис = new ImportMergeService(_контрагенты!);
+                Отчёт = сервис.MergeImported(пакет.Value, ВыбраннаяПолитика());
+            }
 
             _статус.Text =
                 $"Импортировано: создано {Отчёт.Created}, обновлено {Отчёт.Updated}, " +

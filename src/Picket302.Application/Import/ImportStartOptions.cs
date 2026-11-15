@@ -84,6 +84,16 @@ public sealed class ImportStartOptions
     public ICounterpartyRepository? Repository { get; set; }
 
     /// <summary>
+    /// Слиятель пакета импорта.
+    /// </summary>
+    /// <remarks>
+    /// Задаётся в совместном режиме: слияние выполняет серверная служба
+    /// одной командой в одной транзакции. Пусто — слияние выполняет локальная
+    /// служба тонкого слияния над репозиторием контрагентов.
+    /// </remarks>
+    public IImportMerger? Merger { get; set; }
+
+    /// <summary>
     /// Создаёт параметры запуска для указанного файла.
     /// </summary>
     /// <param name="filePath">Путь к импортируемому файлу.</param>

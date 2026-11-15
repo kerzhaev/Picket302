@@ -608,6 +608,8 @@ public sealed class LocalDataGateway : IDataGateway
         var создано = 0;
         var обновлено = 0;
         var конфликтов = 0;
+        var ошибок = 0;
+        var непроверенных = 0;
 
         foreach (var исход in исходы)
         {
@@ -629,12 +631,24 @@ public sealed class LocalDataGateway : IDataGateway
 
                     break;
             }
+
+            if (исход.Record.Status == ImportRecordStatus.HasErrors)
+            {
+                ошибок++;
+            }
+
+            if (исход.Record.Status == ImportRecordStatus.Unverified)
+            {
+                непроверенных++;
+            }
         }
 
         return new ImportMergeReport(
             создано,
             обновлено,
             исходы.Count - создано - обновлено,
-            конфликтов);
+            конфликтов,
+            ошибок,
+            непроверенных);
     }
 }

@@ -339,12 +339,13 @@ public sealed class FormImportWizard : Form
     /// <summary>
     /// Применяет импорт по выбранной политике.
     /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Итог импорта либо <see langword="null"/> — импорт не применён.</returns>
-    public ImportResult? ВыполнитьИмпорт()
+    public async Task<ImportResult?> ВыполнитьИмпортAsync(CancellationToken cancellationToken = default)
     {
         СохранитьПолитики();
 
-        var итог = _контроллер.Commit();
+        var итог = await _контроллер.CommitAsync(cancellationToken).ConfigureAwait(true);
 
         ОбновитьИтогИмпорта(итог);
         ПоказатьШаг();
@@ -896,7 +897,7 @@ public sealed class FormImportWizard : Form
             Location = new Point(12, 44),
             Size = new Size(160, 30),
         };
-        импортировать.Click += (_, _) => ВыполнитьИмпорт();
+        импортировать.Click += async (_, _) => await ВыполнитьИмпортAsync();
 
         _итогИмпорта.Location = new Point(12, 90);
         _итогИмпорта.Size = new Size(650, 120);

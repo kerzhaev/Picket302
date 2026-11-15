@@ -24,14 +24,18 @@ namespace Picket302.Application.Services;
 /// </remarks>
 public sealed class ImportDeduplicator
 {
-    private readonly ICounterpartyRepository _репозиторий;
+    private readonly ICounterpartyRepository? _репозиторий;
 
     /// <summary>
     /// Создаёт дедупликатор.
     /// </summary>
-    /// <param name="repository">Репозиторий контрагентов.</param>
-    public ImportDeduplicator(ICounterpartyRepository repository)
-        => _репозиторий = repository ?? throw new ArgumentNullException(nameof(repository));
+    /// <param name="repository">
+    /// Репозиторий контрагентов. Пусто — сверка с базой недоступна, и
+    /// отбрасываются только повторы внутри пакета: так поступает мастер
+    /// импорта в совместном режиме, где существующие записи обрабатывает
+    /// служба тонкого слияния на сервере.
+    /// </param>
+    public ImportDeduplicator(ICounterpartyRepository? repository) => _репозиторий = repository;
 
     /// <summary>
     /// Отбрасывает дубликаты пакета и записи, уже присутствующие в базе.
@@ -157,6 +161,12 @@ public sealed class ImportDeduplicator
         CounterpartyDraft черновик,
         CancellationToken cancellationToken)
     {
+        if (_репозиторий is null)
+        {
+            throw new InvalidOperationException(
+                "Сверка записей с базой недоступна: репозиторий контрагентов не задан.");
+        }
+
         var инн = string.IsNullOrWhiteSpace(черновик.Inn) ? null : черновик.Inn.Trim();
         var имя = (черновик.Name ?? string.Empty).Trim();
         var индекс = string.IsNullOrWhiteSpace(черновик.PostalZip) ? null : черновик.PostalZip.Trim();

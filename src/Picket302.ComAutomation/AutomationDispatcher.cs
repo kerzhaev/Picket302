@@ -9,6 +9,7 @@ using Picket302.Domain.Exchange;
 using Picket302.Domain.Repositories;
 using Picket302.Domain.ValueObjects;
 using Picket302.Infrastructure.Data;
+using Picket302.Infrastructure.Integration;
 using Picket302.Infrastructure.Repositories;
 using Picket302.Infrastructure.Templates;
 using Picket302.Printing;
@@ -618,6 +619,7 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
 
     private readonly object _sync = new();
     private readonly string _databasePath;
+    private readonly string? _каталогПрофиля;
     private readonly PrintEnvelopeSettings _settings;
     private SqliteUnitOfWork? _session;
     private PrintSessionController? _printing;
@@ -627,11 +629,20 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
     /// </summary>
     /// <param name="databasePath">Путь к файлу базы данных; пусто — профиль пользователя.</param>
     /// <param name="settings">Настройки печати из реестра.</param>
-    public ComAutomationEnvironment(string? databasePath = null, PrintEnvelopeSettings? settings = null)
+    /// <param name="каталогПрофиля">
+    /// Каталог профиля рабочего места, в котором ищутся реквизиты сопряжения
+    /// с общей базой; пусто — профиль пользователя по умолчанию.
+    /// </param>
+    public ComAutomationEnvironment(
+        string? databasePath = null,
+        PrintEnvelopeSettings? settings = null,
+        string? каталогПрофиля = null)
     {
         _databasePath = string.IsNullOrWhiteSpace(databasePath)
             ? DefaultDatabasePath()
             : Path.GetFullPath(databasePath);
+
+        _каталогПрофиля = string.IsNullOrWhiteSpace(каталогПрофиля) ? null : каталогПрофиля;
 
         _settings = settings ?? new PrintEnvelopeSettings();
     }
@@ -645,38 +656,6 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         ApplicationDirectoryName,
         DatabaseFileName);
-
-    /// <summary>
-    /// Определяет, сопряжено ли рабочее место с общей базой.
-    /// </summary>
-    /// <returns>
-    /// <see langword="true"/>, если в профиле есть реквизиты сопряжения
-    /// (shared.json с устройством и отпечатком сервера).
-    /// </returns>
-    private static bool ОбщаяБазаСопряжена()
-    {
-        try
-        {
-            var путь = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                ApplicationDirectoryName,
-                "shared.json");
-
-            if (!File.Exists(путь))
-            {
-                return false;
-            }
-
-            var текст = File.ReadAllText(путь);
-
-            return текст.Contains("\"deviceId\"", StringComparison.Ordinal)
-                && текст.Contains("\"serverFingerprint\"", StringComparison.Ordinal);
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-    }
 
     /// <inheritdoc />
     public bool IsDatabaseLoaded
@@ -704,7 +683,7 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
         // Совместный режим: устройство сопряжено с общей базой, и COM-сервер
         // не открывает устаревшую локальную базу вместо неё (решение
         // SOURCE-MAP, сценарий 51).
-        if (ОбщаяБазаСопряжена())
+        if (SharedWorkstationMode.СопряженоСОбщейБазой(_каталогПрофиля))
         {
             AutomationServerLog.Write(
                 "Отказ: рабочее место сопряжено с общей базой; COM-автоматизация "

@@ -1311,7 +1311,9 @@ public sealed class RemoteDataGateway : IDataGateway
             ответ.Created,
             ответ.Updated,
             ответ.Skipped,
-            ответ.Conflicts);
+            ответ.Conflicts,
+            ответ.Errors,
+            ответ.Unverified);
     }
 
     /// <inheritdoc />

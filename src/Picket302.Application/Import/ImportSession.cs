@@ -57,6 +57,7 @@ public sealed class ImportSession
 
     private readonly ICounterpartyRepository? _репозиторий;
     private readonly ImportMergeService? _слияние;
+    private readonly IImportMerger? _слиятель;
     private readonly ImportDeduplicator? _дедупликация;
     private readonly AddressHeuristicsService _адреса;
     private readonly bool _распознаватьАдреса;
@@ -74,6 +75,10 @@ public sealed class ImportSession
     /// <param name="groupId">Категория адресной книги, с которой начинается импорт.</param>
     /// <param name="mergePolicy">Политика слияния с существующей базой.</param>
     /// <param name="mergeService">Служба тонкого слияния.</param>
+    /// <param name="merger">
+    /// Слиятель пакета импорта. Задаётся в совместном режиме: слияние
+    /// выполняет серверная служба одной командой в одной транзакции.
+    /// </param>
     /// <param name="deduplicator">Дедупликатор импорта.</param>
     /// <param name="addressService">Служба распознавания адресов.</param>
     /// <param name="recognizeAddresses">
@@ -89,6 +94,7 @@ public sealed class ImportSession
         long? groupId = null,
         MergePolicy mergePolicy = MergePolicy.SkipExisting,
         ImportMergeService? mergeService = null,
+        IImportMerger? merger = null,
         ImportDeduplicator? deduplicator = null,
         AddressHeuristicsService? addressService = null,
         bool recognizeAddresses = true)
@@ -103,7 +109,8 @@ public sealed class ImportSession
         GroupId = groupId;
         _политикаСлияния = mergePolicy;
         _слияние = mergeService ?? (repository is null ? null : new ImportMergeService(repository));
-        _дедупликация = deduplicator ?? (repository is null ? null : new ImportDeduplicator(repository));
+        _слиятель = merger;
+        _дедупликация = deduplicator ?? new ImportDeduplicator(repository);
         _адреса = addressService ?? new AddressHeuristicsService();
         _распознаватьАдреса = recognizeAddresses;
     }
@@ -313,6 +320,7 @@ public sealed class ImportSession
             options.Repository,
             options.GroupId,
             options.MergePolicy,
+            merger: options.Merger,
             addressService: адреса,
             recognizeAddresses: options.RecognizeAddresses);
 
@@ -356,10 +364,10 @@ public sealed class ImportSession
         MergePolicy mergePolicy,
         CancellationToken cancellationToken = default)
     {
-        if (_слияние is null || _дедупликация is null)
+        if (_слияние is null && _слиятель is null)
         {
             throw new InvalidOperationException(
-                "Не задан репозиторий контрагентов: импорт не может быть применён.");
+                "Не задан слиятель импорта: импорт не может быть применён.");
         }
 
         var отобранные = new List<ImportRecord>();
@@ -382,7 +390,7 @@ public sealed class ImportSession
         }
 
         // Дедупликация внутри пакета: повторы по ключу слияния исключаются.
-        var дедупликация = _дедупликация.FilterDuplicates(
+        var дедупликация = _дедупликация!.FilterDuplicates(
             отобранные.Select(запись => запись.Draft),
             mergePolicy,
             SourceDescription,
@@ -399,7 +407,30 @@ public sealed class ImportSession
             Records = отобранные.Where(запись => принятые.Contains(запись.Draft)).ToList(),
         };
 
-        var результаты = await _слияние
+        if (_слиятель is not null)
+        {
+            // Слияние выполняет служба: пакет применяется одной командой в
+            // одной транзакции. Повтор команды с прежним идентификатором
+            // операции возвращает прежний результат и не создаёт дублей.
+            var итог = await _слиятель
+                .СлитьAsync(пакет, mergePolicy, cancellationToken)
+                .ConfigureAwait(false);
+
+            return new ImportResult
+            {
+                Policy = policy,
+                Created = итог.Created,
+                Updated = итог.Updated,
+                Skipped = итог.Skipped
+                    + отброшеноПолитикой
+                    + дедупликация.SkippedDuplicates.Count,
+                Conflicts = итог.Conflicts,
+                Errors = итог.Errors,
+                Unverified = итог.Unverified,
+            };
+        }
+
+        var результаты = await _слияние!
             .MergeImportedDetailed(пакет, mergePolicy, cancellationToken)
             .ConfigureAwait(false);
 

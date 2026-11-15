@@ -23,8 +23,11 @@ namespace Picket302.App.Shared;
 /// </remarks>
 public sealed class SharedClientProfile
 {
-    /// <summary>Имя файла реквизитов подключения.</summary>
-    public const string SettingsFileName = "shared.json";
+    /// <summary>
+    /// Имя файла реквизитов подключения. Совпадает с именем, которое ищет
+    /// COM-сервер автоматизации: правило сопряжения должно быть одно.
+    /// </summary>
+    public const string SettingsFileName = SharedWorkstationMode.SettingsFileName;
 
     /// <summary>Имя секрета устройства в защищённом хранилище.</summary>
     public const string DeviceSecretName = "shared-device-secret";

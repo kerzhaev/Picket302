@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Xml.Linq;
 using Picket302.Application.Import;
 using Picket302.Application.Services;
+using Picket302.App.Shared;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
@@ -53,6 +54,8 @@ public sealed class ImportWizardController
 
     private readonly ICounterpartyRepository? _repository;
     private readonly IGroupRepository? _groups;
+    private readonly IImportMerger? _слиятель;
+    private readonly IDataGateway? _шлюз;
     private readonly ICsvProfileStore _profileStore;
 
     private readonly Dictionary<int, ImportFieldSlot?> _overrides = [];
@@ -86,14 +89,26 @@ public sealed class ImportWizardController
     /// Хранилище файлов профилей сопоставления (*.csvprof); при отсутствии
     /// используется хранилище по умолчанию.
     /// </param>
+    /// <param name="слиятель">
+    /// Слиятель пакета импорта; задаётся в совместном режиме — слияние
+    /// выполняет серверная служба.
+    /// </param>
+    /// <param name="шлюз">
+    /// Шлюз данных рабочего места; задаётся в совместном режиме — список и
+    /// создание категорий адресной книги идут через общую базу.
+    /// </param>
     public ImportWizardController(
         ICounterpartyRepository? repository = null,
         IGroupRepository? groups = null,
-        ICsvProfileStore? profileStore = null)
+        ICsvProfileStore? profileStore = null,
+        IImportMerger? слиятель = null,
+        IDataGateway? шлюз = null)
     {
         _repository = repository;
         _groups = groups;
         _profileStore = profileStore ?? CreateProfileStore();
+        _слиятель = слиятель;
+        _шлюз = шлюз;
     }
 
     /// <summary>Текущий шаг мастера.</summary>
@@ -299,11 +314,18 @@ public sealed class ImportWizardController
     /// (ТЗ §8.12, функция 159, шаг 2: «выбор категории назначения»).
     /// </summary>
     /// <param name="cancellationToken">Токен отмены.</param>
-    /// <returns>Список групп; пустой список, если репозиторий не задан.</returns>
+    /// <returns>Список групп; пустой список, если ни репозиторий, ни шлюз не заданы.</returns>
     public async Task<IReadOnlyList<Group>> LoadCategoriesAsync(CancellationToken cancellationToken = default)
-        => _groups is null
+    {
+        if (_шлюз is not null)
+        {
+            return await _шлюз.ПолучитьГруппыAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return _groups is null
             ? []
             : await _groups.GetAllAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Создаёт новую категорию адресной книги и назначает её текущей
@@ -316,7 +338,39 @@ public sealed class ImportWizardController
     /// репозиторий групп не задан либо имя пустое.</returns>
     public async Task<Group?> CreateCategoryAsync(string название, CancellationToken cancellationToken = default)
     {
-        if (_groups is null || string.IsNullOrWhiteSpace(название))
+        if (string.IsNullOrWhiteSpace(название))
+        {
+            return null;
+        }
+
+        if (_шлюз is not null)
+        {
+            var результат = await _шлюз
+                .СоздатьКатегориюAsync(название.Trim(), null, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (результат.IsFailure)
+            {
+                ErrorMessage = результат.Error;
+                return null;
+            }
+
+            var категория = результат.Value;
+
+            SetGroupId(категория.Id);
+
+            return new Group
+            {
+                Id = категория.Id,
+                Name = категория.Name,
+                ParentId = категория.ParentId,
+                IsDefault = категория.IsDefault,
+                IsClosed = категория.IsClosed,
+                SortOrder = категория.SortOrder,
+            };
+        }
+
+        if (_groups is null)
         {
             return null;
         }
@@ -737,8 +791,14 @@ public sealed class ImportWizardController
     /// Применяет импорт по выбранной политике и возвращает итоговые счётчики
     /// (ТЗ §8.12, функция 159, шаг 7).
     /// </summary>
+    /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Итог импорта либо <see langword="null"/> — импорт не применён.</returns>
-    public ImportResult? Commit()
+    /// <remarks>
+    /// Применение асинхронное: в совместном режиме слияние выполняет серверная
+    /// служба, и сетевой запрос не должен выполняться блокирующим вызовом из
+    /// потока интерфейса.
+    /// </remarks>
+    public async Task<ImportResult?> CommitAsync(CancellationToken cancellationToken = default)
     {
         if (_session is null)
         {
@@ -749,7 +809,9 @@ public sealed class ImportWizardController
         try
         {
             _session.SetMergePolicy(MergePolicy);
-            Result = _session.Commit(ImportPolicy, MergePolicy);
+            Result = await _session
+                .CommitAsync(ImportPolicy, MergePolicy, cancellationToken)
+                .ConfigureAwait(true);
             ErrorMessage = null;
             return Result;
         }
@@ -924,6 +986,7 @@ public sealed class ImportWizardController
             MergePolicy = MergePolicy,
             RecognizeAddresses = true,
             Repository = _repository,
+            Merger = _слиятель,
         };
 
         if (_mappingSet)
