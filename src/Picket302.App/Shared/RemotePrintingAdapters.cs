@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Picket302.Domain.Common;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
@@ -5,6 +6,7 @@ using Picket302.Printing;
 using Picket302.Shared.Commands;
 using Picket302.Shared.Dtos;
 using Picket302.Shared.Mapping;
+using Picket302.Shared.Protocol;
 
 namespace Picket302.App.Shared;
 
@@ -14,28 +16,35 @@ namespace Picket302.App.Shared;
 public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
 {
     private readonly SharedTransport _транспорт;
+    private readonly PendingOperationsStore _незавершённые;
 
     /// <summary>
     /// Создаёт адаптер шаблонов печати.
     /// </summary>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
-    public RemotePrintTemplateRepository(SharedTransport транспорт)
+    /// <param name="незавершённые">Хранилище незавершённых операций.</param>
+    public RemotePrintTemplateRepository(SharedTransport транспорт, PendingOperationsStore незавершённые)
     {
         ArgumentNullException.ThrowIfNull(транспорт);
+        ArgumentNullException.ThrowIfNull(незавершённые);
 
         _транспорт = транспорт;
+        _незавершённые = незавершённые;
     }
 
     /// <inheritdoc />
     public async Task<long> AddAsync(PrintTemplate template, CancellationToken cancellationToken = default)
     {
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<SavePrintTemplateRequest, PrintTemplateDto>(
+        var ответ = await _незавершённые
+            .ВыполнитьAsync<PrintTemplateDto>(
+                _транспорт,
                 "templates.save",
-                new SavePrintTemplateRequest(
-                    SharedMapping.КШаблону(template, template.Version, null),
-                    template.Version),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(
+                    new SavePrintTemplateRequest(
+                        SharedMapping.КШаблону(template, template.Version, null),
+                        template.Version),
+                    SharedJson.Options),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return ответ.Id;
@@ -79,13 +88,16 @@ public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
     /// <inheritdoc />
     public async Task<int> UpdateAsync(PrintTemplate template, CancellationToken cancellationToken = default)
     {
-        await _транспорт
-            .ВыполнитьКомандуAsync<SavePrintTemplateRequest, PrintTemplateDto>(
+        await _незавершённые
+            .ВыполнитьAsync<PrintTemplateDto>(
+                _транспорт,
                 "templates.save",
-                new SavePrintTemplateRequest(
-                    SharedMapping.КШаблону(template, template.Version, null),
-                    template.Version),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(
+                    new SavePrintTemplateRequest(
+                        SharedMapping.КШаблону(template, template.Version, null),
+                        template.Version),
+                    SharedJson.Options),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return 1;
@@ -103,11 +115,14 @@ public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
             return false;
         }
 
-        await _транспорт
-            .ВыполнитьКомандуAsync<DeletePrintTemplateRequest, VersionedResponse>(
+        await _незавершённые
+            .ВыполнитьAsync<VersionedResponse>(
+                _транспорт,
                 "templates.delete",
-                new DeletePrintTemplateRequest(id, шаблон.Version),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(
+                    new DeletePrintTemplateRequest(id, шаблон.Version),
+                    SharedJson.Options),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return true;
@@ -120,28 +135,35 @@ public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
 public sealed class RemoteBlankFieldRepository : IBlankFieldRepository
 {
     private readonly SharedTransport _транспорт;
+    private readonly PendingOperationsStore _незавершённые;
 
     /// <summary>
     /// Создаёт адаптер полей бланка.
     /// </summary>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
-    public RemoteBlankFieldRepository(SharedTransport транспорт)
+    /// <param name="незавершённые">Хранилище незавершённых операций.</param>
+    public RemoteBlankFieldRepository(SharedTransport транспорт, PendingOperationsStore незавершённые)
     {
         ArgumentNullException.ThrowIfNull(транспорт);
+        ArgumentNullException.ThrowIfNull(незавершённые);
 
         _транспорт = транспорт;
+        _незавершённые = незавершённые;
     }
 
     /// <inheritdoc />
     public async Task<long> AddAsync(BlankField field, CancellationToken cancellationToken = default)
     {
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<SaveBlankFieldRequest, BlankFieldDto>(
+        var ответ = await _незавершённые
+            .ВыполнитьAsync<BlankFieldDto>(
+                _транспорт,
                 "template-fields.save",
-                new SaveBlankFieldRequest(
-                    SharedMapping.КПолюБланка(field, field.Version),
-                    field.Version),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(
+                    new SaveBlankFieldRequest(
+                        SharedMapping.КПолюБланка(field, field.Version),
+                        field.Version),
+                    SharedJson.Options),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return ответ.Id;
@@ -191,13 +213,16 @@ public sealed class RemoteBlankFieldRepository : IBlankFieldRepository
     /// <inheritdoc />
     public async Task<int> UpdateAsync(BlankField field, CancellationToken cancellationToken = default)
     {
-        await _транспорт
-            .ВыполнитьКомандуAsync<SaveBlankFieldRequest, BlankFieldDto>(
+        await _незавершённые
+            .ВыполнитьAsync<BlankFieldDto>(
+                _транспорт,
                 "template-fields.save",
-                new SaveBlankFieldRequest(
-                    SharedMapping.КПолюБланка(field, field.Version),
-                    field.Version),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(
+                    new SaveBlankFieldRequest(
+                        SharedMapping.КПолюБланка(field, field.Version),
+                        field.Version),
+                    SharedJson.Options),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return 1;
@@ -217,11 +242,14 @@ public sealed class RemoteBlankFieldRepository : IBlankFieldRepository
             return false;
         }
 
-        await _транспорт
-            .ВыполнитьКомандуAsync<DeleteBlankFieldRequest, VersionedResponse>(
+        await _незавершённые
+            .ВыполнитьAsync<VersionedResponse>(
+                _транспорт,
                 "template-fields.delete",
-                new DeleteBlankFieldRequest(id, поле.Version),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(
+                    new DeleteBlankFieldRequest(id, поле.Version),
+                    SharedJson.Options),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return true;
@@ -234,16 +262,20 @@ public sealed class RemoteBlankFieldRepository : IBlankFieldRepository
 public sealed class RemotePrintJobRepository : IPrintJobRepository
 {
     private readonly SharedTransport _транспорт;
+    private readonly PendingOperationsStore _незавершённые;
 
     /// <summary>
     /// Создаёт адаптер реестра печатных сессий.
     /// </summary>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
-    public RemotePrintJobRepository(SharedTransport транспорт)
+    /// <param name="незавершённые">Хранилище незавершённых операций.</param>
+    public RemotePrintJobRepository(SharedTransport транспорт, PendingOperationsStore незавершённые)
     {
         ArgumentNullException.ThrowIfNull(транспорт);
+        ArgumentNullException.ThrowIfNull(незавершённые);
 
         _транспорт = транспорт;
+        _незавершённые = незавершённые;
     }
 
     /// <inheritdoc />
@@ -253,22 +285,27 @@ public sealed class RemotePrintJobRepository : IPrintJobRepository
 
         // Сессия печати создаётся на сервере реестра без привязки к
         // отправлениям: журнал печати с исходами и устройством заполняет
-        // отдельная команда print.record-event.
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<CreatePrintSessionRequest, CreatePrintSessionResponse>(
+        // отдельная команда print.record-event. Сессия — мутация: потерянный
+        // ответ не приводит к второй сессии, повтор идёт с прежним
+        // идентификатором операции.
+        var ответ = await _незавершённые
+            .ВыполнитьAsync<CreatePrintSessionResponse>(
+                _транспорт,
                 "print.create-session",
-                new CreatePrintSessionRequest(
-                    printJob.TemplateId,
-                    printJob.PrinterName,
-                    printJob.PaperSizeName,
-                    printJob.PaperWidthMm,
-                    printJob.PaperHeightMm,
-                    printJob.FontInfo,
-                    printJob.Copies,
-                    printJob.PrintMode,
-                    printJob.Status,
-                    printJob.ErrorText),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(
+                    new CreatePrintSessionRequest(
+                        printJob.TemplateId,
+                        printJob.PrinterName,
+                        printJob.PaperSizeName,
+                        printJob.PaperWidthMm,
+                        printJob.PaperHeightMm,
+                        printJob.FontInfo,
+                        printJob.Copies,
+                        printJob.PrintMode,
+                        printJob.Status,
+                        printJob.ErrorText),
+                    SharedJson.Options),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return ответ.PrintJobId;
@@ -366,11 +403,14 @@ public sealed class RemotePrintDataSource : IPrintDataSource
         IReadOnlyList<long> mailIds,
         CancellationToken cancellationToken = default)
     {
+        // print.get-data — команда-чтение: исход не влияет на данные,
+        // регистрация в незавершённых операциях не требуется.
         var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<GetPrintDataRequest, GetPrintDataResponse>(
+            .ВыполнитьКомандуJsonAsync<GetPrintDataResponse>(
                 "print.get-data",
-                new GetPrintDataRequest(mailIds),
-                cancellationToken: cancellationToken)
+                JsonSerializer.Serialize(new GetPrintDataRequest(mailIds), SharedJson.Options),
+                Guid.NewGuid().ToString("D"),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return ответ.Items

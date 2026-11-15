@@ -32,20 +32,32 @@ namespace Picket302.App.Shared;
 public sealed class RemoteDataGateway : IDataGateway
 {
     private readonly SharedTransport _транспорт;
+    private readonly PendingOperationsStore _незавершённые;
 
     /// <summary>
     /// Создаёт доступ к общей базе.
     /// </summary>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
-    public RemoteDataGateway(SharedTransport транспорт)
+    /// <param name="незавершённые">
+    /// Хранилище незавершённых операций: каждая мутация регистрируется с
+    /// точным телом запроса; при потере ответа повтор выполняется с прежним
+    /// идентификатором, и дубль не возникает.
+    /// </param>
+    public RemoteDataGateway(SharedTransport транспорт, PendingOperationsStore незавершённые)
     {
         ArgumentNullException.ThrowIfNull(транспорт);
+        ArgumentNullException.ThrowIfNull(незавершённые);
 
         _транспорт = транспорт;
+        _незавершённые = незавершённые;
     }
 
     /// <inheritdoc />
     public bool ОбщийРежим => true;
+
+    /// <inheritdoc />
+    public IReadOnlyList<PendingOperationsStore.НезавершённаяОперация> НезавершённыеОперации
+        => _незавершённые.Незавершённые;
 
     /// <inheritdoc />
     public async Task<Page<Counterparty>> ПолучитьКонтрагентовAsync(
@@ -85,44 +97,44 @@ public sealed class RemoteDataGateway : IDataGateway
     }
 
     /// <inheritdoc />
-    public Task<Result<Counterparty>> СохранитьКонтрагентаAsync(
-        Counterparty контрагент,
-        CancellationToken токен = default)
-        => ВыполнитьAsync(async () =>
-        {
-            var dto = await _транспорт
-                .ВыполнитьКомандуAsync<SaveCounterpartyRequest, SaveCounterpartyResponse>(
-                    "counterparties.save",
-                    new SaveCounterpartyRequest(
-                        SharedMapping.ККонтрагенту(контрагент, контрагент.Version),
-                        контрагент.Version),
-                    operationId: null,
-                    cancellationToken: токен)
-                .ConfigureAwait(false);
-
-            контрагент.Version = dto.Version;
-
-            return контрагент;
-        });
-
-    /// <inheritdoc />
     public Task<Result<Counterparty>> УдалитьКонтрагентаAsync(
         Counterparty контрагент,
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            await _транспорт
-                .ВыполнитьКомандуAsync<ChangeCounterpartyStateRequest, VersionedResponse>(
-                    "counterparties.change-state",
-                    new ChangeCounterpartyStateRequest(
-                        контрагент.Id,
-                        контрагент.Version,
-                        false),
-                    operationId: null,
-                    cancellationToken: токен)
-                .ConfigureAwait(false);
+            await ВыполнитьОперациюAsync<ChangeCounterpartyStateRequest, VersionedResponse>(
+                "counterparties.change-state",
+                new ChangeCounterpartyStateRequest(
+                    контрагент.Id,
+                    контрагент.Version,
+                    false),
+                токен)
+            .ConfigureAwait(false);
 
             контрагент.IsDeleted = true;
+
+            return контрагент;
+        });
+
+    /// <inheritdoc />
+    public Task<Result<Counterparty>> СохранитьКонтрагентаAsync(
+        Counterparty контрагент,
+        CancellationToken токен = default)
+        => ВыполнитьAsync(async () =>
+        {
+            var dto = await ВыполнитьОперациюAsync<SaveCounterpartyRequest, SaveCounterpartyResponse>(
+                "counterparties.save",
+                new SaveCounterpartyRequest(
+                    SharedMapping.ККонтрагенту(контрагент, контрагент.Version),
+                    контрагент.Version),
+                токен)
+            .ConfigureAwait(false);
+
+            // Идентификатор назначает сервер: без него последующие операции
+            // над записью (письмо, рассылка) ссылались бы на несуществующего
+            // контрагента.
+            контрагент.Id = dto.Id;
+            контрагент.Version = dto.Version;
 
             return контрагент;
         });
@@ -148,14 +160,11 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<BatchChangeCounterpartyStateRequest, BatchOperationResponse>(
+            var ответ = await ВыполнитьОперациюAsync<BatchChangeCounterpartyStateRequest, BatchOperationResponse>(
                     "counterparties.batch-change-state",
                     new BatchChangeCounterpartyStateRequest(
                         контрагенты.Select(з => new VersionedId(з.Id, з.Version)).ToArray(),
-                        восстановить),
-                    operationId: null,
-                    cancellationToken: токен)
+                        восстановить), токен)
                 .ConfigureAwait(false);
 
             return ответ.Count;
@@ -169,15 +178,12 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<BatchUpdateCounterpartyFieldRequest, BatchOperationResponse>(
+            var ответ = await ВыполнитьОперациюAsync<BatchUpdateCounterpartyFieldRequest, BatchOperationResponse>(
                     "counterparties.batch-update-field",
                     new BatchUpdateCounterpartyFieldRequest(
                         контрагенты.Select(з => new VersionedId(з.Id, з.Version)).ToArray(),
                         свойство,
-                        значение),
-                    operationId: null,
-                    cancellationToken: токен)
+                        значение), токен)
                 .ConfigureAwait(false);
 
             return ответ.Count;
@@ -291,16 +297,13 @@ public sealed class RemoteDataGateway : IDataGateway
                     .ConfigureAwait(false))
                 .FirstOrDefault(запись => запись.FieldName == поле);
 
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<SetCounterpartyFieldRequest, CounterpartyFieldResponse>(
+            var ответ = await ВыполнитьОперациюAsync<SetCounterpartyFieldRequest, CounterpartyFieldResponse>(
                     "counterparties.set-field",
                     new SetCounterpartyFieldRequest(
                         идентификаторКонтрагента,
                         поле,
                         значение,
-                        существующее?.Version ?? 0),
-                    operationId: null,
-                    cancellationToken: токен)
+                        существующее?.Version ?? 0), токен)
                 .ConfigureAwait(false);
 
             return new CounterpartyField
@@ -331,15 +334,12 @@ public sealed class RemoteDataGateway : IDataGateway
                 return false;
             }
 
-            await _транспорт
-                .ВыполнитьКомандуAsync<RemoveCounterpartyFieldRequest, VersionedResponse>(
+            await ВыполнитьОперациюAsync<RemoveCounterpartyFieldRequest, VersionedResponse>(
                     "counterparties.remove-field",
                     new RemoveCounterpartyFieldRequest(
                         идентификаторКонтрагента,
                         поле,
-                        существующее.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                        существующее.Version), токен)
                 .ConfigureAwait(false);
 
             return true;
@@ -349,17 +349,14 @@ public sealed class RemoteDataGateway : IDataGateway
     public Task<Result<Counterparty>> СоздатьОтправителяAsync(AgentDto агент, CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<CreateAgentRequest, CounterpartyResponse>(
+            var ответ = await ВыполнитьОперациюAsync<CreateAgentRequest, CounterpartyResponse>(
                     "counterparties.create-agent",
                     new CreateAgentRequest(
                         агент.Name,
                         агент.Inn,
                         агент.Kpp,
                         агент.BankName,
-                        агент.Zip),
-                    operationId: null,
-                    cancellationToken: токен)
+                        агент.Zip), токен)
                 .ConfigureAwait(false);
 
             return new Counterparty
@@ -426,12 +423,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<CreateCategoryRequest, GroupDto>(
+            var ответ = await ВыполнитьОперациюAsync<CreateCategoryRequest, GroupDto>(
                     "groups.create-category",
-                    new CreateCategoryRequest(наименование, родитель),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new CreateCategoryRequest(наименование, родитель), токен)
                 .ConfigureAwait(false);
 
             return new Category(
@@ -453,12 +447,9 @@ public sealed class RemoteDataGateway : IDataGateway
         {
             var версия = await ТекущаяВерсияГруппыAsync(категория.Id, токен).ConfigureAwait(false);
 
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<RenameCategoryRequest, GroupDto>(
+            var ответ = await ВыполнитьОперациюAsync<RenameCategoryRequest, GroupDto>(
                     "groups.rename-category",
-                    new RenameCategoryRequest(категория.Id, наименование, версия),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new RenameCategoryRequest(категория.Id, наименование, версия), токен)
                 .ConfigureAwait(false);
 
             return new Category(
@@ -477,12 +468,9 @@ public sealed class RemoteDataGateway : IDataGateway
         {
             var версия = await ТекущаяВерсияГруппыAsync(категория.Id, токен).ConfigureAwait(false);
 
-            await _транспорт
-                .ВыполнитьКомандуAsync<DeleteCategoryRequest, VersionedResponse>(
+            await ВыполнитьОперациюAsync<DeleteCategoryRequest, VersionedResponse>(
                     "groups.delete-category",
-                    new DeleteCategoryRequest(категория.Id, версия),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new DeleteCategoryRequest(категория.Id, версия), токен)
                 .ConfigureAwait(false);
 
             return 1;
@@ -505,15 +493,12 @@ public sealed class RemoteDataGateway : IDataGateway
                     "Контрагент не найден.");
             }
 
-            await _транспорт
-                .ВыполнитьКомандуAsync<MoveCounterpartyRequest, VersionedResponse>(
+            await ВыполнитьОперациюAsync<MoveCounterpartyRequest, VersionedResponse>(
                     "groups.move-counterparty",
                     new MoveCounterpartyRequest(
                         идентификаторКонтрагента,
                         идентификаторКатегории,
-                        контрагент.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                        контрагент.Version), токен)
                 .ConfigureAwait(false);
 
             контрагент.GroupId = идентификаторКатегории;
@@ -539,12 +524,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<CreateFolderRequest, FolderDto>(
+            var ответ = await ВыполнитьОперациюAsync<CreateFolderRequest, FolderDto>(
                     "folders.create",
-                    new CreateFolderRequest(наименование, родитель, примечание),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new CreateFolderRequest(наименование, родитель, примечание), токен)
                 .ConfigureAwait(false);
 
             return ИзПапки(ответ);
@@ -557,12 +539,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<RenameFolderRequest, FolderDto>(
+            var ответ = await ВыполнитьОперациюAsync<RenameFolderRequest, FolderDto>(
                     "folders.rename",
-                    new RenameFolderRequest(папка.Id, наименование, папка.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new RenameFolderRequest(папка.Id, наименование, папка.Version), токен)
                 .ConfigureAwait(false);
 
             return ИзПапки(ответ);
@@ -575,12 +554,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<MoveFolderRequest, FolderDto>(
+            var ответ = await ВыполнитьОперациюAsync<MoveFolderRequest, FolderDto>(
                     "folders.move",
-                    new MoveFolderRequest(папка.Id, родитель, папка.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new MoveFolderRequest(папка.Id, родитель, папка.Version), токен)
                 .ConfigureAwait(false);
 
             return ИзПапки(ответ);
@@ -590,12 +566,9 @@ public sealed class RemoteDataGateway : IDataGateway
     public Task<Result<bool>> УдалитьПапкуAsync(Folder папка, CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            await _транспорт
-                .ВыполнитьКомандуAsync<DeleteFolderRequest, VersionedResponse>(
+            await ВыполнитьОперациюAsync<DeleteFolderRequest, VersionedResponse>(
                     "folders.delete",
-                    new DeleteFolderRequest(папка.Id, папка.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new DeleteFolderRequest(папка.Id, папка.Version), токен)
                 .ConfigureAwait(false);
 
             return true;
@@ -654,12 +627,9 @@ public sealed class RemoteDataGateway : IDataGateway
     public Task<Result<Mail>> СоздатьПисьмоAsync(Mail письмо, CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<CreateMailRequest, MailDto>(
+            var ответ = await ВыполнитьОперациюAsync<CreateMailRequest, MailDto>(
                     "mails.create",
-                    new CreateMailRequest(SharedMapping.КОтправлению(письмо, письмо.Version)),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new CreateMailRequest(SharedMapping.КОтправлению(письмо, письмо.Version)), токен)
                 .ConfigureAwait(false);
 
             return ИзПисьма(ответ);
@@ -673,16 +643,13 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<TransitionMailStatusRequest, MailDto>(
+            var ответ = await ВыполнитьОперациюAsync<TransitionMailStatusRequest, MailDto>(
                     "mails.transition-status",
                     new TransitionMailStatusRequest(
                         письмо.Id,
                         статус,
                         момент,
-                        письмо.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                        письмо.Version), токен)
                 .ConfigureAwait(false);
 
             return ИзПисьма(ответ);
@@ -695,12 +662,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<MoveMailToFolderRequest, MailDto>(
+            var ответ = await ВыполнитьОперациюAsync<MoveMailToFolderRequest, MailDto>(
                     "mails.move-to-folder",
-                    new MoveMailToFolderRequest(письмо.Id, идентификаторПапки, письмо.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new MoveMailToFolderRequest(письмо.Id, идентификаторПапки, письмо.Version), токен)
                 .ConfigureAwait(false);
 
             return ИзПисьма(ответ);
@@ -717,15 +681,12 @@ public sealed class RemoteDataGateway : IDataGateway
 
         var версия = контрагент?.Version ?? 0;
 
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<UpdateDraftRecipientAddressRequest, UpdateDraftRecipientAddressResponse>(
+        var ответ = await ВыполнитьОперациюAsync<UpdateDraftRecipientAddressRequest, UpdateDraftRecipientAddressResponse>(
                 "mails.update-draft-address",
                 new UpdateDraftRecipientAddressRequest(
                     идентификаторКонтрагента,
                     SharedMapping.КАдресу(адрес)!,
-                    версия),
-                operationId: null,
-                cancellationToken: токен)
+                    версия), токен)
             .ConfigureAwait(false);
 
         return ответ.Updated;
@@ -757,7 +718,7 @@ public sealed class RemoteDataGateway : IDataGateway
 
     /// <inheritdoc />
     public Task<IEmailLogWriter> ПолучитьПисателяEmailAsync(CancellationToken токен = default)
-        => Task.FromResult<IEmailLogWriter>(new RemoteEmailLogWriter(_транспорт));
+        => Task.FromResult<IEmailLogWriter>(new RemoteEmailLogWriter(_транспорт, _незавершённые));
 
     /// <inheritdoc />
     public async Task<Result<int>> ИзменитьСостояниеПоИдентификаторамAsync(
@@ -781,11 +742,9 @@ public sealed class RemoteDataGateway : IDataGateway
             записи.Add(new VersionedId(контрагент.Id, контрагент.Version));
         }
 
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<BatchChangeCounterpartyStateRequest, BatchOperationResponse>(
+        var ответ = await ВыполнитьОперациюAsync<BatchChangeCounterpartyStateRequest, BatchOperationResponse>(
                 "counterparties.batch-change-state",
-                new BatchChangeCounterpartyStateRequest(записи, восстановить),
-                cancellationToken: токен)
+                new BatchChangeCounterpartyStateRequest(записи, восстановить), токен)
             .ConfigureAwait(false);
 
         return Result<int>.Success(ответ.Count);
@@ -812,11 +771,9 @@ public sealed class RemoteDataGateway : IDataGateway
             записи.Add(new VersionedId(контрагент.Id, контрагент.Version));
         }
 
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<BatchUpdateCounterpartyFieldRequest, BatchOperationResponse>(
+        var ответ = await ВыполнитьОперациюAsync<BatchUpdateCounterpartyFieldRequest, BatchOperationResponse>(
                 "counterparties.batch-update-field",
-                new BatchUpdateCounterpartyFieldRequest(записи, свойство, значение),
-                cancellationToken: токен)
+                new BatchUpdateCounterpartyFieldRequest(записи, свойство, значение), токен)
             .ConfigureAwait(false);
 
         return Result<int>.Success(ответ.Count);
@@ -830,16 +787,13 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<AssignMailNumberRequest, MailDto>(
+            var ответ = await ВыполнитьОперациюAsync<AssignMailNumberRequest, MailDto>(
                     "mails.assign-number",
                     new AssignMailNumberRequest(
                         письмо.Id,
                         шаблон,
                         момент,
-                        письмо.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                        письмо.Version), токен)
                 .ConfigureAwait(false);
 
             return ИзПисьма(ответ);
@@ -911,12 +865,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<GenerateDistributionRequest, DistributionDto>(
+            var ответ = await ВыполнитьОперациюAsync<GenerateDistributionRequest, DistributionDto>(
                     "distributions.generate",
-                    new GenerateDistributionRequest(план),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new GenerateDistributionRequest(план), токен)
                 .ConfigureAwait(false);
 
             return ИзРассылки(ответ);
@@ -931,16 +882,13 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<CreateDistributionFromSelectionRequest, DistributionDto>(
+            var ответ = await ВыполнитьОперациюAsync<CreateDistributionFromSelectionRequest, DistributionDto>(
                     "distributions.create-from-selection",
                     new CreateDistributionFromSelectionRequest(
                         идентификаторы,
                         отправитель,
                         наименование,
-                        формат),
-                    operationId: null,
-                    cancellationToken: токен)
+                        формат), токен)
                 .ConfigureAwait(false);
 
             return ИзРассылки(ответ);
@@ -952,12 +900,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<CloneDistributionRequest, CloneDistributionResponse>(
+            var ответ = await ВыполнитьОперациюAsync<CloneDistributionRequest, CloneDistributionResponse>(
                     "distributions.clone-for-resend",
-                    new CloneDistributionRequest(идентификатор),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new CloneDistributionRequest(идентификатор), токен)
                 .ConfigureAwait(false);
 
             return new РассылкаКлон(
@@ -975,8 +920,7 @@ public sealed class RemoteDataGateway : IDataGateway
         {
             // Версия — та, которую вызывающий прочитал: повторное чтение на
             // сервере означало бы «последний сохранивший победит».
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<UpdateDistributionRequest, UpdateDistributionResponse>(
+            var ответ = await ВыполнитьОперациюAsync<UpdateDistributionRequest, UpdateDistributionResponse>(
                     "distributions.update",
                     new UpdateDistributionRequest(
                         запрос.DistributionId,
@@ -985,9 +929,7 @@ public sealed class RemoteDataGateway : IDataGateway
                         запрос.SenderId,
                         запрос.CounterpartyIds,
                         запрос.EnvelopeType,
-                        ожидаемаяВерсия),
-                    operationId: null,
-                    cancellationToken: токен)
+                        ожидаемаяВерсия), токен)
                 .ConfigureAwait(false);
 
             return new РассылкаПравка(
@@ -1001,12 +943,9 @@ public sealed class RemoteDataGateway : IDataGateway
     public Task<Result<Distribution>> СохранитьРассылкуAsync(Distribution рассылка, CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<SaveDistributionRequest, DistributionDto>(
+            var ответ = await ВыполнитьОперациюAsync<SaveDistributionRequest, DistributionDto>(
                     "distributions.save",
-                    new SaveDistributionRequest(рассылка.Id, рассылка.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new SaveDistributionRequest(рассылка.Id, рассылка.Version), токен)
                 .ConfigureAwait(false);
 
             return ИзРассылки(ответ);
@@ -1019,12 +958,9 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<MarkDistributionDispatchedRequest, DistributionDto>(
+            var ответ = await ВыполнитьОперациюAsync<MarkDistributionDispatchedRequest, DistributionDto>(
                     "distributions.mark-dispatched",
-                    new MarkDistributionDispatchedRequest(рассылка.Id, момент, рассылка.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new MarkDistributionDispatchedRequest(рассылка.Id, момент, рассылка.Version), токен)
                 .ConfigureAwait(false);
 
             return ИзРассылки(ответ);
@@ -1033,12 +969,9 @@ public sealed class RemoteDataGateway : IDataGateway
     /// <inheritdoc />
     public async Task<int> ПересчитатьКонвертыРассылкиAsync(Distribution рассылка, CancellationToken токен = default)
     {
-        await _транспорт
-            .ВыполнитьКомандуAsync<RecalculateEnvelopesRequest, DistributionDto>(
+        await ВыполнитьОперациюAsync<RecalculateEnvelopesRequest, DistributionDto>(
                 "distributions.recalculate-envelopes",
-                new RecalculateEnvelopesRequest(рассылка.Id, рассылка.Version),
-                operationId: null,
-                cancellationToken: токен)
+                new RecalculateEnvelopesRequest(рассылка.Id, рассылка.Version), токен)
             .ConfigureAwait(false);
 
         var пересчитанная = await ПолучитьРассылкуAsync(рассылка.Id, токен).ConfigureAwait(false);
@@ -1130,14 +1063,11 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<SavePrintTemplateRequest, PrintTemplateDto>(
+            var ответ = await ВыполнитьОперациюAsync<SavePrintTemplateRequest, PrintTemplateDto>(
                     "templates.save",
                     new SavePrintTemplateRequest(
                         SharedMapping.КШаблону(шаблон, шаблон.Version, null),
-                        шаблон.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                        шаблон.Version), токен)
                 .ConfigureAwait(false);
 
             return new PrintTemplate
@@ -1159,12 +1089,9 @@ public sealed class RemoteDataGateway : IDataGateway
     public Task<Result<bool>> УдалитьШаблонAsync(PrintTemplate шаблон, CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            await _транспорт
-                .ВыполнитьКомандуAsync<DeletePrintTemplateRequest, VersionedResponse>(
+            await ВыполнитьОперациюAsync<DeletePrintTemplateRequest, VersionedResponse>(
                     "templates.delete",
-                    new DeletePrintTemplateRequest(шаблон.Id, шаблон.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new DeletePrintTemplateRequest(шаблон.Id, шаблон.Version), токен)
                 .ConfigureAwait(false);
 
             return true;
@@ -1176,14 +1103,11 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<SaveBlankFieldRequest, BlankFieldDto>(
+            var ответ = await ВыполнитьОперациюAsync<SaveBlankFieldRequest, BlankFieldDto>(
                     "template-fields.save",
                     new SaveBlankFieldRequest(
                         SharedMapping.КПолюБланка(поле, поле.Version),
-                        поле.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                        поле.Version), токен)
                 .ConfigureAwait(false);
 
             return new BlankField
@@ -1218,12 +1142,9 @@ public sealed class RemoteDataGateway : IDataGateway
     public Task<Result<bool>> УдалитьПолеШаблонаAsync(BlankField поле, CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            await _транспорт
-                .ВыполнитьКомандуAsync<DeleteBlankFieldRequest, VersionedResponse>(
+            await ВыполнитьОперациюAsync<DeleteBlankFieldRequest, VersionedResponse>(
                     "template-fields.delete",
-                    new DeleteBlankFieldRequest(поле.Id, поле.Version),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new DeleteBlankFieldRequest(поле.Id, поле.Version), токен)
                 .ConfigureAwait(false);
 
             return true;
@@ -1234,12 +1155,14 @@ public sealed class RemoteDataGateway : IDataGateway
         IReadOnlyList<long> идентификаторы,
         CancellationToken токен = default)
     {
+        // print.get-data — команда-чтение: исход не влияет на данные,
+        // регистрация в незавершённых операциях не требуется.
         var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<GetPrintDataRequest, GetPrintDataResponse>(
+            .ВыполнитьКомандуJsonAsync<GetPrintDataResponse>(
                 "print.get-data",
-                new GetPrintDataRequest(идентификаторы),
-                operationId: null,
-                cancellationToken: токен)
+                JsonSerializer.Serialize(new GetPrintDataRequest(идентификаторы), SharedJson.Options),
+                Guid.NewGuid().ToString("D"),
+                токен)
             .ConfigureAwait(false);
 
         return ответ.Items
@@ -1260,15 +1183,12 @@ public sealed class RemoteDataGateway : IDataGateway
         CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<RecordPrintEventRequest, PrintEventResponse>(
+            var ответ = await ВыполнитьОперациюAsync<RecordPrintEventRequest, PrintEventResponse>(
                     "print.record-event",
                     new RecordPrintEventRequest(
                         идентификаторы,
                         описаниеШаблона,
-                        исход),
-                    operationId: null,
-                    cancellationToken: токен)
+                        исход), токен)
                 .ConfigureAwait(false);
 
             return new PrintHistory
@@ -1352,12 +1272,9 @@ public sealed class RemoteDataGateway : IDataGateway
     public Task<Result<int>> ОчиститьБазуAsync(ClearScope область, CancellationToken токен = default)
         => ВыполнитьAsync(async () =>
         {
-            var ответ = await _транспорт
-                .ВыполнитьКомандуAsync<ClearDatabaseRequest, ClearDatabaseResponse>(
+            var ответ = await ВыполнитьОперациюAsync<ClearDatabaseRequest, ClearDatabaseResponse>(
                     "database.clear",
-                    new ClearDatabaseRequest(область),
-                    operationId: null,
-                    cancellationToken: токен)
+                    new ClearDatabaseRequest(область), токен)
                 .ConfigureAwait(false);
 
             return ответ.Cleared;
@@ -1366,12 +1283,9 @@ public sealed class RemoteDataGateway : IDataGateway
     /// <inheritdoc />
     public async Task<int> НаполнитьДемоДаннымиAsync(CancellationToken токен = default)
     {
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<SeedDemoRequest, SeedDemoResponse>(
+        var ответ = await ВыполнитьОперациюAsync<SeedDemoRequest, SeedDemoResponse>(
                 "database.seed-demo",
-                new SeedDemoRequest(),
-                operationId: null,
-                cancellationToken: токен)
+                new SeedDemoRequest(), токен)
             .ConfigureAwait(false);
 
         return ответ.Seeded;
@@ -1383,17 +1297,14 @@ public sealed class RemoteDataGateway : IDataGateway
         MergePolicy политика,
         CancellationToken токен = default)
     {
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<ImportMergeRequest, ImportMergeResponse>(
+        var ответ = await ВыполнитьОперациюAsync<ImportMergeRequest, ImportMergeResponse>(
                 "import.merge",
                 new ImportMergeRequest(
                     пакет.SourceFormat,
                     пакет.SourceFile,
                     пакет.ImportedAt,
                     пакет.Records.ToArray(),
-                    политика),
-                operationId: null,
-                cancellationToken: токен)
+                    политика), токен)
             .ConfigureAwait(false);
 
         return new ImportMergeReport(
@@ -1401,6 +1312,44 @@ public sealed class RemoteDataGateway : IDataGateway
             ответ.Updated,
             ответ.Skipped,
             ответ.Conflicts);
+    }
+
+    /// <inheritdoc />
+    public async Task ПовторитьНезавершённуюAsync(
+        string идентификатор,
+        CancellationToken токен = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(идентификатор);
+
+        await _незавершённые
+            .ПовторитьAsync(_транспорт, идентификатор, токен)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Выполняет мутацию через механизм незавершённых операций: тело
+    /// запроса сериализуется один раз, регистрируется в хранилище вместе с
+    /// идентификатором операции и передаётся службе; при потере ответа
+    /// исход сообщается как неизвестный, повтор — с прежними
+    /// идентификатором и телом.
+    /// </summary>
+    /// <typeparam name="TЗапрос">Тип запроса команды.</typeparam>
+    /// <typeparam name="TОтвет">Тип ответа команды.</typeparam>
+    /// <param name="имяКоманды">Имя команды службы.</param>
+    /// <param name="запрос">Запрос команды.</param>
+    /// <param name="токен">Токен отмены.</param>
+    /// <returns>Ответ команды.</returns>
+    private async Task<TОтвет> ВыполнитьОперациюAsync<TЗапрос, TОтвет>(
+        string имяКоманды,
+        TЗапрос запрос,
+        CancellationToken токен)
+        where TЗапрос : notnull
+    {
+        var тело = JsonSerializer.Serialize(запрос, SharedJson.Options);
+
+        return await _незавершённые
+            .ВыполнитьAsync<TОтвет>(_транспорт, имяКоманды, тело, токен)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

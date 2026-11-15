@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -23,7 +25,7 @@ namespace Picket302.App.Shared;
 /// остаётся недоступным, данные оператора не подменяются.
 /// </para>
 /// </remarks>
-public sealed class SharedModeException : Exception
+public class SharedModeException : Exception
 {
     /// <summary>
     /// Создаёт ошибку совместного режима.
@@ -48,6 +50,34 @@ public sealed class SharedModeException : Exception
 }
 
 /// <summary>
+/// Исход операции неизвестен: запрос был отправлен, ответ не получен.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Для мутаций это отдельный класс ошибок: операция <b>могла</b> быть
+/// выполнена на сервере, и утверждать обратное нельзя. Повтор с тем же
+/// идентификатором операции безопасен — служба вернёт прежний результат и не
+/// выполнит команду второй раз; повтор с новым идентификатором создал бы
+/// дубль.
+/// </para>
+/// <para>
+/// Для запросов чтения исход на данные не влияет: сообщение говорит только
+/// о недоступности.
+/// </para>
+/// </remarks>
+public sealed class SharedOutcomeUnknownException : SharedModeException
+{
+    /// <summary>
+    /// Создаёт ошибку неизвестного исхода.
+    /// </summary>
+    /// <param name="сообщение">Сообщение оператору.</param>
+    public SharedOutcomeUnknownException(string сообщение)
+        : base(SharedErrorCodes.OutcomeUnknown, сообщение)
+    {
+    }
+}
+
+/// <summary>
 /// Транспорт клиента совместного режима: защищённые запросы к серверной
 /// службе.
 /// </summary>
@@ -59,19 +89,16 @@ public sealed class SharedModeException : Exception
 /// там она не отключается: сверяется фрагмент отпечатка из кода сопряжения.
 /// </para>
 /// <para>
-/// Тело запроса для идентификатора операции сохраняется: повтор той же
-/// операции отправляет те же байты, иначе служба справедливо сочтёт это
-/// другой операцией.
+/// Сбой сети различается честно: если соединение не установлено, запрос не
+/// был доставлен и данные на сервере не изменялись; если запрос ушёл, а
+/// ответ потерян, исход мутации неизвестен — об этом сообщается отдельной
+/// ошибкой, и повтор выполняется с прежним идентификатором операции.
 /// </para>
 /// </remarks>
 public sealed class SharedTransport : IDisposable
 {
     private HttpClient _клиент;
-    private readonly Dictionary<string, string> _телаОпераций = new(StringComparer.Ordinal);
     private readonly Action<string> _журнал;
-
-    /// <summary>Предельный размер кэша тел операций.</summary>
-    public const int ПредельныйКэшТелОпераций = 64;
 
     /// <summary>
     /// Создаёт транспорт для подключения к службе.
@@ -84,24 +111,65 @@ public sealed class SharedTransport : IDisposable
         string секрет,
         Action<string>? журнал = null)
     {
-        ArgumentNullException.ThrowIfNull(реквизиты);
-        ArgumentException.ThrowIfNullOrWhiteSpace(секрет);
-
-        if (string.IsNullOrWhiteSpace(реквизиты.ServerFingerprint))
-        {
-            throw new ArgumentException(
-                "Не задан закреплённый отпечаток сервера: подключение без проверки сертификата запрещено.",
-                nameof(реквизиты));
-        }
+        ПроверитьРеквизиты(реквизиты, секрет);
 
         _журнал = журнал ?? (_ => { });
 
-        _клиент = СоздатьКлиент(реквизиты.ServerFingerprint);
+        _клиент = СоздатьКлиент(реквизиты);
+        НазначитьЗаголовки(_клиент, секрет);
+    }
 
-        _клиент.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", секрет);
-        _клиент.DefaultRequestHeaders.Add(
-            SharedProtocol.ProtocolVersionHeader,
-            SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    /// <summary>
+    /// Создаёт транспорт поверх готового обработчика HTTP: используется в
+    /// проверках, где ответ теряется управляемо. Проверка сертификата не
+    /// отключается — обработчик оборачивает штатный обработчик с
+    /// закреплением отпечатка.
+    /// </summary>
+    /// <param name="реквизиты">Реквизиты подключения.</param>
+    /// <param name="секрет">Секрет устройства.</param>
+    /// <param name="обработчик">Готовый обработчик HTTP.</param>
+    /// <param name="журнал">Приёмник записей журнала клиента.</param>
+    internal SharedTransport(
+        SharedClientSettings реквизиты,
+        string секрет,
+        HttpMessageHandler обработчик,
+        Action<string>? журнал = null)
+    {
+        ПроверитьРеквизиты(реквизиты, секрет);
+        ArgumentNullException.ThrowIfNull(обработчик);
+
+        _журнал = журнал ?? (_ => { });
+
+        _клиент = new HttpClient(обработчик)
+        {
+            BaseAddress = БазовыйАдрес(реквизиты),
+            Timeout = TimeSpan.FromSeconds(60),
+        };
+
+        НазначитьЗаголовки(_клиент, секрет);
+    }
+
+    /// <summary>
+    /// Строит базовый адрес службы из реквизитов подключения.
+    /// </summary>
+    /// <param name="реквизиты">Реквизиты подключения.</param>
+    /// <returns>Базовый адрес HTTPS.</returns>
+    private static Uri БазовыйАдрес(SharedClientSettings реквизиты)
+    {
+        var хост = реквизиты.Host.Trim();
+
+        if (хост.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            хост = хост["https://".Length..];
+        }
+        else if (хост.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            хост = хост["http://".Length..];
+        }
+
+        хост = хост.TrimEnd('/');
+
+        return new Uri($"https://{хост}:{реквизиты.Port}/");
     }
 
     /// <summary>
@@ -140,51 +208,71 @@ public sealed class SharedTransport : IDisposable
     }
 
     /// <summary>
-    /// Выполняет команду службы.
+    /// Выполняет команду службы с заданным телом запроса.
     /// </summary>
-    /// <typeparam name="TЗапрос">Тип запроса.</typeparam>
+    /// <remarks>
+    /// <para>
+    /// Тело передаётся в виде готового JSON: повтор той же операции
+    /// отправляет те же байты. Служба хранит отпечаток содержимого и
+    /// отклоняет повтор под тем же идентификатором с другим телом.
+    /// </para>
+    /// </remarks>
     /// <typeparam name="TОтвет">Тип ответа.</typeparam>
     /// <param name="имяКоманды">Имя команды.</param>
-    /// <param name="запрос">Запрос.</param>
-    /// <param name="operationId">
-    /// Идентификатор операции. Повтор с тем же идентификатором отправляет те
-    /// же байты и возвращает прежний результат.
-    /// </param>
-    /// <param name="токен">Токен отмены.</param>
+    /// <param name="телоJson">Тело запроса в виде JSON.</param>
+    /// <param name="operationId">Идентификатор операции.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Ответ команды.</returns>
-    public async Task<TОтвет> ВыполнитьКомандуAsync<TЗапрос, TОтвет>(
+    public Task<TОтвет> ВыполнитьКомандуJsonAsync<TОтвет>(
         string имяКоманды,
-        TЗапрос запрос,
-        string? operationId = null,
+        string телоJson,
+        string operationId,
+        CancellationToken cancellationToken = default)
+        => РазобратьКомандуAsync<TОтвет>(
+            ВыполнитьКомандуТекстомAsync(имяКоманды, телоJson, operationId, cancellationToken));
+
+    /// <summary>
+    /// Выполняет команду службы и возвращает тело ответа без разбора.
+    /// </summary>
+    /// <remarks>
+    /// Повтор операции не знает тип ответа команды: хранилище незавершённых
+    /// операций возвращает тело как есть, повторивший — разбирает сам.
+    /// </remarks>
+    /// <param name="имяКоманды">Имя команды.</param>
+    /// <param name="телоJson">Тело запроса в виде JSON.</param>
+    /// <param name="operationId">Идентификатор операции.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>Тело ответа в виде JSON.</returns>
+    public async Task<string> ВыполнитьКомандуТекстомAsync(
+        string имяКоманды,
+        string телоJson,
+        string operationId,
         CancellationToken cancellationToken = default)
     {
-        var идентификатор = operationId ?? Guid.NewGuid().ToString("D");
-
-        if (!_телаОпераций.TryGetValue(идентификатор, out var тело))
-        {
-            тело = JsonSerializer.Serialize(запрос, SharedJson.Options);
-
-            // Кэш тел ограничен: он нужен только для повтора недавней
-            // операции, чей ответ ещё не дошёл до клиента.
-            while (_телаОпераций.Count >= ПредельныйКэшТелОпераций)
-            {
-                _телаОпераций.Remove(_телаОпераций.Keys.First());
-            }
-
-            _телаОпераций[идентификатор] = тело;
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(имяКоманды);
+        ArgumentException.ThrowIfNullOrWhiteSpace(телоJson);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
 
         using var сообщение = new HttpRequestMessage(
             HttpMethod.Post,
             $"{SharedProtocol.RoutePrefix}/commands/{имяКоманды}");
 
-        сообщение.Headers.Add(SharedProtocol.OperationIdHeader, идентификатор);
+        сообщение.Headers.Add(SharedProtocol.OperationIdHeader, operationId);
+        сообщение.Content = new StringContent(телоJson, Encoding.UTF8, "application/json");
 
-        сообщение.Content = new StringContent(тело, Encoding.UTF8, "application/json");
+        return await ОтправитьAsync(сообщение, cancellationToken, команда: true)
+            .ConfigureAwait(false);
+    }
 
-        var текст = await ОтправитьAsync(сообщение, cancellationToken).ConfigureAwait(false);
-
-        return Разобрать<TОтвет>(текст);
+    /// <summary>
+    /// Разбирает тело ответа команды после его получения.
+    /// </summary>
+    /// <typeparam name="TОтвет">Тип ответа.</typeparam>
+    /// <param name="получение">Задача получения тела ответа.</param>
+    /// <returns>Разобранный ответ.</returns>
+    private static async Task<TОтвет> РазобратьКомандуAsync<TОтвет>(Task<string> получение)
+    {
+        return Разобрать<TОтвет>(await получение.ConfigureAwait(false));
     }
 
     /// <summary>
@@ -192,7 +280,7 @@ public sealed class SharedTransport : IDisposable
     /// </summary>
     /// <typeparam name="TОтвет">Тип ответа.</typeparam>
     /// <param name="маршрут">Маршрут запроса.</param>
-    /// <param name="токен">Токен отмены.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Ответ запроса.</returns>
     public async Task<TОтвет> ВыполнитьЗапросAsync<TОтвет>(
         string маршрут,
@@ -200,7 +288,8 @@ public sealed class SharedTransport : IDisposable
     {
         using var сообщение = new HttpRequestMessage(HttpMethod.Get, маршрут);
 
-        var текст = await ОтправитьAsync(сообщение, cancellationToken).ConfigureAwait(false);
+        var текст = await ОтправитьAsync(сообщение, cancellationToken, команда: false)
+            .ConfigureAwait(false);
 
         return Разобрать<TОтвет>(текст);
     }
@@ -255,13 +344,21 @@ public sealed class SharedTransport : IDisposable
     /// </summary>
     /// <param name="name">Наименование пакета.</param>
     /// <param name="содержимое">Содержимое .lbk-файла.</param>
+    /// <param name="operationId">
+    /// Идентификатор операции; пусто — создаётся новый. Повтор выгрузки
+    /// выполняется с прежним идентификатором.
+    /// </param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Метаданные сохранённой версии.</returns>
     public async Task<TemplatePackageDto> ВыгрузитьПакетШаблонаAsync(
         string name,
         byte[] содержимое,
+        string? operationId = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(содержимое);
+
         var тело = JsonSerializer.Serialize(
             new UploadTemplatePackageRequest(name, Convert.ToBase64String(содержимое)),
             SharedJson.Options);
@@ -270,10 +367,16 @@ public sealed class SharedTransport : IDisposable
             HttpMethod.Post,
             $"{SharedProtocol.RoutePrefix}/commands/templates.upload-package");
 
-        сообщение.Headers.Add(SharedProtocol.OperationIdHeader, Guid.NewGuid().ToString("D"));
-        сообщение.Content = new StringContent(тело, System.Text.Encoding.UTF8, "application/json");
+        сообщение.Headers.Add(
+            SharedProtocol.OperationIdHeader,
+            string.IsNullOrWhiteSpace(operationId)
+                ? Guid.NewGuid().ToString("D")
+                : operationId);
 
-        var текст = await ОтправитьAsync(сообщение, cancellationToken).ConfigureAwait(false);
+        сообщение.Content = new StringContent(тело, Encoding.UTF8, "application/json");
+
+        var текст = await ОтправитьAsync(сообщение, cancellationToken, команда: true)
+            .ConfigureAwait(false);
 
         var разобранный = JsonSerializer.Deserialize<TemplatePackageDto>(текст, SharedJson.Options);
 
@@ -287,7 +390,7 @@ public sealed class SharedTransport : IDisposable
     /// </summary>
     /// <param name="код">Код сопряжения, показанный администратором.</param>
     /// <param name="имяУстройства">Имя устройства.</param>
-    /// <param name="токен">Токен отмены.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Результат сопряжения.</returns>
     public async Task<PairResponse> СопрячьAsync(
         string код,
@@ -301,7 +404,8 @@ public sealed class SharedTransport : IDisposable
             Encoding.UTF8,
             "application/json");
 
-        var текст = await ОтправитьAsync(сообщение, cancellationToken).ConfigureAwait(false);
+        var текст = await ОтправитьAsync(сообщение, cancellationToken, команда: false)
+            .ConfigureAwait(false);
 
         return Разобрать<PairResponse>(текст);
     }
@@ -309,35 +413,32 @@ public sealed class SharedTransport : IDisposable
     /// <summary>
     /// Отправляет запрос и возвращает тело ответа.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Сбой сети классифицируется честно. Соединение не установлено —
+    /// HTTP-запрос не отправлялся, и данные на сервере не изменялись.
+    /// Ответ потерян (таймаут, разрыв после отправки, обрыв чтения) — исход
+    /// мутации неизвестен, что сообщается отдельной ошибкой.
+    /// </para>
+    /// </remarks>
     /// <param name="сообщение">Запрос.</param>
     /// <param name="токен">Токен отмены.</param>
+    /// <param name="команда">
+    /// Признак мутации: для мутаций потерянный ответ означает неизвестный
+    /// исход, для запросов чтения — только недоступность.
+    /// </param>
     /// <returns>Тело ответа.</returns>
-    private async Task<string> ОтправитьAsync(HttpRequestMessage сообщение, CancellationToken токен)
+    private async Task<string> ОтправитьAsync(
+        HttpRequestMessage сообщение,
+        CancellationToken токен,
+        bool команда)
     {
-        HttpResponseMessage ответ;
+        HttpResponseMessage? ответ = null;
 
         try
         {
             ответ = await _клиент.SendAsync(сообщение, токен).ConfigureAwait(false);
-        }
-        catch (HttpRequestException ошибка)
-        {
-            _журнал($"Общая база недоступна: {ошибка.Message}");
 
-            throw new SharedModeException(
-                "network-unreachable",
-                "Общая база недоступна. Проверьте, что серверная служба запущена и что компьютер "
-                + "с ней доступен по сети. Данные на этом компьютере не изменялись.");
-        }
-        catch (TaskCanceledException) when (!токен.IsCancellationRequested)
-        {
-            throw new SharedModeException(
-                "network-unreachable",
-                "Превычено время ожидания ответа общей базы. Повторите действие.");
-        }
-
-        using (ответ)
-        {
             var текст = await ответ.Content.ReadAsStringAsync(токен).ConfigureAwait(false);
 
             if (ответ.IsSuccessStatusCode)
@@ -347,6 +448,87 @@ public sealed class SharedTransport : IDisposable
 
             throw ПреобразоватьОшибку(ответ.StatusCode, текст);
         }
+        catch (SharedModeException)
+        {
+            throw;
+        }
+        catch (TaskCanceledException) when (!токен.IsCancellationRequested)
+        {
+            throw ИсходНеизвестен("превышено время ожидания ответа", команда);
+        }
+        catch (HttpRequestException ошибка) when (СоединениеНеУстановлено(ошибка))
+        {
+            _журнал($"Общая база недоступна: {ошибка.Message}");
+
+            throw new SharedModeException(
+                "network-unreachable",
+                "Общая база недоступна. Проверьте, что серверная служба запущена и что компьютер "
+                + "с ней доступен по сети. Запрос не был доставлен серверу: данные на сервере "
+                + "не изменялись.");
+        }
+        catch (HttpRequestException ошибка)
+        {
+            _журнал($"Ответ общей базы потерян: {ошибка.Message}");
+
+            throw ИсходНеизвестен($"ошибка соединения ({ошибка.Message})", команда);
+        }
+        catch (IOException)
+        {
+            // Обрыв при чтении ответа: запрос уже был отправлен.
+            throw ИсходНеизвестен("связь оборвалась при получении ответа", команда);
+        }
+        finally
+        {
+            ответ?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Строит ошибку неизвестного исхода.
+    /// </summary>
+    /// <param name="причина">Причина для журнала и сообщения.</param>
+    /// <param name="команда">Признак мутации.</param>
+    /// <returns>Готовая ошибка.</returns>
+    private static SharedOutcomeUnknownException ИсходНеизвестен(string причина, bool команда)
+    {
+        if (!команда)
+        {
+            // Для запросов чтения исход на данные не влияет.
+            return new SharedOutcomeUnknownException(
+                "Общая база не ответила: " + причина + ". Данные не изменялись.");
+        }
+
+        return new SharedOutcomeUnknownException(
+            "Исход операции неизвестен: " + причина + ". Запрос был отправлен, ответ не "
+            + "получен — операция могла быть выполнена на сервере. Не создавайте запись "
+            + "заново: откройте «Сервис → Незавершённые операции» и повторите действие — "
+            + "команда будет отправлена с прежним идентификатором, дубль не возникнет.");
+    }
+
+    /// <summary>
+    /// Определяет, что соединение не было установлено: HTTP-запрос не
+    /// отправлялся.
+    /// </summary>
+    /// <remarks>
+    /// Отказ TCP-соединения и ошибка рукопожатия TLS происходят до отправки
+    /// HTTP-запроса, поэтому команда не могла дойти до службы. Иные ошибки
+    /// классифицируются консервативно: исход считается неизвестным.
+    /// </remarks>
+    /// <param name="ошибка">Исходная ошибка.</param>
+    /// <returns>
+    /// <see langword="true"/>, если соединение не установлено.
+    /// </returns>
+    private static bool СоединениеНеУстановлено(Exception ошибка)
+    {
+        for (var текущая = (Exception?)ошибка; текущая is not null; текущая = текущая.InnerException)
+        {
+            if (текущая is SocketException or AuthenticationException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -412,19 +594,64 @@ public sealed class SharedTransport : IDisposable
     }
 
     /// <summary>
-    /// Создаёт HTTP-клиент, принимающий только сертификат с заданным
-    /// отпечатком открытого ключа.
+    /// Проверяет реквизиты подключения.
+    /// </summary>
+    /// <param name="реквизиты">Реквизиты подключения.</param>
+    /// <param name="секрет">Секрет устройства.</param>
+    private static void ПроверитьРеквизиты(SharedClientSettings реквизиты, string секрет)
+    {
+        ArgumentNullException.ThrowIfNull(реквизиты);
+        ArgumentException.ThrowIfNullOrWhiteSpace(секрет);
+
+        if (string.IsNullOrWhiteSpace(реквизиты.ServerFingerprint))
+        {
+            throw new ArgumentException(
+                "Не задан закреплённый отпечаток сервера: подключение без проверки сертификата запрещено.",
+                nameof(реквизиты));
+        }
+    }
+
+    /// <summary>
+    /// Назначает клиенту заголовки аутентификации и версии протокола.
+    /// </summary>
+    /// <param name="клиент">HTTP-клиент.</param>
+    /// <param name="секрет">Секрет устройства.</param>
+    private static void НазначитьЗаголовки(HttpClient клиент, string секрет)
+    {
+        клиент.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", секрет);
+        клиент.DefaultRequestHeaders.Add(
+            SharedProtocol.ProtocolVersionHeader,
+            SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Создаёт HTTP-клиент с базовым адресом службы, принимающий только
+    /// сертификат с заданным отпечатком открытого ключа.
+    /// </summary>
+    /// <param name="реквизиты">Реквизиты подключения.</param>
+    /// <returns>Готовый HTTP-клиент.</returns>
+    private static HttpClient СоздатьКлиент(SharedClientSettings реквизиты)
+        => new(СоздатьОбработчикОтпечатка(реквизиты.ServerFingerprint))
+        {
+            BaseAddress = БазовыйАдрес(реквизиты),
+            Timeout = TimeSpan.FromSeconds(60),
+        };
+
+    /// <summary>
+    /// Создаёт обработчик HTTP с закреплением отпечатка: для проверок,
+    /// оборачивающих штатный обработчик (управляемая потеря ответа и
+    /// подобные сценарии). Проверка сертификата не отключается.
     /// </summary>
     /// <param name="отпечаток">
     /// Ожидаемый отпечаток. Пусто — сверка ведётся по фрагменту кода
     /// сопряжения (см. <see cref="СоздатьДляСопряжения"/>).
     /// </param>
-    /// <returns>Готовый HTTP-клиент.</returns>
-    private static HttpClient СоздатьКлиент(string отпечаток)
+    /// <returns>Обработчик с проверкой сертификата.</returns>
+    internal static HttpClientHandler СоздатьОбработчикОтпечатка(string отпечаток)
     {
         var ожидаемый = отпечаток?.Trim() ?? string.Empty;
 
-        var обработчик = new HttpClientHandler
+        return new HttpClientHandler
         {
             ServerCertificateCustomValidationCallback = (_, сертификат, _, _) =>
             {
@@ -447,11 +674,6 @@ public sealed class SharedTransport : IDisposable
 
                 return string.Equals(вычисленный, ожидаемый, StringComparison.OrdinalIgnoreCase);
             },
-        };
-
-        return new HttpClient(обработчик)
-        {
-            Timeout = TimeSpan.FromSeconds(60),
         };
     }
 

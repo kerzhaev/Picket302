@@ -233,12 +233,14 @@ public sealed class AppServices : IAsyncDisposable
         SharedUsageCounter счётчикОбъёма,
         SharedClientProfile профильКлиента,
         PrinterManager? службаПринтеров,
-        bool реестрОтправителяИзолирован)
+        bool реестрОтправителяИзолирован,
+        PendingOperationsStore незавершённые)
     {
         ArgumentNullException.ThrowIfNull(данные);
         ArgumentNullException.ThrowIfNull(транспорт);
         ArgumentNullException.ThrowIfNull(счётчикОбъёма);
         ArgumentNullException.ThrowIfNull(профильКлиента);
+        ArgumentNullException.ThrowIfNull(незавершённые);
 
         _профиль = профиль;
         _транспорт = транспорт;
@@ -330,9 +332,9 @@ public sealed class AppServices : IAsyncDisposable
         // Шаблоны, поля бланка, реестр печатных сессий и данные для печати
         // приходят из общей базы; визуализация и спулер остаются на этом
         // компьютере.
-        var шаблоны = new RemotePrintTemplateRepository(транспорт);
-        var поля = new RemoteBlankFieldRepository(транспорт);
-        var журналПечати = new RemotePrintJobRepository(транспорт);
+        var шаблоны = new RemotePrintTemplateRepository(транспорт, незавершённые);
+        var поля = new RemoteBlankFieldRepository(транспорт, незавершённые);
+        var журналПечати = new RemotePrintJobRepository(транспорт, незавершённые);
         var данныеПечати = new RemotePrintDataSource(транспорт);
 
         ШаблоныПечати = шаблоны;
@@ -355,7 +357,7 @@ public sealed class AppServices : IAsyncDisposable
             выводКодов,
             new LogoRenderer(),
             printerProfiles: локальныеПринтеры,
-            printHistory: new PrintHistoryRecorder(new RemotePrintHistoryWriter(транспорт)),
+            printHistory: new PrintHistoryRecorder(new RemotePrintHistoryWriter(транспорт, незавершённые)),
             licenseGate: ВоротаЛицензии);
 
         ПрофильКалибровки = new PrinterOffsetProfile(локальныеПринтеры);
@@ -690,7 +692,13 @@ public sealed class AppServices : IAsyncDisposable
             секрет,
             сообщение => Console.Error.WriteLine(сообщение));
 
-        var удалённый = new RemoteDataGateway(транспорт);
+        // Незавершённые операции переживают перезапуск приложения: при
+        // потере ответа повтор выполняется с прежним идентификатором.
+        var незавершённые = new PendingOperationsStore(
+            Path.Combine(пути.DataDirectory, "pending-operations.json"),
+            журнал: сообщение => Console.Error.WriteLine(сообщение));
+
+        var удалённый = new RemoteDataGateway(транспорт, незавершённые);
         var счётчик = new SharedUsageCounter(удалённый);
 
         await счётчик.ОбновитьAsync(cancellationToken).ConfigureAwait(false);
@@ -702,7 +710,8 @@ public sealed class AppServices : IAsyncDisposable
             счётчик,
             профильКлиента,
             службаПринтеров,
-            реестрОтправителяИзолирован);
+            реестрОтправителяИзолирован,
+            незавершённые);
     }
 
     /// <summary>

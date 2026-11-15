@@ -10,19 +10,27 @@ namespace Picket302.App.Shared;
 /// <summary>
 /// Запись печатных событий в общий журнал через серверную службу.
 /// </summary>
+/// <remarks>
+/// Событие пишется как операция с защитой от дубля: потерянный ответ не
+/// приводит ко второй записи журнала печати.
+/// </remarks>
 public sealed class RemotePrintHistoryWriter : IPrintHistoryWriter
 {
     private readonly SharedTransport _транспорт;
+    private readonly PendingOperationsStore _незавершённые;
 
     /// <summary>
     /// Создаёт запись печатных событий поверх серверной службы.
     /// </summary>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
-    public RemotePrintHistoryWriter(SharedTransport транспорт)
+    /// <param name="незавершённые">Хранилище незавершённых операций.</param>
+    public RemotePrintHistoryWriter(SharedTransport транспорт, PendingOperationsStore незавершённые)
     {
         ArgumentNullException.ThrowIfNull(транспорт);
+        ArgumentNullException.ThrowIfNull(незавершённые);
 
         _транспорт = транспорт;
+        _незавершённые = незавершённые;
     }
 
     /// <inheritdoc />
@@ -34,19 +42,20 @@ public sealed class RemotePrintHistoryWriter : IPrintHistoryWriter
         string? outcome = null,
         string? deviceId = null)
     {
-        var ответ = await _транспорт
-            .ВыполнитьКомандуAsync<RecordPrintEventRequest, PrintEventResponse>(
-                "print.record-event",
-                new RecordPrintEventRequest(
-                    new[] { mailId },
-                    templateDescription,
-                    outcome is null ? PrintEventOutcome.Spooled : Enum.Parse<PrintEventOutcome>(outcome),
-                    null,
-                    null,
-                    1,
-                    "selected",
-                    null),
-                cancellationToken: cancellationToken)
+        var тело = System.Text.Json.JsonSerializer.Serialize(
+            new RecordPrintEventRequest(
+                new[] { mailId },
+                templateDescription,
+                outcome is null ? PrintEventOutcome.Spooled : Enum.Parse<PrintEventOutcome>(outcome),
+                null,
+                null,
+                1,
+                "selected",
+                null),
+            SharedJson.Options);
+
+        var ответ = await _незавершённые
+            .ВыполнитьAsync<PrintEventResponse>(_транспорт, "print.record-event", тело, cancellationToken)
             .ConfigureAwait(false);
 
         return Result<PrintHistory>.Success(new PrintHistory

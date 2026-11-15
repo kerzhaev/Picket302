@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Picket302.Application.Services;
 using Picket302.Infrastructure.Data;
 using Picket302.Infrastructure.Mail;
@@ -65,19 +66,27 @@ public sealed class LocalEmailLogWriter : IEmailLogWriter
 /// <summary>
 /// Журнал email-рассылок в общей базе через серверную службу.
 /// </summary>
+/// <remarks>
+/// Запись в журнал выполняется как операция с защитой от дубля: потерянный
+/// ответ не приводит к повторной записи журнала с новым идентификатором.
+/// </remarks>
 public sealed class RemoteEmailLogWriter : IEmailLogWriter
 {
     private readonly SharedTransport _транспорт;
+    private readonly PendingOperationsStore _незавершённые;
 
     /// <summary>
     /// Создаёт писатель журнала поверх серверной службы.
     /// </summary>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
-    public RemoteEmailLogWriter(SharedTransport транспорт)
+    /// <param name="незавершённые">Хранилище незавершённых операций.</param>
+    public RemoteEmailLogWriter(SharedTransport транспорт, PendingOperationsStore незавершённые)
     {
         ArgumentNullException.ThrowIfNull(транспорт);
+        ArgumentNullException.ThrowIfNull(незавершённые);
 
         _транспорт = транспорт;
+        _незавершённые = незавершённые;
     }
 
     /// <inheritdoc />
@@ -85,20 +94,21 @@ public sealed class RemoteEmailLogWriter : IEmailLogWriter
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        await _транспорт
-            .ВыполнитьКомандуAsync<WriteEmailLogRequest, WriteEmailLogResponse>(
-                "email-log.write",
-                new WriteEmailLogRequest(new[]
-                {
-                    new EmailLogEntryDto(
-                        entry.Recipient,
-                        entry.Status,
-                        entry.SmtpCode,
-                        entry.ServerResponse,
-                        entry.Error,
-                        entry.SentAtUtc),
-                }),
-                cancellationToken: cancellationToken)
+        var тело = JsonSerializer.Serialize(
+            new WriteEmailLogRequest(new[]
+            {
+                new EmailLogEntryDto(
+                    entry.Recipient,
+                    entry.Status,
+                    entry.SmtpCode,
+                    entry.ServerResponse,
+                    entry.Error,
+                    entry.SentAtUtc),
+            }),
+            SharedJson.Options);
+
+        await _незавершённые
+            .ВыполнитьAsync<WriteEmailLogResponse>(_транспорт, "email-log.write", тело, cancellationToken)
             .ConfigureAwait(false);
     }
 

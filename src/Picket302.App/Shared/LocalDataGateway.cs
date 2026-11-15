@@ -40,6 +40,19 @@ public sealed class LocalDataGateway : IDataGateway
     public bool ОбщийРежим => false;
 
     /// <inheritdoc />
+    public IReadOnlyList<PendingOperationsStore.НезавершённаяОперация> НезавершённыеОперации
+        => Array.Empty<PendingOperationsStore.НезавершённаяОперация>();
+
+    /// <inheritdoc />
+    public Task ПовторитьНезавершённуюAsync(string идентификатор, CancellationToken токен = default)
+    {
+        // В одиночном режиме запись идёт в местную базу напрямую:
+        // незавершённых операций не возникает.
+        throw new InvalidOperationException(
+            "В одиночном режиме незавершённых операций нет.");
+    }
+
+    /// <inheritdoc />
     public Task<Page<Counterparty>> ПолучитьКонтрагентовAsync(
         PageRequest запрос,
         CounterpartyFilter? фильтр = null,

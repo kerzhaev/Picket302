@@ -53,6 +53,13 @@ public static class SharedErrorCodes
     /// <summary>Операция уже выполняется.</summary>
     public const string OperationInProgress = "operation-in-progress";
 
+    /// <summary>
+    /// Исход операции неизвестен: запрос был отправлен, ответ не получен.
+    /// Код используется только клиентом (службой не отправляется): служба,
+    /// получившая запрос, всегда отвечает содержательно либо отказом.
+    /// </summary>
+    public const string OutcomeUnknown = "outcome-unknown";
+
     /// <summary>Внутренняя ошибка службы.</summary>
     public const string Internal = "internal";
 }

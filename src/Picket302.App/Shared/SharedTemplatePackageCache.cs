@@ -102,15 +102,25 @@ public sealed class SharedTemplatePackageCache
     /// <summary>
     /// Загружает пакет шаблона на сервер.
     /// </summary>
+    /// <remarks>
+    /// Выгрузка — мутация: при передаче хранилища незавершённых операций
+    /// потерянный ответ не приводит ко второй версии пакета, повтор
+    /// выполняется с прежним идентификатором.
+    /// </remarks>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
     /// <param name="name">Наименование пакета.</param>
     /// <param name="путьКФайлу">Локальный путь к .lbk-файлу.</param>
+    /// <param name="незавершённые">
+    /// Хранилище незавершённых операций; пусто — выгрузка без учёта
+    /// (используется в проверках без сети).
+    /// </param>
     /// <param name="cancellationToken">Токен отмены.</param>
     /// <returns>Метаданные сохранённой версии.</returns>
     public async Task<TemplatePackageDto> ЗагрузитьAsync(
         SharedTransport транспорт,
         string name,
         string путьКФайлу,
+        PendingOperationsStore? незавершённые = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -119,9 +129,42 @@ public sealed class SharedTemplatePackageCache
         var содержимое = await File.ReadAllBytesAsync(путьКФайлу, cancellationToken)
             .ConfigureAwait(false);
 
-        return await транспорт
-            .ВыгрузитьПакетШаблонаAsync(name, содержимое, cancellationToken)
-            .ConfigureAwait(false);
+        if (незавершённые is null)
+        {
+            return await транспорт
+                .ВыгрузитьПакетШаблонаAsync(name, содержимое, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var тело = System.Text.Json.JsonSerializer.Serialize(
+            new UploadTemplatePackageRequest(name, Convert.ToBase64String(содержимое)),
+            SharedJson.Options);
+
+        var идентификатор = незавершённые.Начать("templates.upload-package", тело);
+
+        try
+        {
+            var метаданные = await транспорт
+                .ВыгрузитьПакетШаблонаAsync(name, содержимое, идентификатор, cancellationToken)
+                .ConfigureAwait(false);
+
+            незавершённые.Завершить(идентификатор);
+
+            return метаданные;
+        }
+        catch (SharedOutcomeUnknownException)
+        {
+            // Ответ потерян: исход неизвестен, запись остаётся для повтора.
+            throw;
+        }
+        catch (SharedModeException)
+        {
+            // Служба ответила содержательным отказом: исход известен,
+            // запись не нужна.
+            незавершённые.Завершить(идентификатор);
+
+            throw;
+        }
     }
 
     /// <summary>

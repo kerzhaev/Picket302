@@ -863,6 +863,28 @@ public sealed class MainShell : Form
         await ЗагрузитьРассылкиAsync(состав, cancellationToken).ConfigureAwait(true);
         await ЗагрузитьОтправленныеAsync(состав, cancellationToken).ConfigureAwait(true);
         await ЗагрузитьПапкиAsync(состав, cancellationToken).ConfigureAwait(true);
+
+        // Незавершённые операции прошлой сессии: ответ сервера был потерян,
+        // исход неизвестен. Оператор решает, повторять ли сейчас.
+        if (состав.Данные.НезавершённыеОперации.Count > 0)
+        {
+            var ответ = MessageBox.Show(
+                this,
+                $"На этом компьютере есть незавершённые операции прошлой сессии "
+                + $"({состав.Данные.НезавершённыеОперации.Count}): ответ сервера был потерян "
+                + "при сетевом сбое, исход неизвестен — операция могла быть выполнена. "
+                + "Открыть окно повтора? Операции будут отправлены с прежними "
+                + "идентификаторами, дублей не возникнет.",
+                "Общая база",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button1);
+
+            if (ответ == DialogResult.Yes && FormSharedPendingOperations.Показать(this, состав.Данные))
+            {
+                ОбновитьВсе();
+            }
+        }
     }
 
     /// <summary>
@@ -944,6 +966,7 @@ public sealed class MainShell : Form
 
         var сервис = new ToolStripMenuItem("Сервис");
         сервис.DropDownItems.Add("Общая база…", null, (_, _) => ОткрытьПодключениеКОбщейБазе());
+        сервис.DropDownItems.Add("Незавершённые операции…", null, (_, _) => ОткрытьНезавершённыеОперации());
         сервис.DropDownItems.Add("Демо-база", null, (_, _) => НаполнитьДемоБазу());
         сервис.DropDownItems.Add("Восстановить удалённые записи", null, (_, _) => ВосстановитьУдалённые());
         сервис.DropDownItems.Add("Создать отправителя…", null, (_, _) => СоздатьОтправителя());
@@ -6068,6 +6091,49 @@ public sealed class MainShell : Form
                 "Общая база",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+    }
+
+    /// <summary>
+    /// Открывает окно незавершённых операций и обновляет данные после
+    /// успешного повтора.
+    /// </summary>
+    private void ОткрытьНезавершённыеОперации()
+    {
+        if (_состав is null)
+        {
+            return;
+        }
+
+        if (!_состав.Данные.ОбщийРежим)
+        {
+            MessageBox.Show(
+                this,
+                "Незавершённые операции есть только в режиме общей базы: запись в "
+                + "одиночном режиме не теряет ответов.",
+                "Незавершённые операции",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        if (_состав.Данные.НезавершённыеОперации.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Незавершённых операций нет: исход всех операций известен.",
+                "Незавершённые операции",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+
+            return;
+        }
+
+        if (FormSharedPendingOperations.Показать(this, _состав.Данные))
+        {
+            // Повтор мог создать или изменить записи: таблицы перечитываются.
+            ОбновитьВсе();
         }
     }
 
