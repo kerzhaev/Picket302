@@ -21,10 +21,16 @@ public enum SharedOperationOutcomeKind
     ReplayError = 2,
 
     /// <summary>
-    /// Идентификатор операции уже занят другой незавершённой попыткой либо
-    /// использован с другим содержимым.
+    /// Идентификатор операции использован с другим содержимым: результат
+    /// прежней операции возвращать нельзя.
     /// </summary>
     Conflict = 3,
+
+    /// <summary>
+    /// Идентификатор операции занят другой попыткой, которая ещё
+    /// выполняется: её исход неизвестен, повторить нужно позже.
+    /// </summary>
+    InProgress = 4,
 }
 
 /// <summary>
@@ -178,8 +184,8 @@ public sealed class SharedOperationStore
             && (сейчас - существующая.CreatedAtUtc) < СрокПерехвата)
         {
             return new SharedOperationOutcome(
-                SharedOperationOutcomeKind.Conflict,
-                Причина: "Операция с этим идентификатором уже выполняется.");
+                SharedOperationOutcomeKind.InProgress,
+                Причина: "Операция с этим идентификатором ещё выполняется. Повторите действие позже.");
         }
 
         // Незавершённая попытка устарела (служба завершилась аварийно):
@@ -204,8 +210,8 @@ public sealed class SharedOperationStore
         return перехвачено > 0
             ? new SharedOperationOutcome(SharedOperationOutcomeKind.Proceed)
             : new SharedOperationOutcome(
-                SharedOperationOutcomeKind.Conflict,
-                Причина: "Операция с этим идентификатором уже выполняется.");
+                SharedOperationOutcomeKind.InProgress,
+                Причина: "Операция с этим идентификатором ещё выполняется. Повторите действие позже.");
     }
 
     /// <summary>

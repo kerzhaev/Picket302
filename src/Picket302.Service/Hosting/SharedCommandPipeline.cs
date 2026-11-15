@@ -162,6 +162,19 @@ public sealed class SharedCommandPipeline
                         SharedErrorCodes.IdempotencyMismatch,
                         начало.Причина ?? "Операция с таким идентификатором уже выполняется.",
                         operationId));
+
+            case SharedOperationOutcomeKind.InProgress:
+                // Отдельный код ошибки: клиент обязан отличать «повтор под
+                // тем же идентификатором с другим содержимым» (исход известен,
+                // запись не нужна) от «первая попытка ещё выполняется»
+                // (исход неизвестен, незавершённая операция сохраняется).
+                return new SharedPipelineResult(
+                    false,
+                    StatusCodes.Status409Conflict,
+                    Ошибка: new SharedError(
+                        SharedErrorCodes.OperationInProgress,
+                        начало.Причина ?? "Операция с этим идентификатором ещё выполняется.",
+                        operationId));
         }
 
         // Шаг 2. Выполнение команды. Транзакцией команды и фиксацией её

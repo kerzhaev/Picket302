@@ -1,4 +1,5 @@
 using Picket302.App.Shared;
+using Picket302.Shared.Protocol;
 
 namespace Picket302.App.UI.Forms;
 
@@ -186,6 +187,19 @@ public sealed class FormSharedPendingOperations : Form
                     MessageBox.Show(
                         this,
                         ошибка.Message,
+                        "Незавершённые операции",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+                catch (SharedModeException ошибка) when (ошибка.Код == SharedErrorCodes.OperationInProgress)
+                {
+                    // Первая попытка ещё выполняется на сервере: её исход
+                    // неизвестен, запись остаётся в списке — повтор позже
+                    // вернёт прежний результат.
+                    MessageBox.Show(
+                        this,
+                        "Операция ещё выполняется на сервере. Повторите действие позже: "
+                        + "команда будет отправлена с прежним идентификатором, дубль не возникнет.",
                         "Незавершённые операции",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);

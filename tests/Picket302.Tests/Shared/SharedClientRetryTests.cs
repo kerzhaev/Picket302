@@ -244,6 +244,88 @@ public sealed class SharedClientRetryTests
     }
 
     [Fact]
+    public async Task Окно_Выполнения_На_Сервере_Сохраняет_Незавершённую_Операцию()
+    {
+        await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
+        var каталог = КаталогПроверки();
+
+        try
+        {
+            using var транспорт = await Транспорт(стенд, "ПК оператора 1");
+            var незавершённые = Хранилище(каталог);
+            var шлюз = new RemoteDataGateway(транспорт, незавершённые);
+
+            var тело = JsonSerializer.Serialize(
+                new SaveCounterpartyRequest(SharedServiceIntegrationTests.Контрагент("ООО «Долгая команда»"), 0),
+                SharedJson.Options);
+
+            // Операция зарегистрирована клиентом, ответ на первую попытку
+            // потерян; на сервере команда ещё выполняется (медленная
+            // команда, окно до завершения первой попытки).
+            var идентификатор = незавершённые.Начать("counterparties.save", тело);
+
+            ЗарегистрироватьВыполняющуюся(стенд, идентификатор, "counterparties.save", тело);
+
+            var ошибка = await Assert.ThrowsAsync<SharedModeException>(
+                () => шлюз.ПовторитьНезавершённуюAsync(идентификатор));
+
+            // Сервер различает «ещё выполняется» и «другое содержимое»:
+            // клиент обязан сохранить запись для повтора позже.
+            Assert.Equal(SharedErrorCodes.OperationInProgress, ошибка.Код);
+            Assert.Single(шлюз.НезавершённыеОперации);
+            Assert.Equal(идентификатор, шлюз.НезавершённыеОперации[0].Идентификатор);
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
+
+    /// <summary>
+    /// Регистрирует на стенде запись «операция ещё выполняется»: тот же
+    /// идентификатор и тело, что у незавершённой операции клиента.
+    /// </summary>
+    /// <param name="стенд">Стенд службы.</param>
+    /// <param name="идентификатор">Идентификатор операции.</param>
+    /// <param name="команда">Имя команды.</param>
+    /// <param name="тело">Тело запроса в виде JSON.</param>
+    private static void ЗарегистрироватьВыполняющуюся(
+        SharedServiceTestHost стенд,
+        string идентификатор,
+        string команда,
+        string тело)
+    {
+        var строкаПодключения = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+        {
+            DataSource = Path.Combine(стенд.КаталогДанных, "picket302.db"),
+            Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWrite,
+            Cache = Microsoft.Data.Sqlite.SqliteCacheMode.Default,
+        }.ToString();
+
+        using var соединение = new Microsoft.Data.Sqlite.SqliteConnection(строкаПодключения);
+        соединение.Open();
+
+        using var вставка = соединение.CreateCommand();
+        вставка.CommandText =
+            """
+            INSERT INTO shared_operations
+                (operation_id, device_id, command_name, request_hash, status, created_at)
+            VALUES (@Id, @Device, @Command, @Hash, 'in-progress', @Now);
+            """;
+        вставка.Parameters.AddWithValue("@Id", идентификатор);
+        вставка.Parameters.AddWithValue("@Device", "ПК оператора 1");
+        вставка.Parameters.AddWithValue("@Command", команда);
+        вставка.Parameters.AddWithValue(
+            "@Hash",
+            Picket302.Service.Data.SharedOperationStore.ВычислитьОтпечаток(тело));
+        вставка.Parameters.AddWithValue(
+            "@Now",
+            DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture));
+
+        вставка.ExecuteNonQuery();
+    }
+
+    [Fact]
     public async Task Отмена_Повтора_Сохраняет_Незавершённую_Операцию()
     {
         await using var стенд = await SharedServiceTestHost.ПоднятьAsync();

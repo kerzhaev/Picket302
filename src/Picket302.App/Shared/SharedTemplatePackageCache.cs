@@ -157,6 +157,12 @@ public sealed class SharedTemplatePackageCache
             // Ответ потерян: исход неизвестен, запись остаётся для повтора.
             throw;
         }
+        catch (SharedModeException ошибка) when (ошибка.Код == SharedErrorCodes.OperationInProgress)
+        {
+            // Выполняется другая попытка этой операции: её исход неизвестен,
+            // запись остаётся — повтор позже вернёт прежний результат.
+            throw;
+        }
         catch (SharedModeException)
         {
             // Служба ответила содержательным отказом: исход известен,

@@ -167,7 +167,9 @@ public sealed class SharedOperationStoreTests
                 var повтор = await журнал.НачатьAsync(
                     "оп-4", "устройство-2", "tests.probe", "хеш", DateTime.UtcNow);
 
-                Assert.Equal(SharedOperationOutcomeKind.Conflict, повтор.Вид);
+                // Попытка ещё выполняется: отдельный исход, чтобы клиент
+                // отличал её от повтора с другим содержимым.
+                Assert.Equal(SharedOperationOutcomeKind.InProgress, повтор.Вид);
             }
         }
         finally
@@ -207,7 +209,7 @@ public sealed class SharedOperationStoreTests
                 var повтор = await журнал.НачатьAsync(
                     "оп-свежая", "устройство-1", "tests.probe", "хеш", DateTime.UtcNow);
 
-                Assert.Equal(SharedOperationOutcomeKind.Conflict, повтор.Вид);
+                Assert.Equal(SharedOperationOutcomeKind.InProgress, повтор.Вид);
             }
         }
         finally

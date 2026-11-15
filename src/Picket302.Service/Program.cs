@@ -73,7 +73,7 @@ internal static class Program
             return 3;
         }
 
-        var параметры = ПрочитатьАргументы(args);
+        var (параметры, портИзАргументов) = ПрочитатьАргументы(args);
 
         Directory.CreateDirectory(параметры.DataDirectory);
         Directory.CreateDirectory(параметры.LogsDirectory);
@@ -95,7 +95,7 @@ internal static class Program
 
         // Настройки из service.json читаются после защиты каталога: файл не
         // должен быть доступен на изменение посторонним учётным записям.
-        СлитьНастройки(параметры);
+        СлитьНастройки(параметры, портИзАргументов);
 
         var сертификат = SharedServiceFactory.НайтиСертификат(параметры.CertificateThumbprint);
 
@@ -228,8 +228,11 @@ internal static class Program
     /// трогая файл настроек: он читается после защиты каталога данных.
     /// </summary>
     /// <param name="args">Аргументы командной строки.</param>
-    /// <returns>Настройки с каталогом и портом из аргументов.</returns>
-    private static ServiceOptions ПрочитатьАргументы(string[] args)
+    /// <returns>
+    /// Настройки с каталогом и портом из аргументов; явный порт аргумента
+    /// (даже равный порту по умолчанию) — для приоритета при слиянии.
+    /// </returns>
+    internal static (ServiceOptions Параметры, int? ПортИзАргументов) ПрочитатьАргументы(string[] args)
     {
         var каталог = ServiceOptions.КаталогДанныхПоУмолчанию();
         int? портИзАргументов = null;
@@ -256,29 +259,43 @@ internal static class Program
             }
         }
 
-        return new ServiceOptions
+        var параметры = new ServiceOptions
         {
             DataDirectory = каталог,
             Port = портИзАргументов ?? ServiceOptions.DefaultPort,
         };
+
+        return (параметры, портИзАргументов);
     }
 
     /// <summary>
-    /// Дополняет параметры файлом настроек <c>service.json</c>: порт из
-    /// файла используется, если порт не задан аргументом командной строки.
+    /// Дополняет параметры файлом настроек <c>service.json</c>: отпечаток
+    /// сертификата задаётся только файлом, порт из файла используется, если
+    /// порт не задан аргументом командной строки.
     /// </summary>
     /// <remarks>
-    /// Аргумент командной строки имеет приоритет над файлом; недопустимый
-    /// порт в файле (вне диапазона 1–65535) игнорируется.
+    /// Явный аргумент командной строки имеет приоритет над файлом, даже
+    /// если он равен порту по умолчанию; недопустимый порт в файле (вне
+    /// диапазона 1–65535) игнорируется.
     /// </remarks>
     /// <param name="параметры">Настройки из аргументов командной строки.</param>
-    private static void СлитьНастройки(ServiceOptions параметры)
+    /// <param name="портИзАргументов">
+    /// Порт, заданный аргументом <c>--port</c>; пусто — аргумент не задан.
+    /// </param>
+    internal static void СлитьНастройки(ServiceOptions параметры, int? портИзАргументов)
     {
         var путьНастроек = Path.Combine(параметры.DataDirectory, ServiceOptions.SettingsFileName);
         var изФайла = ServiceOptions.Прочитать(путьНастроек);
 
-        if (параметры.Port == ServiceOptions.DefaultPort
-            && изФайла.Port is > 0 and <= 65535)
+        // Отпечаток сертификата задаётся только файлом настроек: без него
+        // служба не запускается (код 2), секрет устройства не передаётся по
+        // открытому каналу.
+        if (string.IsNullOrWhiteSpace(параметры.CertificateThumbprint))
+        {
+            параметры.CertificateThumbprint = изФайла.CertificateThumbprint;
+        }
+
+        if (портИзАргументов is null && изФайла.Port is > 0 and <= 65535)
         {
             параметры.Port = изФайла.Port;
         }
