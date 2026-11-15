@@ -84,7 +84,8 @@ public sealed class AppServices : IAsyncDisposable
         string путьБазы,
         Picket302ProfilePaths профиль,
         PrinterManager? службаПринтеров,
-        bool реестрОтправителяИзолирован)
+        bool реестрОтправителяИзолирован,
+        Picket302.Infrastructure.Licensing.LicensingRegistry? реестрЛицензирования = null)
     {
         ArgumentNullException.ThrowIfNull(сессия);
 
@@ -104,18 +105,24 @@ public sealed class AppServices : IAsyncDisposable
         // вычисляется при старте, проверка ведётся в одной точке. Ворота
         // создаются до состава слоя данных: прикладные службы ограничивают
         // создание записей лимитами пробного периода.
-        Машина = new MachineIdentity(сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+        Машина = new MachineIdentity(
+            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)),
+            реестрЛицензирования);
         ХранилищеЛицензии = new LicenseStore(
             профиль.LicensePath,
-            null,
+            реестрЛицензирования,
             Машина,
             сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
 
         СчётчикиИспользования = DatabaseUsageCounter.Создать(сессия);
 
+        // Автомат получает тот же реестр лицензирования, что и хранилище:
+        // у изолированного профиля состояние пробного периода живёт в файле
+        // профиля. Значение «пусто» оставляет прежнее поведение — ветка
+        // реестра Windows (производственный профиль).
         АвтоматЛицензии = new LicenseStateMachine(
             ХранилищеЛицензии,
-            null,
+            реестрЛицензирования,
             null,
             () => СчётчикиИспользования?.Invoke() ?? new СнимокИспользования(0, 0));
 
@@ -234,7 +241,8 @@ public sealed class AppServices : IAsyncDisposable
         SharedClientProfile профильКлиента,
         PrinterManager? службаПринтеров,
         bool реестрОтправителяИзолирован,
-        PendingOperationsStore незавершённые)
+        PendingOperationsStore незавершённые,
+        Picket302.Infrastructure.Licensing.LicensingRegistry? реестрЛицензирования = null)
     {
         ArgumentNullException.ThrowIfNull(данные);
         ArgumentNullException.ThrowIfNull(транспорт);
@@ -261,18 +269,22 @@ public sealed class AppServices : IAsyncDisposable
         Журнал = new LogHub(профиль.LogsDirectory);
         var журнал = (string сообщение) => Журнал.LogError(new InvalidOperationException(сообщение));
 
-        Машина = new MachineIdentity(сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+        Машина = new MachineIdentity(
+            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)),
+            реестрЛицензирования);
         ХранилищеЛицензии = new LicenseStore(
             профиль.LicensePath,
-            null,
+            реестрЛицензирования,
             Машина,
             сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
 
         СчётчикиИспользования = счётчикОбъёма.Получить;
 
+        // Автомат получает тот же реестр лицензирования, что и хранилище
+        // (см. комментарий в конструкторе одиночного режима).
         АвтоматЛицензии = new LicenseStateMachine(
             ХранилищеЛицензии,
-            null,
+            реестрЛицензирования,
             null,
             () => СчётчикиИспользования?.Invoke() ?? new СнимокИспользования(0, 0));
 
@@ -651,8 +663,9 @@ public sealed class AppServices : IAsyncDisposable
         bool создатьДемоБазу = false,
         CancellationToken cancellationToken = default,
         PrinterManager? службаПринтеров = null,
-        bool реестрОтправителяИзолирован = false)
-        => СоздатьЯдроAsync(null, путьБазы, создатьДемоБазу, cancellationToken, службаПринтеров, реестрОтправителяИзолирован);
+        bool реестрОтправителяИзолирован = false,
+        Picket302.Infrastructure.Licensing.LicensingRegistry? реестрЛицензирования = null)
+        => СоздатьЯдроAsync(null, путьБазы, создатьДемоБазу, cancellationToken, службаПринтеров, реестрОтправителяИзолирован, реестрЛицензирования);
 
     /// <summary>
     /// Создаёт состав приложения в указанном профиле путей и применяет
@@ -671,7 +684,8 @@ public sealed class AppServices : IAsyncDisposable
         bool создатьДемоБазу = false,
         CancellationToken cancellationToken = default,
         PrinterManager? службаПринтеров = null,
-        bool реестрОтправителяИзолирован = false)
+        bool реестрОтправителяИзолирован = false,
+        Picket302.Infrastructure.Licensing.LicensingRegistry? реестрЛицензирования = null)
     {
         ArgumentNullException.ThrowIfNull(пути);
 
@@ -681,7 +695,8 @@ public sealed class AppServices : IAsyncDisposable
             создатьДемоБазу,
             cancellationToken,
             службаПринтеров,
-            реестрОтправителяИзолирован);
+            реестрОтправителяИзолирован,
+            реестрЛицензирования);
     }
 
     /// <summary>
@@ -738,13 +753,31 @@ public sealed class AppServices : IAsyncDisposable
     /// Общая цепочка создания состава: подготовка каталога, миграции схемы
     /// и сборка служб по путям профиля.
     /// </summary>
+    /// <summary>
+    /// Определяет, является ли каталог данных профиля изолированным
+    /// (непроизводственным): временный корень теста либо иной путь,
+    /// отличный от каталога профиля по умолчанию.
+    /// </summary>
+    /// <param name="каталогДанных">Каталог данных профиля.</param>
+    /// <returns>Признак изолированного профиля.</returns>
+    private static bool ИзолированныйПрофиль(string каталогДанных)
+    {
+        var производственный = Picket302.Infrastructure.ProfileIsolationGuard.Канонизировать(
+            Picket302ProfilePaths.КаталогДанныхПоУмолчанию());
+
+        var фактический = Picket302.Infrastructure.ProfileIsolationGuard.Канонизировать(каталогДанных);
+
+        return !string.Equals(производственный, фактический, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<AppServices> СоздатьЯдроAsync(
         Picket302ProfilePaths? пути,
         string путьБазы,
         bool создатьДемоБазу,
         CancellationToken cancellationToken,
         PrinterManager? службаПринтеров = null,
-        bool реестрОтправителяИзолирован = false)
+        bool реестрОтправителяИзолирован = false,
+        Picket302.Infrastructure.Licensing.LicensingRegistry? реестрЛицензирования = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(путьБазы);
 
@@ -771,12 +804,23 @@ public sealed class AppServices : IAsyncDisposable
 
             var профиль = пути ?? Picket302ProfilePaths.ПоУмолчанию();
 
+            // Реестр лицензирования изолированного профиля: у непроизводственного
+            // профиля (тесты, приёмочные стенды) состояние пробного периода
+            // пишется в файл этого профиля, а не в реальный HKCU рабочей
+            // машины — иначе прогон тестов зависит от срока пробного периода
+            // машины. Производственный профиль (по умолчанию) продолжает
+            // использовать ветку реестра Windows.
+            реестрЛицензирования ??= ИзолированныйПрофиль(профиль.DataDirectory)
+                ? Picket302.Infrastructure.Licensing.LicensingRegistry.File(профиль.DataDirectory)
+                : null;
+
             var состав = new AppServices(
                 сессия,
                 Path.GetFullPath(путьБазы),
                 профиль,
                 службаПринтеров,
-                реестрОтправителяИзолирован);
+                реестрОтправителяИзолирован,
+                реестрЛицензирования);
 
             if (создатьДемоБазу)
             {

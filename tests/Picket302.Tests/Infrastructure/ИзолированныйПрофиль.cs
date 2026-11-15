@@ -60,12 +60,24 @@ public sealed class ИзолированныйПрофиль : IDisposable
     /// <returns>Главное окно с готовым составом.</returns>
     public async Task<MainShell> СоздатьОболочкуAsync(bool создатьДемоБазу = true)
     {
-        _состав = await AppServices.СоздатьAsync(Пути, создатьДемоБазу).ConfigureAwait(false);
+        _состав = await AppServices.СоздатьAsync(
+            Пути,
+            создатьДемоБазу,
+            реестрЛицензирования: РеестрЛицензирования).ConfigureAwait(false);
 
         _оболочка = new MainShell(_состав);
 
         return _оболочка;
     }
+
+    /// <summary>
+    /// Реестр лицензирования изолированного профиля: состояние пробного
+    /// периода пишется в файл временного профиля, а не в реальный
+    /// HKCU\Software\Picket302\Licensing рабочей машины.
+    /// </summary>
+    public Picket302.Infrastructure.Licensing.LicensingRegistry РеестрЛицензирования { get; } =
+        Picket302.Infrastructure.Licensing.LicensingRegistry.File(
+            Picket302ProfilePaths.ДляКорня(Guid.NewGuid().ToString("N")).DataDirectory);
 
     /// <summary>
     /// Передаёт профилю владение составом, созданным вызывающим кодом:
