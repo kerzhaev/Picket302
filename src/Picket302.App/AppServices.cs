@@ -334,7 +334,16 @@ public sealed class AppServices : IAsyncDisposable
         // Шаблоны, поля бланка, реестр печатных сессий и данные для печати
         // приходят из общей базы; визуализация и спулер остаются на этом
         // компьютере.
-        var шаблоны = new RemotePrintTemplateRepository(транспорт, незавершённые);
+        //
+        // Содержимое макета шаблона (.lbk) на сервере лежит в защищённом
+        // каталоге, и путь к нему клиенту не передаётся: рабочее место
+        // получает версию пакета по привязке строки шаблона и сверяет её по
+        // отпечатку. Кэш пакетов — локальный, он переживает перезапуск и не
+        // отдаёт устаревшую версию после смены пакета на сервере.
+        var разрешительПакетов = new SharedTemplatePackageResolver(
+            new SharedTemplatePackageCache(профиль.DataDirectory));
+
+        var шаблоны = new RemotePrintTemplateRepository(транспорт, незавершённые, разрешительПакетов);
         var поля = new RemoteBlankFieldRepository(транспорт, незавершённые);
         var журналПечати = new RemotePrintJobRepository(транспорт, незавершённые);
         var данныеПечати = new RemotePrintDataSource(транспорт);
@@ -359,7 +368,9 @@ public sealed class AppServices : IAsyncDisposable
             выводКодов,
             new LogoRenderer(),
             printerProfiles: локальныеПринтеры,
-            printHistory: new PrintHistoryRecorder(new RemotePrintHistoryWriter(транспорт, незавершённые)),
+            printHistory: new PrintHistoryRecorder(
+                new RemotePrintHistoryWriter(транспорт, незавершённые),
+                фиксироватьНеуспешныеИсходы: true),
             licenseGate: ВоротаЛицензии);
 
         ПрофильКалибровки = new PrinterOffsetProfile(локальныеПринтеры);

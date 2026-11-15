@@ -202,14 +202,18 @@ public sealed class MailService : IPrintHistoryWriter
     /// Идентификатор устройства-клиента, выполнившего печать; пусто в
     /// одиночном режиме.
     /// </param>
+    /// <param name="operationId">
+    /// Идентификатор операции записи; пусто в одиночном режиме.
+    /// </param>
     /// <returns>Запись журнала либо текст нарушения.</returns>
     public async Task<Result<PrintHistory>> RegisterPrintAsync(
         long mailId,
         long? printJobId,
         string templateDescription,
         CancellationToken cancellationToken = default,
-        string? outcome = null,
-        string? deviceId = null)
+        PrintOutcome? outcome = null,
+        string? deviceId = null,
+        string? operationId = null)
     {
         if (string.IsNullOrWhiteSpace(templateDescription))
         {
@@ -237,8 +241,9 @@ public sealed class MailService : IPrintHistoryWriter
             Note = отправление.Note,
             TemplateDescription = templateDescription,
             PrintJobId = printJobId,
-            Outcome = outcome,
+            Outcome = outcome?.ToString(),
             DeviceId = deviceId,
+            OperationId = operationId,
         };
 
         await _единицаРаботы.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);

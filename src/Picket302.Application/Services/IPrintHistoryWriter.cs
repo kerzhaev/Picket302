@@ -27,14 +27,21 @@ public interface IPrintHistoryWriter
     /// <param name="printJobId">Идентификатор сессии печати.</param>
     /// <param name="templateDescription">Описание использованного шаблона.</param>
     /// <param name="cancellationToken">Токен отмены.</param>
-    /// <param name="outcome">Исход печати; пусто — определяется программой.</param>
+    /// <param name="outcome">
+    /// Исход печати; пусто — определяется программой.
+    /// </param>
     /// <param name="deviceId">Устройство, выполнившее печать; пусто в одиночном режиме.</param>
+    /// <param name="operationId">
+    /// Идентификатор операции записи; пусто в одиночном режиме. По нему повтор
+    /// записи после обрыва связи опознаётся как повтор той же операции.
+    /// </param>
     /// <returns>Запись журнала либо текст нарушения.</returns>
     Task<Result<PrintHistory>> RegisterPrintAsync(
         long mailId,
         long? printJobId,
         string templateDescription,
         CancellationToken cancellationToken = default,
-        string? outcome = null,
-        string? deviceId = null);
+        PrintOutcome? outcome = null,
+        string? deviceId = null,
+        string? operationId = null);
 }

@@ -538,13 +538,26 @@ public sealed class LocalDataGateway : IDataGateway
                     null,
                     описаниеШаблона,
                     токен,
-                    исход.ToString(),
+                    ДоменныйИсход(исход),
                     deviceId: null)
                 .ConfigureAwait(false);
         }
 
         return последний ?? Result<PrintHistory>.Failure("Печатное событие не зафиксировано.");
     }
+
+    /// <summary>
+    /// Переводит контрактный исход печати в доменный.
+    /// </summary>
+    /// <param name="исход">Контрактный исход.</param>
+    /// <returns>Доменный исход.</returns>
+    private static PrintOutcome ДоменныйИсход(PrintEventOutcome исход) => исход switch
+    {
+        PrintEventOutcome.Prepared => PrintOutcome.Prepared,
+        PrintEventOutcome.Spooled => PrintOutcome.Spooled,
+        PrintEventOutcome.Error => PrintOutcome.Error,
+        _ => PrintOutcome.Unknown,
+    };
 
     /// <inheritdoc />
     public Task<Page<PrintHistory>> ПолучитьИсториюПечатиAsync(

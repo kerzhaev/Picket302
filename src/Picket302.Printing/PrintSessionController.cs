@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Picket302.Domain.Common;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Licensing;
 using Picket302.Domain.Postal;
@@ -406,7 +407,7 @@ public sealed class PrintSessionController
 
             if (проверкаМетрик.IsBlocked)
             {
-                return await ЗаписатьИтогAsync(
+                var итог = await ЗаписатьИтогAsync(
                     контекст,
                     request,
                     PrintJobStatus.BlockedSize,
@@ -414,6 +415,18 @@ public sealed class PrintSessionController
                     предупреждения,
                     секундомер,
                     cancellationToken).ConfigureAwait(false);
+
+                // Задание не дошло до спулера: конверты не напечатаны, но
+                // исход попытки фиксируется в журнале — «подготовлено».
+                await ЗаписатьИсходAsync(
+                    request,
+                    итог.PrintJobId,
+                    контекст.TemplateName,
+                    PrintOutcome.Prepared,
+                    предупреждения,
+                    cancellationToken).ConfigureAwait(false);
+
+                return итог;
             }
 
             progress?.Report(new PrintProgress(
@@ -438,9 +451,41 @@ public sealed class PrintSessionController
             }
 
             var плановаяЗапись = СобратьЗапись(контекст, PrintJobStatus.Success, секундомер);
-            var плановыйИдентификатор = await _журнал
-                .AddAsync(СобратьЗаписьРеестра(контекст, PrintJobStatus.Success, null, DateTime.UtcNow), cancellationToken)
-                .ConfigureAwait(false);
+            long? плановыйИдентификатор = null;
+
+            try
+            {
+                плановыйИдентификатор = await _журнал
+                    .AddAsync(СобратьЗаписьРеестра(контекст, PrintJobStatus.Success, null, DateTime.UtcNow), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OutcomeUnknownException исключение)
+            {
+                // Исход записи сессии неизвестен: сервер мог создать запись
+                // реестра, а мог и не создать. Задание в спулер не передавалось
+                // и не будет: конверты не напечатаны. Исход попытки
+                // фиксируется в журнале как «неизвестный», а повтор печати не
+                // выполняется — повторяется только запись, с прежним
+                // идентификатором операции.
+                await ЗаписатьИсходAsync(
+                    request,
+                    null,
+                    контекст.TemplateName,
+                    PrintOutcome.Unknown,
+                    предупреждения,
+                    cancellationToken).ConfigureAwait(false);
+
+                return new PrintResult
+                {
+                    IsSuccess = false,
+                    Status = PrintJobStatus.Failed,
+                    ErrorMessage = "Исход записи сессии печати неизвестен: " + исключение.Message
+                        + ". Печать не выполнялась: задание в спулер не передавалось."
+                        + " Повторите запись в разделе «Сервис → Незавершённые операции» — "
+                        + "повторная печать не требуется.",
+                    Warnings = предупреждения,
+                };
+            }
 
             var статус = PrintJobStatus.Success;
             string? ошибка = null;
@@ -522,20 +567,43 @@ public sealed class PrintSessionController
                             request.MailIds,
                             плановыйИдентификатор,
                             контекст.TemplateName,
-                            cancellationToken)
+                            cancellationToken,
+                            PrintOutcome.Spooled)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
                     throw;
                 }
-#pragma warning disable CA1031 // Сбой записи истории печати фиксируется в журнале сессии печати.
+#pragma warning disable CA1031 // Сбой записи в журнал не отменяет состоявшуюся печать.
                 catch (Exception исключение)
 #pragma warning restore CA1031
                 {
-                    статус = PrintJobStatus.Failed;
-                    ошибка = $"Не удалось записать историю печати: {исключение.Message}";
+                    // Конверты уже приняты локальным спулером, поэтому сбой
+                    // записи в журнал не превращает состоявшуюся печать в
+                    // «не напечатано». Итог сессии остаётся успешным, а
+                    // оператору сообщается, что повторяется только запись —
+                    // с прежним идентификатором операции. Повторная
+                    // физическая печать не выполняется.
+                    предупреждения.Add(
+                        "Запись в журнал печати не подтверждена: " + исключение.Message
+                        + ". Конверты переданы в спулер; повторная печать не требуется — "
+                        + "повторите запись в разделе «Сервис → Незавершённые операции».");
                 }
+            }
+            else if (статус != PrintJobStatus.Success && !request.IsTest)
+            {
+                // Задание не принято спулером: конверты не напечатаны. Исход
+                // попытки фиксируется в журнале как «ошибка». Отмена
+                // оператором в общем журнале также относится к этому исходу:
+                // точный статус сессии хранится в реестре сессий печати.
+                await ЗаписатьИсходAsync(
+                    request,
+                    плановыйИдентификатор,
+                    контекст.TemplateName,
+                    PrintOutcome.Error,
+                    предупреждения,
+                    cancellationToken).ConfigureAwait(false);
             }
 
             return await ЗаписатьИтогAsync(
@@ -548,6 +616,19 @@ public sealed class PrintSessionController
                 cancellationToken,
                 плановыйИдентификатор,
                 плановаяЗапись).ConfigureAwait(false);
+        }
+        catch (TemplatePackageUnavailableException исключение)
+        {
+            // Содержимое макета недоступно или не совпадает с объявленной
+            // версией: печать и предпросмотр не выполняются. Молчаливый
+            // откат на прежний макет дал бы конверт, отличный от ожидаемого.
+            return new PrintResult
+            {
+                IsSuccess = false,
+                Status = PrintJobStatus.Failed,
+                ErrorMessage = исключение.Message,
+                Warnings = предупреждения,
+            };
         }
         catch (PrintAuditException исключение)
         {
@@ -591,6 +672,58 @@ public sealed class PrintSessionController
             _кодовыйШтамп,
             _qr,
             _логотип));
+    }
+
+    /// <summary>
+    /// Фиксирует в журнале печати исход попытки, не дошедшей до спулера.
+    /// </summary>
+    /// <param name="request">Запрос печати.</param>
+    /// <param name="printJobId">Идентификатор сессии печати; пусто — сессия не записана.</param>
+    /// <param name="templateDescription">Описание шаблона.</param>
+    /// <param name="outcome">Исход попытки.</param>
+    /// <param name="предупреждения">Список предупреждений сессии.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <remarks>
+    /// Сбой записи исхода не отменяет состояние печати и не приводит к
+    /// повторной печати: исход — вспомогательная запись, а не условие
+    /// выполнения задания.
+    /// </remarks>
+    private async Task ЗаписатьИсходAsync(
+        PrintRequest request,
+        long? printJobId,
+        string templateDescription,
+        PrintOutcome outcome,
+        List<string> предупреждения,
+        CancellationToken cancellationToken)
+    {
+        if (_историяПечати is null || request.IsTest || request.MailIds.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _историяПечати
+                .RecordAsync(
+                    request.MailIds,
+                    printJobId,
+                    templateDescription,
+                    cancellationToken,
+                    outcome)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // Сбой записи исхода не отменяет состояние печати.
+        catch (Exception исключение)
+#pragma warning restore CA1031
+        {
+            предупреждения.Add(
+                "Исход печати не записан в журнал: " + исключение.Message
+                + ". Повторная печать не выполняется.");
+        }
     }
 
     private async Task<PrintResult> ЗаписатьИтогAsync(

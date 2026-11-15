@@ -249,6 +249,53 @@ public sealed class SharedTemplatePackageStore
     }
 
     /// <summary>
+    /// Находит пакет по идентификатору.
+    /// </summary>
+    /// <param name="packageId">Идентификатор пакета.</param>
+    /// <param name="cancellationToken">Токен отмены.</param>
+    /// <returns>
+    /// Метаданные пакета; <see langword="null"/> — пакета с таким
+    /// идентификатором нет.
+    /// </returns>
+    public async Task<TemplatePackageDto?> НайтиAsync(
+        string packageId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+
+        var строка = await _сессия.Connection.QueryFirstOrDefaultAsync<СтрокаПакета>(
+            new CommandDefinition(
+                """
+                SELECT package_id AS PackageId,
+                       name AS Name,
+                       version AS Version,
+                       content_hash AS ContentHash,
+                       size_bytes AS SizeBytes,
+                       is_builtin AS IsBuiltin,
+                       updated_at AS UpdatedAt
+                FROM shared_template_packages
+                WHERE package_id = @Id;
+                """,
+                new { Id = packageId },
+                _сессия.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        if (строка is null)
+        {
+            return null;
+        }
+
+        return new TemplatePackageDto(
+            строка.PackageId,
+            строка.Name,
+            строка.Version,
+            строка.ContentHash,
+            строка.SizeBytes,
+            строка.IsBuiltin != 0,
+            Разобрать(строка.UpdatedAt));
+    }
+
+    /// <summary>
     /// Перечисляет пакеты.
     /// </summary>
     /// <param name="cancellationToken">Токен отмены.</param>

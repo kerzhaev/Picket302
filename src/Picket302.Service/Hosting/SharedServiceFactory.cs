@@ -188,7 +188,7 @@ public static class SharedServiceFactory
         реестр.Register(new MarkDistributionDispatchedCommand(база));
         реестр.Register(new RecalculateEnvelopesCommand(база));
 
-        реестр.Register(new SavePrintTemplateCommand(база));
+        реестр.Register(new SavePrintTemplateCommand(база, каталогПакетов));
         реестр.Register(new DeletePrintTemplateCommand(база));
         реестр.Register(new SaveBlankFieldCommand(база));
         реестр.Register(new DeleteBlankFieldCommand(база));

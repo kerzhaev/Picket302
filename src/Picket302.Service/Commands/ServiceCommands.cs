@@ -22,10 +22,17 @@ public sealed class SavePrintTemplateCommand : SharedDbCommand<SavePrintTemplate
     /// Создаёт команду.
     /// </summary>
     /// <param name="база">Фабрика сессий базы данных.</param>
-    public SavePrintTemplateCommand(ServerDatabase база)
+    /// <param name="каталогПакетов">Каталог пакетов шаблонов.</param>
+    public SavePrintTemplateCommand(ServerDatabase база, string каталогПакетов)
         : base(база)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(каталогПакетов);
+
+        КаталогПакетов = каталогПакетов;
     }
+
+    /// <summary>Каталог пакетов шаблонов.</summary>
+    private string КаталогПакетов { get; }
 
     /// <inheritdoc />
     public override string Name => Имя;
@@ -39,6 +46,28 @@ public sealed class SavePrintTemplateCommand : SharedDbCommand<SavePrintTemplate
     {
         var шаблон = SharedMapping.ИзШаблона(запрос.Template);
         var новый = шаблон.Id <= 0;
+
+        // Привязка к пакету шаблона проверяется по серверу: строка шаблона
+        // должна ссылаться на пакет, который действительно есть, и на его
+        // действующую версию. Иначе рабочее место запросило бы содержимое,
+        // которого на сервере нет.
+        var хранилищеПакетов = new SharedTemplatePackageStore(КаталогПакетов, область.Единица);
+
+        if (шаблон.PackageId is not null)
+        {
+            var пакет = await хранилищеПакетов
+                .НайтиAsync(шаблон.PackageId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (пакет is null)
+            {
+                throw new SharedValidationException(
+                    "Пакет шаблона не найден на сервере. Загрузите пакет и повторите сохранение.");
+            }
+
+            шаблон.PackageVersion = пакет.Version;
+            шаблон.PackageHash = пакет.ContentHash;
+        }
 
         if (!новый)
         {
@@ -71,6 +100,16 @@ public sealed class SavePrintTemplateCommand : SharedDbCommand<SavePrintTemplate
 
             шаблон.FilePath = сохранённый.FilePath;
             шаблон.IsBuiltin = сохранённый.IsBuiltin;
+
+            // Привязка к пакету шаблона сохраняется, если запрос её не
+            // содержит: пустое значение из запроса не затирает сохранённую
+            // привязку, иначе шаблон потерял бы связь с содержимым макета.
+            if (шаблон.PackageId is null)
+            {
+                шаблон.PackageId = сохранённый.PackageId;
+                шаблон.PackageVersion = сохранённый.PackageVersion;
+                шаблон.PackageHash = сохранённый.PackageHash;
+            }
 
             var затронуто = await область.Данные.ШаблоныПечати
                 .UpdateAsync(шаблон, cancellationToken)
@@ -440,7 +479,7 @@ public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRe
             throw new SharedValidationException("Не выбрано ни одного отправления.");
         }
 
-        var исход = запрос.Outcome.ToString();
+        var исход = ДоменныйИсход(запрос.Outcome);
 
         foreach (var идентификатор in запрос.MailIds)
         {
@@ -451,7 +490,8 @@ public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRe
                     запрос.TemplateDescription,
                     cancellationToken,
                     исход,
-                    контекст.DeviceId)
+                    контекст.DeviceId,
+                    контекст.OperationId)
                 .ConfigureAwait(false);
 
             if (результат.IsFailure)
@@ -462,6 +502,19 @@ public sealed class RecordPrintEventCommand : SharedDbCommand<RecordPrintEventRe
 
         return new PrintEventResponse(запрос.MailIds, null, запрос.Outcome);
     }
+
+    /// <summary>
+    /// Переводит контрактный исход печати в доменный.
+    /// </summary>
+    /// <param name="исход">Контрактный исход.</param>
+    /// <returns>Доменный исход.</returns>
+    private static PrintOutcome ДоменныйИсход(PrintEventOutcome исход) => исход switch
+    {
+        PrintEventOutcome.Prepared => PrintOutcome.Prepared,
+        PrintEventOutcome.Spooled => PrintOutcome.Spooled,
+        PrintEventOutcome.Error => PrintOutcome.Error,
+        _ => PrintOutcome.Unknown,
+    };
 }
 
 /// <summary>

@@ -153,6 +153,10 @@ public sealed record PrintJobDto(
 /// Исход печатной операции: «Prepared», «Spooled», «Error» или «Unknown».
 /// Пусто — исход определялся самой программой (одиночный режим).
 /// </param>
+/// <param name="OperationId">
+/// Идентификатор операции записи; безопасная ссылка, по которой повтор
+/// записи после обрыва связи опознаётся как повтор той же операции.
+/// </param>
 public sealed record PrintHistoryDto(
     long Id,
     DateTime PrintedAt,
@@ -165,7 +169,8 @@ public sealed record PrintHistoryDto(
     string TemplateDescription,
     long? PrintJobId,
     string? DeviceId,
-    string? Outcome = null);
+    string? Outcome = null,
+    string? OperationId = null);
 
 /// <summary>
 /// Данные отправления для печати.

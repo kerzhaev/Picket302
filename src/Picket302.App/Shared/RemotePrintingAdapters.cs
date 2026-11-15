@@ -17,19 +17,28 @@ public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
 {
     private readonly SharedTransport _транспорт;
     private readonly PendingOperationsStore _незавершённые;
+    private readonly SharedTemplatePackageResolver? _разрешитель;
 
     /// <summary>
     /// Создаёт адаптер шаблонов печати.
     /// </summary>
     /// <param name="транспорт">Транспорт клиента совместного режима.</param>
     /// <param name="незавершённые">Хранилище незавершённых операций.</param>
-    public RemotePrintTemplateRepository(SharedTransport транспорт, PendingOperationsStore незавершённые)
+    /// <param name="разрешитель">
+    /// Получатель содержимого пакета шаблона; пусто — содержимое не
+    /// запрашивается (проверки без сети).
+    /// </param>
+    public RemotePrintTemplateRepository(
+        SharedTransport транспорт,
+        PendingOperationsStore незавершённые,
+        SharedTemplatePackageResolver? разрешитель = null)
     {
         ArgumentNullException.ThrowIfNull(транспорт);
         ArgumentNullException.ThrowIfNull(незавершённые);
 
         _транспорт = транспорт;
         _незавершённые = незавершённые;
+        _разрешитель = разрешитель;
     }
 
     /// <inheritdoc />
@@ -55,7 +64,33 @@ public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
     {
         var шаблоны = await GetAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return шаблоны.FirstOrDefault(шаблон => шаблон.Id == id);
+        var шаблон = шаблоны.FirstOrDefault(запись => запись.Id == id);
+
+        if (шаблон is null)
+        {
+            return null;
+        }
+
+        // Содержимое макета получается по привязке к пакету: путь к файлу на
+        // сервере клиенту не передаётся. Версия, полученная от сервера,
+        // проверяется по отпечатку — печать по чужой версии недопустима.
+        if (_разрешитель is not null)
+        {
+            var путь = await _разрешитель
+                .РазрешитьAsync(
+                    шаблон,
+                    (идентификатор, версия, токен) => _транспорт
+                        .СкачатьПакетШаблонаAsync(идентификатор, версия, токен),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (путь is not null)
+            {
+                шаблон.FilePath = путь;
+            }
+        }
+
+        return шаблон;
     }
 
     /// <inheritdoc />
@@ -81,6 +116,9 @@ public sealed class RemotePrintTemplateRepository : IPrintTemplateRepository
                 IsBuiltin = шаблон.IsBuiltin,
                 Country = шаблон.Country,
                 Version = шаблон.Version,
+                PackageId = string.IsNullOrWhiteSpace(шаблон.PackageId) ? null : шаблон.PackageId,
+                PackageVersion = шаблон.PackageVersion > 0 ? шаблон.PackageVersion : null,
+                PackageHash = string.IsNullOrWhiteSpace(шаблон.ContentHash) ? null : шаблон.ContentHash,
             })
             .ToArray();
     }
@@ -286,29 +324,41 @@ public sealed class RemotePrintJobRepository : IPrintJobRepository
         // Сессия печати создаётся на сервере реестра без привязки к
         // отправлениям: журнал печати с исходами и устройством заполняет
         // отдельная команда print.record-event. Сессия — мутация: потерянный
-        // ответ не приводит к второй сессии, повтор идёт с прежним
+        // ответ не приводит ко второй сессии, повтор идёт с прежним
         // идентификатором операции.
-        var ответ = await _незавершённые
-            .ВыполнитьAsync<CreatePrintSessionResponse>(
-                _транспорт,
-                "print.create-session",
-                JsonSerializer.Serialize(
-                    new CreatePrintSessionRequest(
-                        printJob.TemplateId,
-                        printJob.PrinterName,
-                        printJob.PaperSizeName,
-                        printJob.PaperWidthMm,
-                        printJob.PaperHeightMm,
-                        printJob.FontInfo,
-                        printJob.Copies,
-                        printJob.PrintMode,
-                        printJob.Status,
-                        printJob.ErrorText),
-                    SharedJson.Options),
-                cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var ответ = await _незавершённые
+                .ВыполнитьAsync<CreatePrintSessionResponse>(
+                    _транспорт,
+                    "print.create-session",
+                    JsonSerializer.Serialize(
+                        new CreatePrintSessionRequest(
+                            printJob.TemplateId,
+                            printJob.PrinterName,
+                            printJob.PaperSizeName,
+                            printJob.PaperWidthMm,
+                            printJob.PaperHeightMm,
+                            printJob.FontInfo,
+                            printJob.Copies,
+                            printJob.PrintMode,
+                            printJob.Status,
+                            printJob.ErrorText),
+                        SharedJson.Options),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-        return ответ.PrintJobId;
+            return ответ.PrintJobId;
+        }
+        catch (SharedOutcomeUnknownException исключение)
+        {
+            // Исход записи сессии неизвестен: сервер мог создать запись
+            // реестра, а мог и не создать. Печатный конвейер различает этот
+            // случай и отказ: неизвестный исход не должен выглядеть как
+            // «конверты не напечатаны» и не должен приводить к повторной
+            // физической печати.
+            throw new OutcomeUnknownException(исключение.Message);
+        }
     }
 
     /// <inheritdoc />

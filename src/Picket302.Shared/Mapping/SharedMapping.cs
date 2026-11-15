@@ -472,12 +472,15 @@ public static class SharedMapping
     /// </summary>
     /// <param name="шаблон">Шаблон.</param>
     /// <param name="версия">Маркер версии строки шаблона.</param>
-    /// <param name="пакет">Метаданные пакета шаблона; пусто — пакет не связан.</param>
+    /// <param name="пакет">
+    /// Метаданные пакета шаблона; пусто — берётся привязка, сохранённая в
+    /// самой строке шаблона.
+    /// </param>
     /// <returns>DTO шаблона.</returns>
     public static PrintTemplateDto КШаблону(
         PrintTemplate шаблон,
         long версия,
-        TemplatePackageDto? пакет) => new(
+        TemplatePackageDto? пакет = null) => new(
         шаблон.Id,
         шаблон.Name,
         шаблон.Kind,
@@ -487,9 +490,9 @@ public static class SharedMapping
         шаблон.Orientation,
         шаблон.IsBuiltin,
         шаблон.Country,
-        пакет?.PackageId,
-        пакет?.Version ?? 0,
-        пакет?.ContentHash,
+        пакет?.PackageId ?? шаблон.PackageId,
+        пакет?.Version ?? шаблон.PackageVersion ?? 0,
+        пакет?.ContentHash ?? шаблон.PackageHash,
         версия);
 
     /// <summary>
@@ -508,6 +511,9 @@ public static class SharedMapping
         Orientation = dto.Orientation,
         IsBuiltin = dto.IsBuiltin,
         Country = dto.Country ?? "RUS",
+        PackageId = string.IsNullOrWhiteSpace(dto.PackageId) ? null : dto.PackageId,
+        PackageVersion = dto.PackageVersion > 0 ? dto.PackageVersion : null,
+        PackageHash = string.IsNullOrWhiteSpace(dto.ContentHash) ? null : dto.ContentHash,
     };
 
     /// <summary>
@@ -611,7 +617,8 @@ public static class SharedMapping
         запись.TemplateDescription,
         запись.PrintJobId,
         устройство,
-        запись.Outcome);
+        запись.Outcome,
+        запись.OperationId);
 
     /// <summary>
     /// Преобразует фильтр выборки контрагентов в доменный.

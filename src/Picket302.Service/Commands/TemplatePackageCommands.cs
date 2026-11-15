@@ -1,3 +1,4 @@
+using Dapper;
 using Picket302.Service.Data;
 using Picket302.Service.Hosting;
 using Picket302.Shared.Commands;
@@ -65,11 +66,32 @@ public sealed class UploadTemplatePackageCommand
 
         var хранилище = new SharedTemplatePackageStore(КаталогПакетов, область.Единица);
 
-        return await хранилище.СохранитьAsync(
+        var метаданные = await хранилище.СохранитьAsync(
             запрос.Name.Trim(),
             содержимое,
             isBuiltin: false,
             cancellationToken).ConfigureAwait(false);
+
+        // Строка шаблона, связанная с пакетом, переводится на новую версию:
+        // иначе рабочее место запросило бы прежнюю версию и напечатало по
+        // устаревшему макету. Привязка хранит именно действующую версию.
+        await область.Единица.Connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE print_templates
+                SET package_version = @Version, package_hash = @Hash
+                WHERE package_id = @Id;
+                """,
+                new
+                {
+                    Id = метаданные.PackageId,
+                    Version = метаданные.Version,
+                    Hash = метаданные.ContentHash,
+                },
+                область.Единица.Transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        return метаданные;
     }
 }
 

@@ -27,8 +27,10 @@ public sealed class PrintTemplateRepository : IPrintTemplateRepository
 
         var идентификатор = await _сессия.ExecuteScalarAsync<long>(
             """
-            INSERT INTO print_templates (name, kind, format, width_mm, height_mm, orientation, file_path, is_builtin, country)
-            VALUES (@Name, @Kind, @Format, @WidthMm, @HeightMm, @Orientation, @FilePath, @IsBuiltin, @Country);
+            INSERT INTO print_templates (name, kind, format, width_mm, height_mm, orientation, file_path, is_builtin, country,
+                package_id, package_version, package_hash)
+            VALUES (@Name, @Kind, @Format, @WidthMm, @HeightMm, @Orientation, @FilePath, @IsBuiltin, @Country,
+                @PackageId, @PackageVersion, @PackageHash);
             SELECT last_insert_rowid();
             """,
             new
@@ -42,6 +44,9 @@ public sealed class PrintTemplateRepository : IPrintTemplateRepository
                 template.FilePath,
                 template.IsBuiltin,
                 template.Country,
+                template.PackageId,
+                template.PackageVersion,
+                template.PackageHash,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -87,7 +92,8 @@ public sealed class PrintTemplateRepository : IPrintTemplateRepository
             """
             UPDATE print_templates SET name = @Name, kind = @Kind, format = @Format, width_mm = @WidthMm,
                 height_mm = @HeightMm, orientation = @Orientation, file_path = @FilePath, is_builtin = @IsBuiltin,
-                country = @Country
+                country = @Country, package_id = @PackageId, package_version = @PackageVersion,
+                package_hash = @PackageHash
             WHERE id = @Id;
             """,
             new
@@ -101,6 +107,9 @@ public sealed class PrintTemplateRepository : IPrintTemplateRepository
                 template.FilePath,
                 template.IsBuiltin,
                 template.Country,
+                template.PackageId,
+                template.PackageVersion,
+                template.PackageHash,
                 template.Id,
             },
             cancellationToken).ConfigureAwait(false);

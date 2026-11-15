@@ -39,14 +39,22 @@ public sealed class RemotePrintHistoryWriter : IPrintHistoryWriter
         long? printJobId,
         string templateDescription,
         CancellationToken cancellationToken = default,
-        string? outcome = null,
-        string? deviceId = null)
+        PrintOutcome? outcome = null,
+        string? deviceId = null,
+        string? operationId = null)
     {
+        var исход = outcome ?? PrintOutcome.Spooled;
+
+        // Идентификатор операции клиент не передаёт: служба знает его по
+        // заголовку запроса и записывает в строку журнала сама. Параметр
+        // оставлен для реализаций, которые ведут журнал на своей стороне.
+        _ = operationId;
+
         var тело = System.Text.Json.JsonSerializer.Serialize(
             new RecordPrintEventRequest(
                 new[] { mailId },
                 templateDescription,
-                outcome is null ? PrintEventOutcome.Spooled : Enum.Parse<PrintEventOutcome>(outcome),
+                КонтрактныйИсход(исход),
                 null,
                 null,
                 1,
@@ -70,10 +78,31 @@ public sealed class RemotePrintHistoryWriter : IPrintHistoryWriter
             Note = null,
             TemplateDescription = templateDescription,
             PrintJobId = ответ.PrintJobId,
-            Outcome = outcome,
+            Outcome = исход.ToString(),
             DeviceId = deviceId,
         });
     }
+
+    /// <summary>
+    /// Переводит доменный исход печати в контрактный исход совместного
+    /// режима.
+    /// </summary>
+    /// <param name="исход">Доменный исход.</param>
+    /// <returns>Контрактный исход.</returns>
+    /// <remarks>
+    /// Перечисления различают четыре состояния, и смешивать их нельзя:
+    /// подтверждение спулера не равно физически напечатанному конверту.
+    /// Соответствие явное, а не приведением типа: значения перечислений
+    /// совместного режима — часть контракта и могут быть расширены.
+    /// </remarks>
+    private static PrintEventOutcome КонтрактныйИсход(PrintOutcome исход) => исход switch
+    {
+        PrintOutcome.Prepared => PrintEventOutcome.Prepared,
+        PrintOutcome.Spooled => PrintEventOutcome.Spooled,
+        PrintOutcome.Error => PrintEventOutcome.Error,
+        PrintOutcome.Unknown => PrintEventOutcome.Unknown,
+        _ => PrintEventOutcome.Unknown,
+    };
 }
 
 /// <summary>
