@@ -317,9 +317,10 @@ begin
       копирование невозможным. Отсутствие службы — норма чистой машины. }
     if not StopService then
     begin
-      MsgBox('Не удалось остановить службу {#ServiceName} для обновления файлов.' + #13#10#13#10 +
-        'Остановите службу вручную (sc.exe stop {#ServiceName}) и повторите установку.',
-        mbError, MB_OK);
+      if not WizardSilent then
+        MsgBox('Не удалось остановить службу {#ServiceName} для обновления файлов.' + #13#10#13#10 +
+          'Остановите службу вручную (sc.exe stop {#ServiceName}) и повторите установку.',
+          mbError, MB_OK);
       RaiseException('Служба не остановлена перед заменой файлов.');
     end;
 

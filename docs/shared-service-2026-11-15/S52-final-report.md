@@ -151,7 +151,7 @@ UX-артефакты, graphify-out/) не затронуты и не комми
 `win-x64 --self-contained false`.
 **EXE (финальный, с исправлениями ревью)**:
 `dist\picket302-server-setup.exe`,
-SHA-256 `93bcd1c6976456aba9e445d3773f6dc91644853aabb98782742d926a961b4c52`.
+SHA-256 `5c95790f68f57186f367771d0431eee093de97e26d98790232fe35a89b074683`.
 **INSTALL_BUILD_VERIFIED = true**; установка выполнена на реальном
 Windows-компьютере (не чистой ВМ): `CLEAN_VM_INSTALL_VERIFIED = NOT_RUN`.
 Обновление поверх **работающей** службы выполнено на реальной машине
@@ -282,7 +282,9 @@ Release **1784/1784**, оба прогона обеспечены TRX-артеф
 `release-final.trx`). BASE 1639: 1623 pass / 16 fail; dc1ceb4: 1755,
 16 fail — те же. Все 16 исторических падений проходят:
 11 DistributionPrintScenarioTests, 4 FormDistributionEditorEditingTests,
-1 MainShellDistributionActionsTests (состав имён — в `wave2.trx`).
+1 MainShellDistributionActionsTests. Промежуточные TRX (wave2/debug2)
+при финальных прогонах удалены; в обоих финальных TRX все тесты этих трёх
+классов — Passed (12+4+4).
 
 
 ## 7. Изменённые файлы
@@ -306,7 +308,7 @@ Release **1784/1784**, оба прогона обеспечены TRX-артеф
 | Тесты Release | то же с `-c Release` | **1784 total / 1784 pass / 0 fail / 0 skip** |
 | Публикация службы | `dotnet publish src/Picket302.Service -c Release -r win-x64 --self-contained false` | `bin\x64\Release\net8.0-windows\win-x64\publish` |
 | Сборка пакета | `ISCC installer\picket302-server.iss` (Inno Setup 6.7.3) | `dist\picket302-server-setup.exe`, exit 0 |
-| TRX | `tests/Picket302.Tests/TestResults/{wave2,debug2}.trx` | 16 имён исторических падений — в wave2.trx |
+| TRX | `tests/Picket302.Tests/TestResults/{debug,release}-final.trx` | 1784/1784 в обеих конфигурациях (артефакты на диске worktree; в Git не входят — TestResults в .gitignore) |
 
 Версии: .NET SDK 8.0.420 (global.json 8.0.100 rollForward latestFeature),
 Inno Setup 6.7.3, Windows 11 (хост подготовки и серверный стенд — один
@@ -317,11 +319,13 @@ Inno Setup 6.7.3, Windows 11 (хост подготовки и серверны�
 - Источник: `installer/picket302-server.iss` (+ `first-run.ps1`,
   `README.md`).
 - Собранный EXE: `dist\picket302-server-setup.exe`,
-  SHA-256 `442f43154749e0b0e1d4da8929a53a40e653a6e90d0737eb1925697c27463c8a`.
-- Установлен **да** — на 192.168.1.42 (не чистая ВМ), дважды: первая
-  установка и повторная поверх работающей службы (путь обновления).
-- Установленная сборка = последняя собранная (содержит все исправления
-  79e5fa3).
+  SHA-256 `5c95790f68f57186f367771d0431eee093de97e26d98790232fe35a89b074683` (совпадает с §4).
+- Установлен **да** — на 192.168.1.42 (не чистая ВМ): первая установка,
+  обновление поверх работающей службы и повторное обновление финальным
+  пакетом (после исправлений ревью) — каждый раз выход 0, служба после
+  установки работает.
+- Установленная сборка = финальный пакет (содержит все исправления
+  79e5fa3 и обе итерации ревью).
 
 ## 10. Хост 192.168.1.117: точный статус
 
@@ -362,7 +366,7 @@ In-process (синтетические) результаты: все Shared-ин
 | SOURCE_VERIFIED | true | карта S52 §2–§6 по первоисточнику; ревью волны — см. §14 |
 | BUILD_DEBUG_VERIFIED / BUILD_RELEASE_VERIFIED | true | 0 ошибок, обе конфигурации |
 | TEST_VERIFIED | true | Debug 1784/1784 (`debug-final.trx`), Release 1784/1784 (`release-final.trx`) |
-| INSTALL_BUILD_VERIFIED | **true** | пакет собран, SHA-256 в §9 |
+| INSTALL_BUILD_VERIFIED | **true** | пакет собран, SHA-256 `5c95790f…b4c52` (§9) |
 | CLEAN_VM_INSTALL_VERIFIED | NOT_RUN | чистой ВМ нет (внешний блокер) |
 | SCM_RUNTIME_VERIFIED | true | реальный SCM: регистрация, запуск, остановка, состояние, NetworkService, AUTO_START; выход оператора не тестировался фактически |
 | REBOOT_VERIFIED | NOT_RUN | окно обслуживания не согласовывалось |
