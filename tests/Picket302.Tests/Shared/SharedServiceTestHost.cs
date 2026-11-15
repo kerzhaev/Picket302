@@ -145,8 +145,13 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
     /// <summary>
     /// Создаёт HTTP-клиент, доверяющий только сертификату стенда.
     /// </summary>
+    /// <param name="сВерсиейПротокола">
+    /// Добавить ли клиенту заголовок версии протокола по умолчанию.
+    /// <see langword="false"/> — для проверок серверного требования
+    /// заголовка: запрос без него обязан отклоняться кодом 426.
+    /// </param>
     /// <returns>Готовый HTTP-клиент.</returns>
-    public HttpClient СоздатьHttpClient()
+    public HttpClient СоздатьHttpClient(bool сВерсиейПротокола = true)
     {
         var обработчик = new HttpClientHandler
         {
@@ -163,9 +168,12 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
             BaseAddress = new Uri(БазовыйАдрес),
         };
 
-        клиент.DefaultRequestHeaders.Add(
-            SharedProtocol.ProtocolVersionHeader,
-            SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (сВерсиейПротокола)
+        {
+            клиент.DefaultRequestHeaders.Add(
+                SharedProtocol.ProtocolVersionHeader,
+                SharedProtocol.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
 
         return клиент;
     }

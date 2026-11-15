@@ -13,13 +13,16 @@
 # сертификату» нет: даже локальная консоль не должна молча принять
 # подменённый узел.
 
+param(
+    # Каталог данных службы, если он перенесён из %ProgramData%
+    # (настраивается в ServiceOptions.DataDirectory).
+    [string]$КаталогДанных = "$env:ProgramData\Picket302\Service"
+)
+
 $ErrorActionPreference = "Stop"
 
-$Port = 30242
-$BaseUrl = "https://127.0.0.1:$Port"
-$DataDirectory = "$env:ProgramData\Picket302\Service"
-$SettingsFile = "$DataDirectory\service.json"
-$TokenFile = "$DataDirectory\admin.token"
+$SettingsFile = "$КаталогДанных\service.json"
+$TokenFile = "$КаталогДанных\admin.token"
 
 # 1. Настройки службы: отпечаток сертификата сервера.
 if (-not (Test-Path $SettingsFile)) {
@@ -28,6 +31,18 @@ if (-not (Test-Path $SettingsFile)) {
 }
 
 $Настройки = Get-Content $SettingsFile -Raw | ConvertFrom-Json
+
+# Порт службы: настраивается в service.json (ServiceOptions.Port); по
+# умолчанию — стандартный порт совместного режима.
+$Port = 30242
+if ($Настройки.PSObject.Properties["Port"]) {
+    $разобранныйПорт = 0
+    if ([int]::TryParse([string]$Настройки.Port, [ref]$разобранныйПорт) -and $разобранныйПорт -ge 1 -and $разобранныйПорт -le 65535) {
+        $Port = $разобранныйПорт
+    }
+}
+
+$BaseUrl = "https://127.0.0.1:$Port"
 
 $Отпечаток = $Настройки.CertificateThumbprint
 if ([string]::IsNullOrWhiteSpace($Отпечаток)) {
@@ -107,12 +122,20 @@ catch {
 
 Write-Host ("Служба готова. Версия протокола: {0}. Идентификатор сервера: {1}." -f $Здоровье.protocolVersion, $Здоровье.serverId)
 
+# Версия протокола берётся из health-ответа службы: запросы к маршрутам
+# команд и администрирования без заголовка версии служба отклоняет (426).
+$ВерсияПротокола = [string]$Здоровье.protocolVersion
+if ([string]::IsNullOrWhiteSpace($ВерсияПротокола)) {
+    $ВерсияПротокола = "1"
+}
+
 # 4. Выдача одноразового кода сопряжения (действует ограниченное время и
 # ровно для одного подключения; нельзя получить удалённым запросом).
 Write-Host ""
 Write-Host "Выдача одноразового кода сопряжения..."
 
 $ЗапросКода = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Post, "$BaseUrl/api/v1/admin/pairing-code")
+$ЗапросКода.Headers.Add("X-Picket302-Protocol-Version", $ВерсияПротокола)
 $ЗапросКода.Headers.Add("X-Picket302-Admin-Token", $Token)
 
 try {

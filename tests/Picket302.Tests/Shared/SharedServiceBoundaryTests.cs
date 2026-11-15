@@ -57,6 +57,26 @@ public sealed class SharedServiceBoundaryTests
     }
 
     [Fact]
+    public async Task Административный_Маршрут_Требует_Заголовок_Версии()
+    {
+        await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
+
+        var админТокен = new Picket302.Service.Security.SharedAdminToken(стенд.КаталогДанных)
+            .ПолучитьИлиСоздать();
+
+        // Запрос без заголовка версии протокола обязан отклоняться кодом
+        // 426: так выглядит запрос клиента, не договорившегося о версии.
+        // Без отдельного клиента без дефолтного заголовка этот путь
+        // маскировался бы заголовком, который тестовый стенд ставит сам.
+        using var безВерсии = стенд.СоздатьHttpClient(сВерсиейПротокола: false);
+        безВерсии.DefaultRequestHeaders.Add("X-Picket302-Admin-Token", админТокен);
+
+        using var ответ = await безВерсии.PostAsync("/api/v1/admin/pairing-code", content: null);
+
+        Assert.Equal(HttpStatusCode.UpgradeRequired, ответ.StatusCode);
+    }
+
+    [Fact]
     public async Task Число_Попыток_Сопряжения_Ограничено()
     {
         await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
