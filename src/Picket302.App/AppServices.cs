@@ -253,6 +253,8 @@ public sealed class AppServices : IAsyncDisposable
         // базой владеет служба, а локальных данных программы достаточно.
         ПутьБазы = string.Empty;
 
+        НезавершённыеОперацииStore = незавершённые;
+
         ХранилищеНастроек = new JsonUiSettingsStore(профиль.UiSettingsPath);
         НастройкиОтображения = new UiSettingsStorage(ХранилищеНастроек);
 
@@ -443,6 +445,13 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>Хранилище настроек интерфейса.</summary>
     public IUiSettingsStore ХранилищеНастроек { get; }
+
+    /// <summary>
+    /// Хранилище незавершённых операций рабочего места (только общий режим;
+    /// в одиночном режиме <see langword="null"/>): блокировка, восстановление
+    /// и контролируемая очистка сроков хранения.
+    /// </summary>
+    public PendingOperationsStore? НезавершённыеОперацииStore { get; }
 
     /// <summary>Хранилище настроек отображения.</summary>
     public UiSettingsStorage НастройкиОтображения { get; }

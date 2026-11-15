@@ -244,8 +244,57 @@ public sealed class SharedClientRetryTests
     }
 
     [Fact]
-    public async Task Окно_Выполнения_На_Сервере_Сохраняет_Незавершённую_Операцию()
+    public async Task Недоступная_История_Блокирует_Мутации_Повтор_Восстанавливает()
     {
+        await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
+        var каталог = КаталогПроверки();
+
+        try
+        {
+            using var транспорт = await ТранспортСПотерей(стенд, "ПК оператора 1", "commands/counterparties.save");
+            var незавершённые = Хранилище(каталог);
+            var шлюз = new RemoteDataGateway(транспорт, незавершённые);
+            var файлИстории = Path.Combine(каталог, "pending-operations.json");
+
+            // Сервер зафиксировал команду, ответ потерян: запись в истории.
+            await Assert.ThrowsAsync<SharedOutcomeUnknownException>(
+                () => шлюз.СохранитьКонтрагентаAsync(Домен("ООО «Недоступная история»")));
+
+            var идентификатор = шлюз.НезавершённыеОперации[0].Идентификатор;
+            Assert.True(File.Exists(файлИстории));
+
+            // Файл истории временно недоступен: новая мутация отклоняется
+            // ДО отправки — она получила бы новый идентификатор.
+            using (var держатель = File.Open(файлИстории, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var ошибка = await Assert.ThrowsAsync<SharedModeException>(
+                    () => шлюз.СохранитьКонтрагентаAsync(Домен("ООО «Вторая запись»")));
+
+                Assert.Equal(SharedErrorCodes.PendingHistoryUnavailable, ошибка.Код);
+
+                // Сервер не получил вторую команду: запись одна.
+                Assert.Single((await шлюз.ПолучитьКонтрагентовAsync(new PageRequest(0, 50))).Items);
+            }
+
+            // Файл вновь доступен: повтор с прежним идентификатором возвращает
+            // один результат, запись остаётся одна.
+            await шлюз.ПовторитьНезавершённуюAsync(идентификатор);
+
+            Assert.Empty(шлюз.НезавершённыеОперации);
+
+            var страница = await шлюз.ПолучитьКонтрагентовAsync(new PageRequest(0, 50));
+
+            Assert.Single(страница.Items);
+            Assert.Equal("ООО «Недоступная история»", страница.Items[0].Name);
+        }
+        finally
+        {
+            УдалитьКаталог(каталог);
+        }
+    }
+
+    [Fact]
+    public async Task Окно_Выполнения_На_Сервере_Сохраняет_Незавершённую_Операцию()    {
         await using var стенд = await SharedServiceTestHost.ПоднятьAsync();
         var каталог = КаталогПроверки();
 

@@ -60,6 +60,14 @@ public static class SharedErrorCodes
     /// </summary>
     public const string OutcomeUnknown = "outcome-unknown";
 
+    /// <summary>
+    /// Клиентская история незавершённых операций недоступна (файл нельзя
+    /// достоверно прочитать): исход прежних действий неизвестен, новые
+    /// удалённые мутации заблокированы до восстановления или явного сброса
+    /// администратором. Код используется только клиентом.
+    /// </summary>
+    public const string PendingHistoryUnavailable = "pending-history-unavailable";
+
     /// <summary>Внутренняя ошибка службы.</summary>
     public const string Internal = "internal";
 }
