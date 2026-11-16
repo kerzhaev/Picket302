@@ -127,6 +127,28 @@ function Compare-Profile {
     return @($changed)
 }
 
+function Get-StartMenuSnapshot {
+    <#
+    Снимок группы меню «Пуск»: наличие и содержимое. Нужен, чтобы проверка
+    сравнивала состояние «до» и «после», а не требовала отсутствия группы:
+    на машине, где настоящий клиент уже установлен, группа «Picket302»
+    существует и должна остаться нетронутой.
+    #>
+    param([string] $Directory)
+
+    if (-not (Test-Path -LiteralPath $Directory)) {
+        return @('каталог отсутствует')
+    }
+
+    $снимок = @("каталог существует")
+
+    foreach ($file in Get-ChildItem -LiteralPath $Directory -Recurse -Force | Sort-Object FullName) {
+        $снимок.Add("$($file.FullName)|$($file.Length)|$($file.LastWriteTimeUtc.Ticks)")
+    }
+
+    return @($снимок)
+}
+
 # ---------------------------------------------------------------------------
 # Подготовка
 # ---------------------------------------------------------------------------
@@ -165,6 +187,8 @@ Write-Host "    каталог установки проверки: $smokeInstal
 $profileBefore = Get-ProfileSnapshot
 Write-Host "    профиль до      : $($profileBefore.Count) файл(ов) в $env:APPDATA\Picket302"
 
+$productionMenuBefore = Get-StartMenuSnapshot -Directory $productionStartMenu
+
 # ---------------------------------------------------------------------------
 # Сборка проверочной копии сценария
 # ---------------------------------------------------------------------------
@@ -184,6 +208,11 @@ $twinText = $twinText.Replace('OutputBaseFilename=picket302-client-setup', 'Outp
 # Собственная группа меню «Пуск»: проверка не должна трогать группу
 # «Picket302», в которой на серверной машине лежит ярлык серверной службы.
 $twinText = $twinText.Replace('DefaultGroupName=Picket302', 'DefaultGroupName=Picket302-Smoke')
+
+# Свой AppId у проверочного двойника: на машине, где настоящий клиент уже
+# установлен, двойник не должен появляться в «Установленных приложениях»
+# вторым пунктом «Picket302».
+$twinText = $twinText.Replace('AppId={{56C1FDF3-7563-4737-9E33-219A7B4E00C4}', 'AppId={{7B2E4C60-3D91-4A85-9F62-0C58D1A74E33}')
 
 if ($twinText -eq $issText) {
     throw 'Проверочная копия сценария не отличается от поставляемого: подмены не сработали.'
@@ -208,6 +237,88 @@ Add-Check -Name 'Компиляция проверочной копии уста
 if ($isccExit -ne 0) {
     throw 'Проверочная копия установщика не собрана: дальнейшие шаги невозможны.'
 }
+
+# ---------------------------------------------------------------------------
+# Контракт публикации: негативные прогоны
+# ---------------------------------------------------------------------------
+
+Write-Step 'Шаг 0. Контракт публикации (негативные прогоны)'
+
+$appProject = Join-Path $RepositoryRoot 'src\Picket302.App\Picket302.App.csproj'
+
+$contractFiles = @(
+    'Picket302.App.exe',
+    'Picket302.App.dll',
+    'Picket302.App.runtimeconfig.json',
+    'Picket302.ComAutomation.exe',
+    'Picket302.ComAutomation.dll',
+    'Picket302.ComAutomation.deps.json',
+    'Picket302.ComAutomation.runtimeconfig.json',
+    'PrintEnvelopePro.tlb',
+    'emailedit\default.html',
+    'emailedit\content.css',
+    'emailedit\word.css',
+    'lang\en.xml',
+    'lang\ru.xml',
+    'lng\Rub.lng',
+    'Resources\Toponyms\regions.txt',
+    'e_sqlite3.dll'
+
+)
+
+function New-ContractFixture {
+    <#
+    Создаёт каталог публикации из обязательных файлов. Отсутствующие имена
+    пропускаются: так собираются неполные варианты для негативных прогонов.
+    #>
+    param(
+        [string] $Directory,
+        [string[]] $Omit = @()
+    )
+
+    New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+
+    foreach ($relative in $contractFiles) {
+        if ($Omit -contains $relative) {
+            continue
+        }
+
+        $target = Join-Path $Directory $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $PublishDir $relative) -Destination $target -Force
+    }
+}
+
+function Test-PublishGate {
+    <#
+    Запускает проверку состава публикации и возвращает её код возврата.
+    #>
+    param([string] $Directory)
+
+    $вывод = & dotnet msbuild $appProject -t:ValidatePublishOutput "-p:PublishDir=$Directory/" -nologo 2>&1
+
+    return @{ Code = $LASTEXITCODE; Output = ($вывод | Out-String) }
+}
+
+$contractRoot = Join-Path $ArtifactsRoot 'publish-contract'
+$completeDir = Join-Path $contractRoot 'complete'
+$withoutSqliteDir = Join-Path $contractRoot 'without-sqlite'
+
+New-ContractFixture -Directory $completeDir
+$completeGate = Test-PublishGate -Directory $completeDir
+
+Add-Check -Name 'Полный состав публикации принимается проверкой' -Passed ($completeGate.Code -eq 0) `
+    -Details ("код = " + $completeGate.Code)
+
+New-ContractFixture -Directory $withoutSqliteDir -Omit @('e_sqlite3.dll')
+$sqliteGate = Test-PublishGate -Directory $withoutSqliteDir
+
+Add-Check -Name 'Публикация без нативной библиотеки SQLite отвергнута' -Passed ($sqliteGate.Code -ne 0) `
+    -Details ("код = " + $sqliteGate.Code)
+
+Add-Check -Name 'Отказ сопровождается понятным сообщением' `
+    -Passed ($sqliteGate.Output -match 'e_sqlite3') `
+    -Details 'Ожидалось упоминание e_sqlite3 в тексте ошибки.'
 
 # ---------------------------------------------------------------------------
 # Установка
@@ -268,9 +379,11 @@ $changedByInstall = @(Compare-Profile -Before $profileBefore -After $profileAfte
 Add-Check -Name 'Установка не изменила профиль пользователя' -Passed ($changedByInstall.Count -eq 0) `
     -Details ($changedByInstall -join '; ')
 
+$productionMenuAfterInstall = Get-StartMenuSnapshot -Directory $productionStartMenu
+$productionMenuChanged = @(Compare-Object -ReferenceObject $productionMenuBefore -DifferenceObject $productionMenuAfterInstall)
 Add-Check -Name 'Группа меню «Пуск» Picket302 не создана и не тронута' `
-    -Passed (-not (Test-Path -LiteralPath $productionStartMenu)) `
-    -Details $productionStartMenu
+    -Passed ($productionMenuChanged.Count -eq 0) `
+    -Details (($productionMenuChanged | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join '; ')
 
 # ---------------------------------------------------------------------------
 # Обновление
@@ -322,9 +435,11 @@ Add-Check -Name 'Каталог установки удалён' -Passed (-not (
 
 Add-Check -Name 'Ярлык в меню «Пуск» удалён' -Passed (-not (Test-Path -LiteralPath $smokeStartMenu))
 
-Add-Check -Name 'Группа меню «Пуск» Picket302 не появилась после проверки' `
-    -Passed (-not (Test-Path -LiteralPath $productionStartMenu)) `
-    -Details $productionStartMenu
+$productionMenuAfterUninstall = Get-StartMenuSnapshot -Directory $productionStartMenu
+$productionMenuChangedAfter = @(Compare-Object -ReferenceObject $productionMenuBefore -DifferenceObject $productionMenuAfterUninstall)
+Add-Check -Name 'Группа меню «Пуск» Picket302 осталась в том же состоянии' `
+    -Passed ($productionMenuChangedAfter.Count -eq 0) `
+    -Details (($productionMenuChangedAfter | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join '; ')
 
 $profileAfterUninstall = Get-ProfileSnapshot
 $changedByUninstall = @(Compare-Profile -Before $profileBefore -After $profileAfterUninstall)

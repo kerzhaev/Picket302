@@ -149,6 +149,71 @@ function Assert-Contract {
     }
 }
 
+function Remove-InnoComments {
+    <#
+    Снимает комментарии сценария Inno Setup: строки целиком с «;», блоки в
+    фигурных скобках и хвостовые комментарии с «//». Блоки в фигурных
+    скобках встречаются только в секции [Code]: в директивах фигурные
+    скобки означают подстановку константы ({app}, {group}).
+    #>
+    param([string] $Text)
+
+    $строки = $Text -split "`r?`n"
+    $результат = New-Object System.Collections.Generic.List[string]
+    $вКоде = $false
+    $внутриБлока = $false
+
+    foreach ($строка in $строки) {
+        $обрезанная = $строка.Trim()
+
+        if ($обрезанная.StartsWith('[') -and $обрезанная.EndsWith(']')) {
+            $вКоде = $обрезанная -ieq '[Code]'
+            $результат.Add($строка)
+            continue
+        }
+
+        if (-not $вКоде) {
+            if ($обрезанная.StartsWith(';')) {
+                $результат.Add('')
+            }
+            else {
+                $результат.Add($строка)
+            }
+            continue
+        }
+
+        $собрано = New-Object System.Text.StringBuilder
+        $index = 0
+
+        while ($index -lt $строка.Length) {
+            if ($внутриБлока) {
+                $закрытие = $строка.IndexOf('}', $index)
+                if ($закрытие -lt 0) { break }
+                $внутриБлока = $false
+                $index = $закрытие + 1
+                continue
+            }
+
+            if ($строка[$index] -eq '{') {
+                $внутриБлока = $true
+                $index++
+                continue
+            }
+
+            if ($строка[$index] -eq '/' -and ($index + 1) -lt $строка.Length -and $строка[$index + 1] -eq '/') {
+                break
+            }
+
+            [void] $собрано.Append($строка[$index])
+            $index++
+        }
+
+        $результат.Add($собрано.ToString())
+    }
+
+    return ($результат -join "`n")
+}
+
 function Find-Iscc {
     param([string] $ExplicitPath)
 
@@ -296,7 +361,7 @@ foreach ($data in $script:ForbiddenUserData) {
 Write-Ok 'Пользовательских данных (база, секрет сопряжения, журналы) в публикации нет.'
 
 # Сценарий установщика не должен содержать операций со службой и брандмауэром.
-$issText = Get-Content -LiteralPath $issPath -Raw
+$issText = Remove-InnoComments (Get-Content -LiteralPath $issPath -Raw -Encoding UTF8)
 foreach ($token in $script:ForbiddenInstallerTokens) {
     Assert-Contract ($issText -notmatch [regex]::Escape($token)) "Сценарий установщика содержит запрещённую операцию '$token'."
 }
@@ -360,6 +425,11 @@ Write-Step 'Шаг 5/5. Отчёт сборки'
 
 $gitHead = (& git -C $RepositoryRoot rev-parse HEAD).Trim()
 $gitBranch = (& git -C $RepositoryRoot rev-parse --abbrev-ref HEAD).Trim()
+
+# Нечистое дерево означает, что пакет собран не из того состояния
+# репозитория, на которое указывает gitHead. Это фиксируется в отчёте.
+$gitStatus = @(& git -C $RepositoryRoot status --porcelain=v1)
+$gitDirty = $gitStatus.Count -gt 0
 $publishFileCount = (Get-ChildItem -LiteralPath $publishDir -Recurse -File).Count
 $publishSizeBytes = (Get-ChildItem -LiteralPath $publishDir -Recurse -File | Measure-Object -Property Length -Sum).Sum
 
@@ -367,6 +437,8 @@ $report = [ordered]@{
     builtAtUtc       = (Get-Date).ToUniversalTime().ToString('o')
     gitHead          = $gitHead
     gitBranch        = $gitBranch
+    gitTreeDirty     = $gitDirty
+    gitChangedFiles  = @($gitStatus)
     configuration    = $Configuration
     runtimeIdentifier = $RuntimeIdentifier
     selfContained    = $true
@@ -394,6 +466,7 @@ Picket302 — клиентский установщик (последняя УС
 Собрано (UTC) : $($report.builtAtUtc)
 Git HEAD      : $gitHead
 Ветка         : $gitBranch
+Дерево        : $(if ($gitDirty) { 'НЕЧИСТОЕ (пакет собран из незакоммиченных изменений)' } else { 'чистое' })
 Конфигурация  : $Configuration / $RuntimeIdentifier / self-contained
 
 Пакет         : $($setupExe.FullName)

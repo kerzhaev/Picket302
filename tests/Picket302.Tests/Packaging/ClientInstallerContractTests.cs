@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Xunit;
 
@@ -121,14 +122,33 @@ public sealed class ClientInstallerContractTests
     public void Client_DoesNotRegisterServiceOrTouchFirewall()
     {
         var корень = FindSolutionRoot();
-        var текст = StripComments(File.ReadAllText(Path.Combine(корень, "installer", ClientInstallerFileName)));
+        var текст = File.ReadAllText(Path.Combine(корень, "installer", ClientInstallerFileName));
 
-        foreach (var операция in ForbiddenInstallerOperations)
-        {
-            Assert.True(
-                !текст.Contains(операция, StringComparison.OrdinalIgnoreCase),
-                $"Клиентский установщик содержит запрещённую операцию «{операция}».");
-        }
+        Assert.True(
+            !ContainsForbiddenOperation(текст),
+            "Клиентский установщик содержит запрещённую операцию: "
+            + string.Join(", ", ForbiddenInstallerOperations.Where(операция =>
+                текст.Contains(операция, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    /// <summary>
+    /// Поиск запрещённой операции не должен пропускать её, объявленную
+    /// директивой, и не должен срабатывать на упоминание в комментарии.
+    /// </summary>
+    [Fact]
+    public void ForbiddenOperations_AreFoundInDirectives_AndIgnoredInComments()
+    {
+        const string вДирективе = "[Setup]\nSource: \"x\"; Flags: ignoreversion netsh\n";
+        const string вКомментарии =
+            "; упоминание netsh в комментарии\n[Code]\n{ и здесь netsh }\nvar x := 1;\n";
+
+        Assert.True(
+            ContainsForbiddenOperation(вДирективе),
+            "Запрещённая операция в директиве не обнаружена.");
+
+        Assert.False(
+            ContainsForbiddenOperation(вКомментарии),
+            "Запрещённая операция, упомянутая только в комментарии, принята за директиву.");
     }
 
     /// <summary>
@@ -361,17 +381,110 @@ public sealed class ClientInstallerContractTests
     }
 
     /// <summary>
-    /// Удаляет из текста сценария строки-комментарии: они описывают
-    /// запреты и не являются исполняемыми директивами.
+    /// Ищет в сценарии запрещённую операцию, не считая комментарии.
     /// </summary>
     /// <param name="текст">Текст сценария.</param>
-    /// <returns>Текст без строк-комментариев.</returns>
+    /// <returns><see langword="true"/>, если запрещённая операция найдена.</returns>
+    private static bool ContainsForbiddenOperation(string текст)
+    {
+        var очищенный = StripComments(текст);
+
+        return ForbiddenInstallerOperations
+            .Any(операция => очищенный.Contains(операция, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Удаляет из текста сценария комментарии: они описывают запреты и не
+    /// являются исполняемыми директивами.
+    /// </summary>
+    /// <remarks>
+    /// Комментарии сценария Inno Setup бывают трёх видов, и все три надо
+    /// снимать: строка целиком с «;», блок в фигурных скобках и хвостовой
+    /// комментарий с «//». Блоки в фигурных скобках встречаются только в
+    /// секции [Code]: в директивах фигурные скобки означают подстановку
+    /// константы ({app}, {group}), и их удаление сломало бы разбор
+    /// сценария.
+    /// </remarks>
+    /// <param name="текст">Текст сценария.</param>
+    /// <returns>Текст без комментариев.</returns>
     private static string StripComments(string текст)
     {
-        var строки = текст.Split('\n')
-            .Where(строка => !строка.TrimStart().StartsWith(";", StringComparison.Ordinal));
+        var результат = new List<string>();
+        var вКоде = false;
+        var внутриБлока = false;
 
-        return string.Join("\n", строки);
+        foreach (var строка in текст.Split('\n'))
+        {
+            var обрезанная = строка.Trim();
+
+            if (обрезанная.StartsWith("[", StringComparison.Ordinal)
+                && обрезанная.EndsWith("]", StringComparison.Ordinal))
+            {
+                вКоде = обрезанная.Equals("[Code]", StringComparison.OrdinalIgnoreCase);
+                результат.Add(строка);
+                continue;
+            }
+
+            if (!вКоде)
+            {
+                результат.Add(обрезанная.StartsWith(";", StringComparison.Ordinal) ? string.Empty : строка);
+                continue;
+            }
+
+            результат.Add(StripCodeComments(строка, ref внутриБлока));
+        }
+
+        return string.Join("\n", результат);
+    }
+
+    /// <summary>
+    /// Удаляет из строки секции [Code] комментарий в фигурных скобках и
+    /// хвостовой комментарий с двойной косой чертой.
+    /// </summary>
+    /// <param name="строка">Строка секции [Code].</param>
+    /// <param name="внутриБлока">
+    /// Признак того, что строка продолжает комментарий в фигурных скобках,
+    /// открытый на предыдущих строках.
+    /// </param>
+    /// <returns>Строка без комментариев.</returns>
+    private static string StripCodeComments(string строка, ref bool внутриБлока)
+    {
+        var результат = new StringBuilder(строка.Length);
+        var index = 0;
+
+        while (index < строка.Length)
+        {
+            if (внутриБлока)
+            {
+                var закрытие = строка.IndexOf('}', index);
+
+                if (закрытие < 0)
+                {
+                    return результат.ToString();
+                }
+
+                внутриБлока = false;
+                index = закрытие + 1;
+                continue;
+            }
+
+            if (строка[index] == '{')
+            {
+                внутриБлока = true;
+                index++;
+                continue;
+            }
+
+            if (строка[index] == '/' && index + 1 < строка.Length && строка[index + 1] == '/')
+            {
+                break;
+            }
+
+            результат.Append(строка[index]);
+            index++;
+        }
+
+        return результат.ToString();
     }
 
     /// <summary>Находит корень репозитория по файлу решения.</summary>

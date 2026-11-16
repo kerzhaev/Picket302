@@ -135,11 +135,11 @@ begin
 end;
 
 { Удаление: программа и ярлыки удаляются, пользовательские данные —
-  сохраняются. Сообщение показывается только при удалении вручную: при
-  обновлении старый установщик выполняется молча. }
+  сохраняются. Сообщение показывается после завершения удаления и только
+  при удалении вручную: при обновлении старый установщик выполняется молча. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  if CurUninstallStep <> usUninstall then
+  if CurUninstallStep <> usPostUninstall then
   begin
     Exit;
   end;
