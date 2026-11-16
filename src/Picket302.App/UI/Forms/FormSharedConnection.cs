@@ -39,19 +39,28 @@ public sealed class FormSharedConnection : Form
 
     private readonly SharedClientProfile _профиль;
     private readonly Action<string> _журнал;
+    private readonly Action<string> _журналОшибки;
 
     /// <summary>
     /// Создаёт диалог подключения к общей базе.
     /// </summary>
     /// <param name="профиль">Профиль подключения к общей базе.</param>
-    /// <param name="журнал">Приёмник записей журнала.</param>
-    public FormSharedConnection(SharedClientProfile профиль, Action<string> журнал)
+    /// <param name="журнал">Приёмник информационных записей журнала.</param>
+    /// <param name="журналОшибки">
+    /// Приёмник записей о неудачном сопряжении; при <see langword="null"/> используется
+    /// <paramref name="журнал"/>.
+    /// </param>
+    public FormSharedConnection(
+        SharedClientProfile профиль,
+        Action<string> журнал,
+        Action<string>? журналОшибки = null)
     {
         ArgumentNullException.ThrowIfNull(профиль);
         ArgumentNullException.ThrowIfNull(журнал);
 
         _профиль = профиль;
         _журнал = журнал;
+        _журналОшибки = журналОшибки ?? журнал;
 
         Text = "Подключение к общей базе";
         Font = new Font("Segoe UI", 9f);
@@ -209,12 +218,12 @@ public sealed class FormSharedConnection : Form
         catch (SharedModeException ошибка)
         {
             _состояние.Text = ошибка.Message;
-            _журнал($"Сопряжение не выполнено: {ошибка.Message}");
+            _журналОшибки($"Сопряжение не выполнено: {ошибка.Message}");
         }
         catch (Exception ошибка)
         {
             _состояние.Text = "Подключение не выполнено. Подробности — в журнале программы.";
-            _журнал($"Сопряжение не выполнено: {ошибка}");
+            _журналОшибки($"Сопряжение не выполнено: {ошибка}");
         }
         finally
         {

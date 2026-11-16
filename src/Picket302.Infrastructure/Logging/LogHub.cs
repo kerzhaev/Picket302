@@ -122,6 +122,45 @@ public sealed class LogHub : IDisposable
     }
 
     /// <summary>
+    /// Записывает сообщение об ошибке без исключения.
+    /// </summary>
+    /// <param name="сообщение">Текст ошибки.</param>
+    /// <remarks>
+    /// Уровень Error остаётся уровнем Error: исключение не придумывается ради
+    /// того, чтобы попасть в тот же файл. Так в журнале нет фиктивных
+    /// <c>InvalidOperationException</c>, а реальные сбои никуда не понижаются.
+    /// </remarks>
+    public void LogError(string сообщение)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(сообщение);
+
+        GetChannel(LogChannel.App).Error("{Message}", сообщение);
+    }
+
+    /// <summary>
+    /// Записывает предупреждение: событие требует внимания, но работа
+    /// продолжается.
+    /// </summary>
+    /// <param name="сообщение">Текст предупреждения.</param>
+    public void LogWarning(string сообщение)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(сообщение);
+
+        GetChannel(LogChannel.App).Warning("{Message}", сообщение);
+    }
+
+    /// <summary>
+    /// Записывает информационное событие: штатное действие без отклонений.
+    /// </summary>
+    /// <param name="сообщение">Текст события.</param>
+    public void LogInfo(string сообщение)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(сообщение);
+
+        GetChannel(LogChannel.App).Information("{Message}", сообщение);
+    }
+
+    /// <summary>
     /// Записывает печатную сессию в канал печати в формате ТЗ §6.5.
     /// </summary>
     /// <param name="сессия">Сведения о печатной сессии.</param>

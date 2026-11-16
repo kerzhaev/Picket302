@@ -106,13 +106,13 @@ public sealed class AppServices : IAsyncDisposable
         // создаются до состава слоя данных: прикладные службы ограничивают
         // создание записей лимитами пробного периода.
         Машина = new MachineIdentity(
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)),
+            сообщение => Журнал.LogError(сообщение),
             реестрЛицензирования);
         ХранилищеЛицензии = new LicenseStore(
             профиль.LicensePath,
             реестрЛицензирования,
             Машина,
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+            сообщение => Журнал.LogError(сообщение));
 
         СчётчикиИспользования = DatabaseUsageCounter.Создать(сессия);
 
@@ -204,7 +204,7 @@ public sealed class AppServices : IAsyncDisposable
         // локализации попадают в журнал ошибок.
         МенеджерЯзыка = new LanguageManager(
             null,
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+            сообщение => Журнал.LogError(сообщение));
 
         // Пользовательские отчёты (ТЗ §8.4, функция 56) исполняются поверх
         // открытого соединения текущей сессии: в совместном режиме такой
@@ -267,16 +267,15 @@ public sealed class AppServices : IAsyncDisposable
         НастройкиОтображения = new UiSettingsStorage(ХранилищеНастроек);
 
         Журнал = new LogHub(профиль.LogsDirectory);
-        var журнал = (string сообщение) => Журнал.LogError(new InvalidOperationException(сообщение));
 
         Машина = new MachineIdentity(
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)),
+            сообщение => Журнал.LogError(сообщение),
             реестрЛицензирования);
         ХранилищеЛицензии = new LicenseStore(
             профиль.LicensePath,
             реестрЛицензирования,
             Машина,
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+            сообщение => Журнал.LogError(сообщение));
 
         СчётчикиИспользования = счётчикОбъёма.Получить;
 
@@ -312,12 +311,14 @@ public sealed class AppServices : IAsyncDisposable
 
                 if (перенесено > 0)
                 {
-                    журнал($"Калибровка принтеров перенесена из локальной базы: профилей {перенесено}.");
+                    Журнал.LogInfo(
+                        $"Калибровка принтеров перенесена из локальной базы: профилей {перенесено}.");
                 }
             }
             catch (Exception ошибка)
             {
-                журнал($"Не удалось перенести калибровку принтеров: {ошибка.Message}");
+                Журнал.LogWarning(
+                    $"Не удалось перенести калибровку принтеров: {ошибка.Message}");
             }
         }
 
@@ -398,7 +399,7 @@ public sealed class AppServices : IAsyncDisposable
 
         МенеджерЯзыка = new LanguageManager(
             null,
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+            сообщение => Журнал.LogError(сообщение));
 
         // Пользовательские отчёты и входящая корреспонденция в совместном
         // режиме недоступны: они исполняются поверх локального соединения.
@@ -431,6 +432,16 @@ public sealed class AppServices : IAsyncDisposable
 
     /// <summary>Путь к файлу базы данных; пусто в совместном режиме.</summary>
     public string ПутьБазы { get; }
+
+    /// <summary>
+    /// Адрес общей базы в виде «узел:порт»; <see langword="null"/> в одиночном
+    /// режиме.
+    /// </summary>
+    /// <remarks>
+    /// Только узел и порт: секрет устройства, отпечаток и административный
+    /// токен в строку состояния и подсказку не попадают.
+    /// </remarks>
+    public string? АдресОбщейБазы { get; private set; }
 
     /// <summary>
     /// Доступ к данным программы: одиночная база или общая база службы.
@@ -747,7 +758,7 @@ public sealed class AppServices : IAsyncDisposable
             ? Picket302.Infrastructure.Licensing.LicensingRegistry.File(пути.DataDirectory)
             : null;
 
-        return new AppServices(
+        var состав = new AppServices(
             пути,
             удалённый,
             транспорт,
@@ -757,6 +768,12 @@ public sealed class AppServices : IAsyncDisposable
             реестрОтправителяИзолирован,
             незавершённые,
             реестрЛицензирования);
+
+        // Адрес общей базы нужен только для индикации режима в интерфейсе:
+        // оператор должен видеть, к какому серверу он подключён.
+        состав.АдресОбщейБазы = $"{реквизиты.Host}:{реквизиты.Port}";
+
+        return состав;
     }
 
     /// <summary>
@@ -897,7 +914,7 @@ public sealed class AppServices : IAsyncDisposable
         return new RussianPostTracker(
             string.IsNullOrWhiteSpace(адрес) ? АдресТрекераПочтыПоУмолчанию : адрес,
             new RussianPostCredentials(логин ?? string.Empty, пароль, токен),
-            сообщение => Журнал.LogError(new InvalidOperationException(сообщение)));
+            сообщение => Журнал.LogError(сообщение));
     }
 
     /// <summary>Базовый адрес сервиса трекера Почты России по умолчанию.</summary>

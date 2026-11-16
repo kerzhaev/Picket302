@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using System.Globalization;
 using System.Windows.Forms;
 using Picket302.App.Shared;
+using Picket302.App.UI;
 using Picket302.App.UI.Components;
 using Picket302.App.UI.Forms;
 using Picket302.Application.Services;
@@ -2655,7 +2656,7 @@ public sealed class MainShell : Form
         var проверка = new UpdateChecker(
             "https://updates.picket302.local/updates.txt",
             "1.0.0",
-            сообщение => _состав.Журнал.LogError(new InvalidOperationException(сообщение)));
+            сообщение => _состав.Журнал.LogWarning(сообщение));
 
         var сведения = await проверка.CheckForUpdatesAsync().ConfigureAwait(true);
 
@@ -3336,15 +3337,23 @@ public sealed class MainShell : Form
     /// выбранных получателей.
     /// </summary>
     /// <summary>
-    /// Показывает имя файла базы в строке состояния, а полный путь —
-    /// всплывающей подсказкой (аудит UX 2026-11-03, F3).
+    /// Показывает текущий режим базы в строке состояния: в общем режиме —
+    /// адрес службы, в одиночном — имя файла базы.
     /// </summary>
+    /// <remarks>
+    /// Раньше текст строился только из <c>ПутьБазы</c>, а в общем составе он
+    /// пуст — после «База:» не оставалось ничего. Оператор не мог отличить
+    /// общую базу от локальной. Адрес службы показывается без секрета
+    /// устройства и без административного токена.
+    /// </remarks>
     /// <param name="состав">Состав приложения.</param>
     private void ЗадатьСостояниеБазы(AppServices состав)
     {
-        _состояниеБазы.Text = $"База: {Path.GetFileName(состав.ПутьБазы)}";
-        _подсказкиСтрокиСостояния.SetToolTip(_состояниеБазы, состав.ПутьБазы);
-        _состояниеБазы.AccessibleName = $"База данных: {состав.ПутьБазы}";
+        var тексты = DatabaseStateText.Построить(состав.АдресОбщейБазы, состав.ПутьБазы);
+
+        _состояниеБазы.Text = тексты.Text;
+        _подсказкиСтрокиСостояния.SetToolTip(_состояниеБазы, тексты.Tooltip);
+        _состояниеБазы.AccessibleName = тексты.AccessibleName;
     }
 
     private async void ОбновитьСтрокуСостояния(AppServices состав)
@@ -3625,6 +3634,12 @@ public sealed class MainShell : Form
     /// <summary>
     /// Создаёт отправителя (агента) и назначает его текущим.
     /// </summary>
+    /// <remarks>
+    /// Карточка сохраняется тем же полным путём, что и карточка получателя.
+    /// Раньше результат формы переносился в <see cref="AgentDto"/>, где нет
+    /// сокращённого наименования, телефона, почты, примечания и адресных
+    /// срезов: введённые реквизиты терялись молча.
+    /// </remarks>
     private async void СоздатьОтправителя()
     {
         if (_состав is null)
@@ -3639,18 +3654,14 @@ public sealed class MainShell : Form
             return;
         }
 
-        var агент = new AgentDto
-        {
-            Name = форма.Результат.Name,
-            Type = форма.Результат.Type,
-            Inn = форма.Результат.Inn,
-            Kpp = форма.Результат.Kpp,
-            Bik = форма.Результат.Bik,
-            Account = форма.Результат.Rs,
-            BankName = форма.Результат.BankName,
-        };
+        // Признак отправителя выставляется до сохранения: сервер получает
+        // уже полную карточку, а не усечённый набор полей.
+        var карточка = форма.Результат;
+        карточка.IsSender = true;
 
-        var результат = await _состав.Данные.СоздатьОтправителяAsync(агент).ConfigureAwait(true);
+        var результат = await _состав.Данные
+            .СохранитьКонтрагентаAsync(карточка)
+            .ConfigureAwait(true);
 
         if (результат.IsFailure)
         {
@@ -3658,6 +3669,21 @@ public sealed class MainShell : Form
             return;
         }
 
+        foreach (var (имя, значение) in форма.ПользовательскиеПоля)
+        {
+            var запись = await _состав.Данные
+                .ЗаписатьПолеКонтрагентаAsync(результат.Value.Id, имя, значение)
+                .ConfigureAwait(true);
+
+            if (запись.IsFailure)
+            {
+                MessageBox.Show(this, запись.Error!, "Отправитель", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+
+        // Текущий отправитель назначается только после подтверждённого
+        // сохранения: неудачное сохранение не должно менять состояние окна.
         _состав.ТекущийОтправитель.SetGlobalSender(результат.Value.Id);
 
         await ЗагрузитьОтправителейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
@@ -6154,7 +6180,8 @@ public sealed class MainShell : Form
 
         using var форма = new FormSharedConnection(
             new SharedClientProfile(Picket302ProfilePaths.ПоУмолчанию().DataDirectory),
-            сообщение => _состав.Журнал.LogError(new InvalidOperationException(сообщение)));
+            _состав.Журнал.LogInfo,
+            _состав.Журнал.LogWarning);
 
         форма.ShowDialog(this);
 
