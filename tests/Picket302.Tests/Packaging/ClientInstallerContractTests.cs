@@ -152,6 +152,28 @@ public sealed class ClientInstallerContractTests
     }
 
     /// <summary>
+    /// Запрещённая операция внутри строкового литерала остаётся видна:
+    /// это исполняемый код, а не комментарий. Фигурная скобка внутри строки
+    /// не открывает комментарий и не прячет код за собой.
+    /// </summary>
+    [Fact]
+    public void ForbiddenOperations_AreFoundInsideStringLiterals()
+    {
+        const string вСтроке = "[Code]\nvar Command := 'netsh advfirewall';\n";
+
+        Assert.True(
+            ContainsForbiddenOperation(вСтроке),
+            "Запрещённая операция в строковом литерале не обнаружена.");
+
+        const string соСкобкойВСтроке =
+            "[Code]\nvar Текст := 'открывающая {';\nvar Command := 'netsh';\n";
+
+        Assert.True(
+            ContainsForbiddenOperation(соСкобкойВСтроке),
+            "Фигурная скобка внутри строки скрыла запрещённую операцию за собой.");
+    }
+
+    /// <summary>
     /// Пользовательские данные (%AppData%\Picket302) при удалении не
     /// удаляются: секция удаления файлов пуста.
     /// </summary>
@@ -441,6 +463,12 @@ public sealed class ClientInstallerContractTests
     /// Удаляет из строки секции [Code] комментарий в фигурных скобках и
     /// хвостовой комментарий с двойной косой чертой.
     /// </summary>
+    /// <remarks>
+    /// Строковые литералы учитываются: фигурная скобка внутри строки не
+    /// открывает комментарий. Иначе несбалансированная скобка в строке
+    /// «съела» бы код до следующей закрывающей скобки и скрыла от сканера
+    /// запрещённую операцию.
+    /// </remarks>
     /// <param name="строка">Строка секции [Code].</param>
     /// <param name="внутриБлока">
     /// Признак того, что строка продолжает комментарий в фигурных скобках,
@@ -465,6 +493,29 @@ public sealed class ClientInstallerContractTests
 
                 внутриБлока = false;
                 index = закрытие + 1;
+                continue;
+            }
+
+            if (строка[index] == '\'')
+            {
+                // Символьный литерал: Pascal Script использует одинарные
+                // кавычки и для символов, и для строк.
+                результат.Append(строка[index]);
+                index++;
+
+                while (index < строка.Length)
+                {
+                    результат.Append(строка[index]);
+
+                    if (строка[index] == '\'')
+                    {
+                        index++;
+                        break;
+                    }
+
+                    index++;
+                }
+
                 continue;
             }
 

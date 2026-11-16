@@ -173,7 +173,7 @@ if (-not (Test-Path -LiteralPath $IsccPath)) {
 New-Item -ItemType Directory -Path $ArtifactsRoot -Force | Out-Null
 
 $smokeInstallDir = Join-Path $env:LOCALAPPDATA 'Programs\Picket302-Smoke'
-$smokeStartMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Picket302-Smoke\Picket302.lnk'
+$smokeStartMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Picket302-Smoke\Picket302-Smoke.lnk'
 
 # Группа меню «Пуск», которой касается поставляемый клиент: проверка не
 # должна ни создать её, ни удалить.
@@ -201,18 +201,29 @@ $twinIssPath = Join-Path $ArtifactsRoot 'picket302-client-smoke.iss'
 # кодировке текущей консоли, и русские тексты сценария исказились бы.
 $issText = Get-Content -LiteralPath $issPath -Raw -Encoding UTF8
 
-$twinText = $issText.Replace('PrivilegesRequired=admin', 'PrivilegesRequired=lowest')
-$twinText = $twinText.Replace('DefaultDirName={autopf}\Picket302', 'DefaultDirName={localappdata}\Programs\Picket302-Smoke')
-$twinText = $twinText.Replace('OutputBaseFilename=picket302-client-setup', 'OutputBaseFilename=picket302-client-smoke')
+# Подмены проверяются по отдельности: если сценарий изменится и строка,
+# которую здесь подменяют, перестанет совпадать, подмена молча станет
+# пустой ночной операцией, и проверочный двойник получит боевые реквизиты
+# (тот же AppId, тот же каталог, то же имя в «Установленных приложениях»).
+$substitutions = @(
+    @{ Find = 'PrivilegesRequired=admin'; Replace = 'PrivilegesRequired=lowest'; Name = 'права установки' },
+    @{ Find = 'DefaultDirName={autopf}\Picket302'; Replace = 'DefaultDirName={localappdata}\Programs\Picket302-Smoke'; Name = 'каталог установки' },
+    @{ Find = 'OutputBaseFilename=picket302-client-setup'; Replace = 'OutputBaseFilename=picket302-client-smoke'; Name = 'имя файла пакета' },
+    @{ Find = 'DefaultGroupName=Picket302'; Replace = 'DefaultGroupName=Picket302-Smoke'; Name = 'группа меню «Пуск»' },
+    @{ Find = 'AppId={{56C1FDF3-7563-4737-9E33-219A7B4E00C4}'; Replace = 'AppId={{7B2E4C60-3D91-4A85-9F62-0C58D1A74E33}'; Name = 'идентификатор приложения' },
+    @{ Find = '#define AppName "Picket302"'; Replace = '#define AppName "Picket302-Smoke"'; Name = 'имя в «Установленных приложениях»' }
+)
 
-# Собственная группа меню «Пуск»: проверка не должна трогать группу
-# «Picket302», в которой на серверной машине лежит ярлык серверной службы.
-$twinText = $twinText.Replace('DefaultGroupName=Picket302', 'DefaultGroupName=Picket302-Smoke')
+$twinText = $issText
 
-# Свой AppId у проверочного двойника: на машине, где настоящий клиент уже
-# установлен, двойник не должен появляться в «Установленных приложениях»
-# вторым пунктом «Picket302».
-$twinText = $twinText.Replace('AppId={{56C1FDF3-7563-4737-9E33-219A7B4E00C4}', 'AppId={{7B2E4C60-3D91-4A85-9F62-0C58D1A74E33}')
+foreach ($substitution in $substitutions) {
+    if (-not $twinText.Contains($substitution.Find)) {
+        throw ("Подмена '{0}' не сработала: в сценарии нет строки '{1}'. " +
+            'Проверочный двойник собран не из той копии сценария — проверка остановлена.') -f $substitution.Name, $substitution.Find
+    }
+
+    $twinText = $twinText.Replace($substitution.Find, $substitution.Replace)
+}
 
 if ($twinText -eq $issText) {
     throw 'Проверочная копия сценария не отличается от поставляемого: подмены не сработали.'
@@ -249,6 +260,7 @@ $appProject = Join-Path $RepositoryRoot 'src\Picket302.App\Picket302.App.csproj'
 $contractFiles = @(
     'Picket302.App.exe',
     'Picket302.App.dll',
+    'Picket302.App.deps.json',
     'Picket302.App.runtimeconfig.json',
     'Picket302.ComAutomation.exe',
     'Picket302.ComAutomation.dll',
@@ -317,8 +329,35 @@ Add-Check -Name 'Публикация без нативной библиотек
     -Details ("код = " + $sqliteGate.Code)
 
 Add-Check -Name 'Отказ сопровождается понятным сообщением' `
-    -Passed ($sqliteGate.Output -match 'e_sqlite3') `
-    -Details 'Ожидалось упоминание e_sqlite3 в тексте ошибки.'
+    -Passed (($sqliteGate.Output -match 'e_sqlite3') -and ($sqliteGate.Output -match 'Публикация неполна')) `
+    -Details 'Ожидалось упоминание e_sqlite3 и «Публикация неполна» в тексте ошибки.'
+
+# Неполный состав: отсутствует обязательный файл.
+$withoutFileDir = Join-Path $contractRoot 'without-file'
+New-ContractFixture -Directory $withoutFileDir -Omit @('emailedit\default.html')
+$fileGate = Test-PublishGate -Directory $withoutFileDir
+
+Add-Check -Name 'Публикация без обязательного файла отвергнута' -Passed ($fileGate.Code -ne 0) `
+    -Details ("код = " + $fileGate.Code)
+
+Add-Check -Name 'Отказ сопровождается понятным сообщением' `
+    -Passed (($fileGate.Output -match 'default.html') -and ($fileGate.Output -match 'Публикация неполна')) `
+    -Details 'Ожидалось упоминание default.html и «Публикация неполна» в тексте ошибки.'
+
+# Зависимая от .NET публикация: без установленного .NET Desktop Runtime
+# клиентский компьютер не запустит программу.
+$frameworkDependentDir = Join-Path $contractRoot 'framework-dependent'
+New-ContractFixture -Directory $frameworkDependentDir
+Set-Content -LiteralPath (Join-Path $frameworkDependentDir 'Picket302.App.runtimeconfig.json') `
+    -Value '{"runtimeOptions":{"frameworks":[{"name":"Microsoft.NETCore.App","version":"8.0.0"}]}}' -Encoding UTF8
+$frameworkGate = Test-PublishGate -Directory $frameworkDependentDir
+
+Add-Check -Name 'Публикация, зависимая от установленного .NET, отвергнута' -Passed ($frameworkGate.Code -ne 0) `
+    -Details ("код = " + $frameworkGate.Code)
+
+Add-Check -Name 'Отказ сопровождается понятным сообщением' `
+    -Passed (($frameworkGate.Output -match 'runtimeconfig') -and ($frameworkGate.Output -match 'Публикация неполна')) `
+    -Details 'Ожидалось упоминание runtimeconfig и «Публикация неполна» в тексте ошибки.'
 
 # ---------------------------------------------------------------------------
 # Установка

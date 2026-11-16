@@ -72,6 +72,8 @@
     <ItemGroup>
       <PublishRequiredFile Include="$(PublishDir)Picket302.App.exe" />
       <PublishRequiredFile Include="$(PublishDir)Picket302.App.dll" />
+      <PublishRequiredFile Include="$(PublishDir)Picket302.App.deps.json" />
+      <PublishRequiredFile Include="$(PublishDir)Picket302.App.runtimeconfig.json" />
       <PublishRequiredFile Include="$(PublishDir)Picket302.ComAutomation.exe" />
       <PublishRequiredFile Include="$(PublishDir)Picket302.ComAutomation.dll" />
       <PublishRequiredFile Include="$(PublishDir)Picket302.ComAutomation.runtimeconfig.json" />

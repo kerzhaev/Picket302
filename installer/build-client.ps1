@@ -194,6 +194,26 @@ function Remove-InnoComments {
                 continue
             }
 
+            if ($строка[$index] -eq "'") {
+                # Строковый литерал: фигурная скобка внутри него не открывает
+                # комментарий.
+                [void] $собрано.Append($строка[$index])
+                $index++
+
+                while ($index -lt $строка.Length) {
+                    [void] $собрано.Append($строка[$index])
+
+                    if ($строка[$index] -eq "'") {
+                        $index++
+                        break
+                    }
+
+                    $index++
+                }
+
+                continue
+            }
+
             if ($строка[$index] -eq '{') {
                 $внутриБлока = $true
                 $index++
@@ -339,6 +359,36 @@ foreach ($runtimeConfig in @('Picket302.App.runtimeconfig.json', 'Picket302.ComA
 }
 
 Write-Ok 'Оболочка и COM-сервер самодостаточны (установленный .NET не требуется).'
+
+# Нативная библиотека SQLite должна быть 64-разрядной (AMD64): поставка
+# объявлена как win-x64. Проверяется заголовок PE-файла.
+$sqlitePath = Join-Path $publishDir 'e_sqlite3.dll'
+
+if (Test-Path -LiteralPath $sqlitePath) {
+    $bytes = [System.IO.File]::ReadAllBytes($sqlitePath)
+
+    $isPe = $bytes.Length -gt 0x40 -and $bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A
+
+    if ($isPe) {
+        $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
+
+        $isPe = $peOffset -gt 0 -and ($peOffset + 6) -lt $bytes.Length `
+            -and $bytes[$peOffset] -eq 0x50 -and $bytes[$peOffset + 1] -eq 0x45 `
+            -and $bytes[$peOffset + 2] -eq 0 -and $bytes[$peOffset + 3] -eq 0
+
+        if ($isPe) {
+            $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+
+            # 0x8664 — AMD64. 0x014C — x86 (32 разряда), 0xAA64 — ARM64.
+            Assert-Contract ($machine -eq 0x8664) `
+                ("Нативная библиотека SQLite имеет архитектуру 0x{0:X4}, а не AMD64 (0x8664). Поставка объявлена как win-x64." -f $machine)
+        }
+    }
+
+    Assert-Contract $isPe "Файл e_sqlite3.dll не является PE-файлом: проверьте состав публикации."
+
+    Write-Ok 'Нативная библиотека SQLite — 64-разрядная (AMD64), как объявлено в поставке.'
+}
 
 # Серверной службы в поставке быть не должно.
 $publishedFiles = Get-ChildItem -LiteralPath $publishDir -Recurse -File | ForEach-Object { $_.FullName }
