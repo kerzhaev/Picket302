@@ -17,6 +17,14 @@ namespace Picket302.App.UI;
 public static class DatabaseStateText
 {
     /// <summary>
+    /// Формирует отметку времени последней успешной загрузки списка.
+    /// </summary>
+    /// <param name="момент">Местное время загрузки.</param>
+    /// <returns>Текст вида «Данные от 21:42:10».</returns>
+    public static string ОтметкаЗагрузки(DateTime момент)
+        => $"Данные от {момент:HH:mm:ss}";
+
+    /// <summary>
     /// Собирает тексты индикации базы: обычный текст, подсказку и имя для
     /// средств доступности.
     /// </summary>

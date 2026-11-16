@@ -60,4 +60,12 @@ public sealed class DatabaseStateTextTests
 
         Assert.Equal("Локальная база: picket302.db", тексты.Text);
     }
+
+    [Fact]
+    public void Отметка_загрузки_показывает_время_с_точностью_до_секунд()
+    {
+        var отметка = DatabaseStateText.ОтметкаЗагрузки(new DateTime(2026, 11, 16, 21, 42, 10));
+
+        Assert.Equal("Данные от 21:42:10", отметка);
+    }
 }
