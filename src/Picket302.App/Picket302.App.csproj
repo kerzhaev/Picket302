@@ -37,10 +37,18 @@
        в ветку LocalServer32 записывается путь к исполняемому файлу сервера,
        а не оболочки (ТЗ §8.9, функция 114; §9.1 «ProgID PEPro.Application»).
        Общие библиотеки (Application, Domain, Infrastructure, Printing) в каталог
-       сборки оболочки уже попадают через ссылки на проекты. -->
+       сборки оболочки уже попадают через ссылки на проекты.
+
+       Каталог сборки COM-сервера обязан совпадать по идентификатору среды
+       выполнения с каталогом сборки оболочки. Раньше идентификатор среды в
+       пути не участвовал, и рядом с оболочкой оказывалась сборка сервера для
+       другой среды (framework-dependent вместо self-contained): её
+       runtimeconfig.json требовал установленного .NET Desktop Runtime, и на
+       рабочей машине без него COM-сервер не запускался. -->
   <Target Name="CopyComAutomationServer" AfterTargets="Build">
     <PropertyGroup>
-      <ComAutomationOutputDir>$(MSBuildThisFileDirectory)..\Picket302.ComAutomation\bin\$(Platform)\$(Configuration)\net8.0-windows\</ComAutomationOutputDir>
+      <ComAutomationOutputDir Condition="'$(RuntimeIdentifier)' != ''">$(MSBuildThisFileDirectory)..\Picket302.ComAutomation\bin\$(Platform)\$(Configuration)\net8.0-windows\$(RuntimeIdentifier)\</ComAutomationOutputDir>
+      <ComAutomationOutputDir Condition="'$(RuntimeIdentifier)' == ''">$(MSBuildThisFileDirectory)..\Picket302.ComAutomation\bin\$(Platform)\$(Configuration)\net8.0-windows\</ComAutomationOutputDir>
     </PropertyGroup>
     <ItemGroup>
       <ComAutomationPayload Include="$(ComAutomationOutputDir)Picket302.ComAutomation.exe" />
@@ -52,6 +60,33 @@
           DestinationFolder="$(OutDir)"
           SkipUnchangedFiles="true"
           Condition="'@(ComAutomationPayload)' != '' And Exists('%(ComAutomationPayload.FullPath)')" />
+  </Target>
+
+  <!-- Проверка состава опубликованной сборки. Обязательный состав рядом с
+       Picket302.App.exe: COM-сервер автоматизации с собственной конфигурацией
+       запуска, библиотека типов, шаблон письма и нативная библиотека SQLite.
+       Публикация завершается ошибкой, если обязательного файла нет: молча
+       неполный пакет доходит до владельца и ломается уже на машине оператора. -->
+  <Target Name="ValidatePublishOutput" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishRequiredFile Include="$(PublishDir)Picket302.App.exe" />
+      <PublishRequiredFile Include="$(PublishDir)Picket302.App.dll" />
+      <PublishRequiredFile Include="$(PublishDir)Picket302.ComAutomation.exe" />
+      <PublishRequiredFile Include="$(PublishDir)Picket302.ComAutomation.dll" />
+      <PublishRequiredFile Include="$(PublishDir)Picket302.ComAutomation.runtimeconfig.json" />
+      <PublishRequiredFile Include="$(PublishDir)Picket302.ComAutomation.deps.json" />
+      <PublishRequiredFile Include="$(PublishDir)PrintEnvelopePro.tlb" />
+      <PublishRequiredFile Include="$(PublishDir)emailedit\default.html" />
+      <!-- Нативная библиотека SQLite: в самодостаточной публикации она лежит
+           в корне каталога, в зависимой от .NET — в runtimes\<среда>\native. -->
+      <PublishRequiredFile Include="$(PublishDir)e_sqlite3.dll" Condition="Exists('$(PublishDir)e_sqlite3.dll')" />
+      <PublishRequiredFile Include="$(PublishDir)runtimes\win-x64\native\e_sqlite3.dll" Condition="!Exists('$(PublishDir)e_sqlite3.dll') And Exists('$(PublishDir)runtimes\win-x64\native\e_sqlite3.dll')" />
+    </ItemGroup>
+    <ItemGroup>
+      <PublishMissingFile Include="@(PublishRequiredFile)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <Error Condition="'@(PublishMissingFile)' != ''"
+           Text="Публикация неполна: обязательные файлы не найдены рядом с Picket302.App.exe: @(PublishMissingFile->'%(Identity)', ', '). Пакет установки собирать нельзя." />
   </Target>
 
 </Project>
