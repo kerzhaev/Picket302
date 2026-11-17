@@ -154,7 +154,13 @@ public sealed class SharedServiceTestHost : IAsyncDisposable
             await ответ.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false),
             SharedJson.Options)!;
 
-        return new SharedTestClient(клиент, сопряжение.DeviceId, сопряжение.Secret, имя);
+        return new SharedTestClient(
+            клиент,
+            сопряжение.DeviceId,
+            сопряжение.Secret,
+            имя,
+            сопряжение.ServerId,
+            сопряжение.ServerFingerprint);
     }
 
     /// <summary>
@@ -249,12 +255,22 @@ public sealed class SharedTestClient : IDisposable
     /// <param name="deviceId">Идентификатор устройства.</param>
     /// <param name="секрет">Секрет устройства.</param>
     /// <param name="имя">Имя устройства.</param>
-    public SharedTestClient(HttpClient клиент, string deviceId, string секрет, string имя)
+    /// <param name="serverId">Идентификатор сервера из ответа сопряжения.</param>
+    /// <param name="serverFingerprint">Отпечаток сервера из ответа сопряжения.</param>
+    public SharedTestClient(
+        HttpClient клиент,
+        string deviceId,
+        string секрет,
+        string имя,
+        string serverId = "",
+        string serverFingerprint = "")
     {
         _клиент = клиент;
         Устройство = deviceId;
         Секрет = секрет;
         Имя = имя;
+        Сервер = serverId;
+        ОтпечатокСервера = serverFingerprint;
 
         _клиент.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", секрет);
 
@@ -274,6 +290,12 @@ public sealed class SharedTestClient : IDisposable
 
     /// <summary>Имя устройства.</summary>
     public string Имя { get; }
+
+    /// <summary>Идентификатор сервера (для клиента штатного транспорта).</summary>
+    public string Сервер { get; }
+
+    /// <summary>Закреплённый отпечаток сервера (для штатного транспорта).</summary>
+    public string ОтпечатокСервера { get; }
 
     /// <summary>HTTP-клиент.</summary>
     public HttpClient Клиент => _клиент;

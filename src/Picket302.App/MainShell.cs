@@ -3662,37 +3662,44 @@ public sealed class MainShell : Form
             return;
         }
 
-        // Признак отправителя выставляется до сохранения: сервер получает
-        // уже полную карточку, а не усечённый набор полей.
-        var карточка = форма.Результат;
-        карточка.IsSender = true;
+        // Регистрация вынесена в отдельную службу: она сохраняет полную
+        // карточку, переносит пользовательские поля и меняет текущего
+        // отправителя только при полном успехе.
+        var регистрация = new SenderRegistrationService(
+            new GatewaySenderPersistence(_состав.Данные),
+            _состав.ТекущийОтправитель);
 
-        var результат = await _состав.Данные
-            .СохранитьКонтрагентаAsync(карточка)
+        var итог = await регистрация
+            .СоздатьAsync(форма.Результат, форма.ПользовательскиеПоля)
             .ConfigureAwait(true);
 
-        if (результат.IsFailure)
+        if (итог.Статус == SenderRegistrationStatus.НеСоздан)
         {
-            MessageBox.Show(this, результат.Error!, "Отправитель", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(
+                this,
+                итог.Ошибка ?? "Не удалось сохранить отправителя.",
+                "Отправитель",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
             return;
         }
 
-        foreach (var (имя, значение) in форма.ПользовательскиеПоля)
+        if (итог.Статус == SenderRegistrationStatus.СозданБезДополнительныхПолей)
         {
-            var запись = await _состав.Данные
-                .ЗаписатьПолеКонтрагентаAsync(результат.Value.Id, имя, значение)
-                .ConfigureAwait(true);
-
-            if (запись.IsFailure)
-            {
-                MessageBox.Show(this, запись.Error!, "Отправитель", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
+            // Карточка уже существует: честно говорим об этом и просим
+            // сохранить её повторно. Повтор обновит ту же запись по ID.
+            MessageBox.Show(
+                this,
+                $"Карточка «{форма.Результат.Name}» создана (ID {итог.Идентификатор}), "
+                + $"но дополнительные поля не сохранены: {string.Join(", ", итог.НесохранённыеПоля)}."
+                + Environment.NewLine + Environment.NewLine
+                + "Откройте карточку в адресной книге и сохраните её ещё раз — "
+                + "будет обновлена та же запись, дубль не создастся.",
+                "Отправитель",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
-
-        // Текущий отправитель назначается только после подтверждённого
-        // сохранения: неудачное сохранение не должно менять состояние окна.
-        _состав.ТекущийОтправитель.SetGlobalSender(результат.Value.Id);
 
         await ЗагрузитьОтправителейAsync(_состав, CancellationToken.None).ConfigureAwait(true);
     }

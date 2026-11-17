@@ -8,14 +8,16 @@ namespace Picket302.Tests.Architecture;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Проверка идёт по исходному тексту <c>MainShell</c>: карточка отправителя
-/// обязана сохраняться полным путём контрагента. Усечённый путь через
-/// <c>AgentDto</c> терял сокращённое наименование, телефон, почту, примечание
-/// и адресные срезы — именно это и было найдено на живом пилоте.
+/// Проверка идёт по исходному тексту: карточка отправителя обязана сохраняться
+/// полным путём контрагента. Усечённый путь через <c>AgentDto</c> терял
+/// сокращённое наименование, телефон, почту, примечание и адресные срезы —
+/// именно это и было найдено на живом пилоте.
 /// </para>
 /// <para>
-/// Тест намеренно смотрит на код, а не на результат: ошибка была не в
-/// хранилище, а в том, какие поля UI-слой передавал на сохранение.
+/// Логика вынесена в <c>SenderRegistrationService</c>, поэтому проверяются три
+/// места: оболочка не собирает <c>AgentDto</c>, служба регистрации ставит
+/// признак отправителя и вызывает сохранение карточки, адаптер ведёт в
+/// <c>СохранитьКонтрагентаAsync</c>.
 /// </para>
 /// </remarks>
 public sealed class SenderCreationPathTests
@@ -26,29 +28,39 @@ public sealed class SenderCreationPathTests
     public void Создание_отправителя_идёт_полной_карточкой()
     {
         var корень = НайтиКореньРепозитория();
-        var путь = Path.Combine(корень, "src", "Picket302.App", "MainShell.cs");
 
-        Assert.True(File.Exists(путь), $"Не найден файл: {путь}");
+        var оболочка = Path.Combine(корень, "src", "Picket302.App", "MainShell.cs");
+        var служба = Path.Combine(корень, "src", "Picket302.App", "Shared", "SenderRegistrationService.cs");
 
-        var текст = File.ReadAllText(путь);
-        var метод = ИзвлечьМетод(текст, "СоздатьОтправителя");
+        Assert.True(File.Exists(оболочка), $"Не найден файл: {оболочка}");
+        Assert.True(File.Exists(служба), $"Не найден файл: {служба}");
+
+        var метод = ИзвлечьМетод(File.ReadAllText(оболочка), "СоздатьОтправителя");
 
         Assert.NotNull(метод);
-
         Assert.DoesNotContain("new AgentDto", метод, StringComparison.Ordinal);
-        Assert.Contains("СохранитьКонтрагентаAsync", метод, StringComparison.Ordinal);
-        Assert.Contains("IsSender = true", метод, StringComparison.Ordinal);
+        Assert.Contains("SenderRegistrationService", метод, StringComparison.Ordinal);
         Assert.Contains("ПользовательскиеПоля", метод, StringComparison.Ordinal);
 
-        // Текущий отправитель назначается только после сохранения: иначе
-        // неудачное сохранение меняло бы состояние окна.
-        var индексСохранения = метод!.IndexOf("СохранитьКонтрагентаAsync", StringComparison.Ordinal);
-        var индексНазначения = метод.IndexOf("SetGlobalSender", StringComparison.Ordinal);
+        var текстСлужбы = File.ReadAllText(служба);
 
-        Assert.True(индексСохранения >= 0, "В методе нет сохранения контрагента.");
+        Assert.Contains("карточка.IsSender = true", текстСлужбы, StringComparison.Ordinal);
+        Assert.Contains("СохранитьКарточкуAsync", текстСлужбы, StringComparison.Ordinal);
+
+        // Текущий отправитель назначается только после сохранения и только при
+        // полном успехе: строка SetGlobalSender идёт после вызова сохранения.
+        var индексСохранения = текстСлужбы.IndexOf("СохранитьКарточкуAsync", StringComparison.Ordinal);
+        var индексНазначения = текстСлужбы.IndexOf("SetGlobalSender", StringComparison.Ordinal);
+
+        Assert.True(индексСохранения >= 0, "В службе нет сохранения карточки.");
         Assert.True(
             индексНазначения > индексСохранения,
             "Текущий отправитель назначается до сохранения карточки.");
+
+        // Адаптер обязан вести в полное сохранение контрагента, а не в
+        // упрощённую команду создания агента.
+        Assert.Contains("СохранитьКонтрагентаAsync", текстСлужбы, StringComparison.Ordinal);
+        Assert.DoesNotContain("СоздатьОтправителяAsync", текстСлужбы, StringComparison.Ordinal);
     }
 
     private static string НайтиКореньРепозитория()

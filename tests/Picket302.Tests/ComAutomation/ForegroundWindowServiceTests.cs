@@ -72,8 +72,20 @@ public sealed class ForegroundWindowServiceTests
             служба.Dispose();
         }
 
-        // HWND уничтожен в собственном потоке службы — утечки окна нет.
-        Assert.False(IsWindow(дескриптор), "HWND не уничтожен после Dispose.");
+        // HWND уничтожается в собственном потоке службы. Dispose ждёт поток
+        // не дольше 3 секунд, поэтому под нагрузкой окно может исчезнуть
+        // чуть позже возврата из Dispose: ждём ограниченно, но требуем
+        // уничтожения окна — утечка по-прежнему считается дефектом.
+        var предел = Stopwatch.StartNew();
+
+        while (IsWindow(дескриптор) && предел.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            Thread.Sleep(25);
+        }
+
+        Assert.False(
+            IsWindow(дескриптор),
+            $"HWND не уничтожен за {предел.Elapsed.TotalSeconds:F1} с после Dispose.");
     }
 
     [Fact]
