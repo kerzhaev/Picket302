@@ -1026,6 +1026,8 @@ public sealed class MainShell : Form
         данные.DropDownItems.Add("Импорт из 1С…", null, (_, _) => ИмпортИз1С());
         данные.DropDownItems.Add("Импорт из внешней БД…", null, (_, _) => ИмпортИзВнешнейБазы());
         данные.DropDownItems.Add("Загрузить данные из старой версии…", null, (_, _) => ОткрытьЗагрузкуИзСтаройВерсии());
+        данные.DropDownItems.Add(new ToolStripSeparator());
+        данные.DropDownItems.Add("Импорт макета конверта (.fr3)…", null, (_, _) => ИмпортироватьМакет());
 
         var сервис = new ToolStripMenuItem("Сервис");
         сервис.DropDownItems.Add("Общая база…", null, (_, _) => ОткрытьПодключениеКОбщейБазе());
@@ -5872,6 +5874,138 @@ public sealed class MainShell : Form
     }
 
     /// <summary>
+    /// <summary>
+    /// Импортирует макет конверта исходной программы (файл .fr3): готовая
+    /// раскладка настоящих бланков — координаты зон адреса, кодового штампа и
+    /// поворот текста.
+    /// </summary>
+    /// <remarks>
+    /// Файл выбирает оператор. Импорт переносит макет как есть: размеры
+    /// страницы, поля с их привязкой к данным, гарнитуры, кегли и поворот
+    /// (адрес на конверте печатается вертикальной колонкой, снизу вверх).
+    /// </remarks>
+    private async void ИмпортироватьМакет()
+    {
+        var состав = _состав;
+
+        if (состав is null)
+        {
+            return;
+        }
+
+        using var выбор = new OpenFileDialog
+        {
+            Title = "Импорт макета конверта",
+            Filter = "Макеты исходной программы (*.fr3)|*.fr3|Все файлы (*.*)|*.*",
+            CheckFileExists = true,
+        };
+
+        if (выбор.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        Picket302.Domain.Serialization.CustomBlank макет;
+
+        try
+        {
+            макет = Infrastructure.Templates.Fr3BlankImporter.Import(выбор.FileName);
+        }
+#pragma warning disable CA1031 // Ошибка импорта показывается оператору текстом.
+        catch (Exception ошибка)
+#pragma warning restore CA1031
+        {
+            MessageBox.Show(
+                this,
+                "Макет не импортирован: " + ошибка.Message,
+                "Импорт макета",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        var имя = Path.GetFileNameWithoutExtension(выбор.FileName).Replace('_', ' ');
+        var формат = ФорматМакета(имя);
+
+        try
+        {
+            var идентификаторШаблона = await состав.ШаблоныПечати.AddAsync(
+                new PrintTemplate
+                {
+                    Name = имя,
+                    Kind = PrintTemplateKind.Envelope,
+                    Format = формат,
+                    WidthMm = макет.Geometry.WidthMm,
+                    HeightMm = макет.Geometry.HeightMm,
+                    Orientation = макет.Geometry.WidthMm >= макет.Geometry.HeightMm
+                        ? TemplateOrientation.Landscape
+                        : TemplateOrientation.Portrait,
+                }).ConfigureAwait(true);
+
+            foreach (var поле in макет.AllFields())
+            {
+                await состав.ПоляШаблонов.AddAsync(
+                    new BlankField
+                    {
+                        TemplateId = идентификаторШаблона,
+                        Name = поле.Name,
+                        Kind = поле.Kind,
+                        Page = 1,
+                        XMm = поле.Bounds.XMm,
+                        YMm = поле.Bounds.YMm,
+                        LengthMm = поле.Bounds.WidthMm,
+                        HeightMm = поле.Bounds.HeightMm,
+                        Rotation = поле.Rotation,
+                        FontName = поле.FontName,
+                        FontHeightPt = поле.FontSizePt,
+                        FontHeightMinPt = поле.MinFontSizePt,
+                        FontHeightMaxPt = поле.MaxFontSizePt,
+                        IsBold = поле.Bold,
+                        IsItalic = поле.Italic,
+                        MaxChars = 255,
+                        IsVisible = true,
+                        IsPrintable = поле.Printable,
+                    }).ConfigureAwait(true);
+            }
+        }
+#pragma warning disable CA1031 // Ошибка сохранения показывается оператору текстом.
+        catch (Exception ошибка)
+#pragma warning restore CA1031
+        {
+            MessageBox.Show(
+                this,
+                "Макет не сохранён: " + ошибка.Message,
+                "Импорт макета",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        MessageBox.Show(
+            this,
+            $"Макет «{имя}» импортирован: {макет.AllFields().Count()} полей. "
+            + "Шаблон доступен в списке печати.",
+            "Импорт макета",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    /// <summary>
+    /// Определяет формат конверта по имени макета.
+    /// </summary>
+    private static string ФорматМакета(string имя)
+    {
+        foreach (var код in new[] { "C4", "C5", "C6", "DL" })
+        {
+            if (имя.Contains(код, StringComparison.OrdinalIgnoreCase))
+            {
+                return код;
+            }
+        }
+
+        return "C5";
+    }
+
     /// Показывает интерактивный предпросмотр печатного задания (ТЗ §8.6,
     /// функция 80).
     /// </summary>

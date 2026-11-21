@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Picket302.Domain.Entities;
 
 namespace Picket302.Printing.Engine;
@@ -154,14 +154,14 @@ public sealed class TextFitter
     {
         var высотаСтроки = _measurer.MeasureLineHeight(field.FontName, кегль);
 
-        if (строки.Count * высотаСтроки > (double)field.HeightMm + 0.01)
+        if (строки.Count * высотаСтроки > (double)ДоступнаяВысота(field) + 0.01)
         {
             return false;
         }
 
         foreach (var строка in строки)
         {
-            if (_measurer.MeasureWidth(строка, field.FontName, кегль) > (double)field.LengthMm + 0.01)
+            if (_measurer.MeasureWidth(строка, field.FontName, кегль) > (double)ДоступнаяШирина(field) + 0.01)
             {
                 return false;
             }
@@ -169,6 +169,24 @@ public sealed class TextFitter
 
         return true;
     }
+
+    /// <summary>
+    /// Поле повёрнуто на 90°: текст идёт вдоль длинной стороны.
+    /// </summary>
+    private static bool Повёрнуто(BlankField field) =>
+        ((field.Rotation % 360) + 360) % 360 is 90 or 270;
+
+    /// <summary>
+    /// Ширина, доступная строке текста, мм.
+    /// </summary>
+    private static decimal ДоступнаяШирина(BlankField field) =>
+        Повёрнуто(field) ? field.HeightMm : field.LengthMm;
+
+    /// <summary>
+    /// Высота, доступная строке текста, мм.
+    /// </summary>
+    private static decimal ДоступнаяВысота(BlankField field) =>
+        Повёрнуто(field) ? field.LengthMm : field.HeightMm;
 
     private List<string> РазбитьПоСловам(string text, BlankField field, decimal кегль)
     {
@@ -179,7 +197,7 @@ public sealed class TextFitter
         {
             var кандидат = текущая.Length == 0 ? слово : $"{текущая} {слово}";
 
-            if (_measurer.MeasureWidth(кандидат, field.FontName, кегль) <= (double)field.LengthMm + 0.01)
+            if (_measurer.MeasureWidth(кандидат, field.FontName, кегль) <= (double)ДоступнаяШирина(field) + 0.01)
             {
                 текущая = кандидат;
                 continue;

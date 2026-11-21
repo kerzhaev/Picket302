@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Drawing.Drawing2D;
 using Picket302.Printing.Elements;
 
@@ -144,6 +144,61 @@ public sealed class GdiGraphicsContext : IGraphicsContext
 
         using var кисть = new SolidBrush(Color);
         _графика.DrawString(text, шрифт, кисть, xMm, yMm, StringFormat.GenericTypographic);
+    }
+
+    /// <inheritdoc />
+    public void DrawStringMm(
+        string text,
+        string fontName,
+        float sizePt,
+        bool bold,
+        int rotation,
+        float xMm,
+        float yMm,
+        float widthMm,
+        float heightMm)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        using var шрифт = new Font(
+            string.IsNullOrWhiteSpace(fontName) ? "Tahoma" : fontName,
+            sizePt,
+            bold ? FontStyle.Bold : FontStyle.Regular,
+            GraphicsUnit.Point);
+
+        using var кисть = new SolidBrush(Color);
+
+        var состояние = _графика.Save();
+
+        // Поворот задаётся вокруг левого нижнего угла поля: при 90° текст
+        // идёт снизу вверх — вертикальная колонка адреса на конверте.
+        var угол = ((rotation % 360) + 360) % 360;
+
+        switch (угол)
+        {
+            case 90:
+                _графика.TranslateTransform(xMm, yMm + heightMm);
+                _графика.RotateTransform(-90f);
+                break;
+            case 180:
+                _графика.TranslateTransform(xMm + widthMm, yMm + heightMm);
+                _графика.RotateTransform(180f);
+                break;
+            case 270:
+                _графика.TranslateTransform(xMm + widthMm, yMm);
+                _графика.RotateTransform(90f);
+                break;
+            default:
+                _графика.TranslateTransform(xMm, yMm);
+                break;
+        }
+
+        _графика.DrawString(text, шрифт, кисть, 0f, 0f, StringFormat.GenericTypographic);
+
+        _графика.Restore(состояние);
     }
 
     /// <inheritdoc />

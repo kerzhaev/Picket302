@@ -1,4 +1,4 @@
-using Picket302.Domain.Entities;
+﻿using Picket302.Domain.Entities;
 
 namespace Picket302.Shared.Dtos;
 
@@ -59,6 +59,7 @@ public sealed record PrintTemplateDto(
 /// <param name="YMm">Смещение по вертикали.</param>
 /// <param name="LengthMm">Длина.</param>
 /// <param name="HeightMm">Высота.</param>
+/// <param name="Rotation">Поворот текста в поле, градусов: 0/90/180/270.</param>
 /// <param name="FontName">Имя шрифта.</param>
 /// <param name="FontHeightPt">Кегль в пунктах.</param>
 /// <param name="FontHeightMinPt">Минимальный кегль.</param>
@@ -83,6 +84,7 @@ public sealed record BlankFieldDto(
     decimal YMm,
     decimal LengthMm,
     decimal HeightMm,
+    int Rotation,
     string FontName,
     decimal FontHeightPt,
     decimal FontHeightMinPt,

@@ -1,4 +1,4 @@
-using Picket302.Domain.Entities;
+﻿using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
 
 using Picket302.Infrastructure.Data;
@@ -28,10 +28,10 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
         var идентификатор = await _сессия.ExecuteScalarAsync<long>(
             """
             INSERT INTO blank_fields (template_id, name, kind, page, x_mm, y_mm, length_mm, height_mm,
-                font_name, font_height_pt, font_height_min_pt, font_height_max_pt, is_bold, is_italic,
+                rotation, font_name, font_height_pt, font_height_min_pt, font_height_max_pt, is_bold, is_italic,
                 color_rgb, align, max_chars, is_visible, is_printable, zone_role, clipart_id)
             VALUES (@TemplateId, @Name, @Kind, @Page, @XMm, @YMm, @LengthMm, @HeightMm,
-                @FontName, @FontHeightPt, @FontHeightMinPt, @FontHeightMaxPt, @IsBold, @IsItalic,
+                @Rotation, @FontName, @FontHeightPt, @FontHeightMinPt, @FontHeightMaxPt, @IsBold, @IsItalic,
                 @ColorRgb, @Align, @MaxChars, @IsVisible, @IsPrintable, @ZoneRole, @ClipartId);
             SELECT last_insert_rowid();
             """,
@@ -45,6 +45,7 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
                 field.YMm,
                 field.LengthMm,
                 field.HeightMm,
+                field.Rotation,
                 field.FontName,
                 field.FontHeightPt,
                 field.FontHeightMinPt,
@@ -86,7 +87,7 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
         return await _сессия.ExecuteAsync(
             """
             UPDATE blank_fields SET name = @Name, kind = @Kind, page = @Page, x_mm = @XMm, y_mm = @YMm,
-                length_mm = @LengthMm, height_mm = @HeightMm, font_name = @FontName,
+                length_mm = @LengthMm, height_mm = @HeightMm, rotation = @Rotation, font_name = @FontName,
                 font_height_pt = @FontHeightPt, font_height_min_pt = @FontHeightMinPt,
                 font_height_max_pt = @FontHeightMaxPt, is_bold = @IsBold, is_italic = @IsItalic,
                 color_rgb = @ColorRgb, align = @Align, max_chars = @MaxChars, is_visible = @IsVisible,
@@ -102,6 +103,7 @@ public sealed class BlankFieldRepository : IBlankFieldRepository
                 field.YMm,
                 field.LengthMm,
                 field.HeightMm,
+                field.Rotation,
                 field.FontName,
                 field.FontHeightPt,
                 field.FontHeightMinPt,

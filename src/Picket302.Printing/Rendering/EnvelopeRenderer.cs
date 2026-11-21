@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using Picket302.Domain.Entities;
 using Picket302.Printing.Elements;
 using Picket302.Printing.Engine;
@@ -221,8 +221,11 @@ public sealed class EnvelopeRenderer
                             поле.FontName,
                             (float)результат.FontSizePt,
                             поле.IsBold,
+                            поле.Rotation,
                             лево,
-                            верх + (номерСтроки * высотаСтроки));
+                            верх + (номерСтроки * высотаСтроки),
+                            (float)поле.LengthMm,
+                            (float)поле.HeightMm);
 
                         номерСтроки++;
                     }
