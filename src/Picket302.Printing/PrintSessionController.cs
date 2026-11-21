@@ -255,6 +255,22 @@ public sealed class PrintSessionController
                 .GetByTemplateAsync(шаблон.Id, cancellationToken)
                 .ConfigureAwait(false);
 
+            // Шаблон без полей печатать бессмысленно: получается пустой лист.
+            // Раньше печать молча выдавала пустой конверт, и оператор не
+            // понимал, почему на бумаге ничего нет (21.11.2026).
+            if (поля.Count == 0)
+            {
+                return new PrintResult
+                {
+                    IsSuccess = false,
+                    Status = PrintJobStatus.Failed,
+                    ErrorMessage =
+                        $"У шаблона «{шаблон.Name}» нет ни одного поля — конверт вышел бы пустым. "
+                        + "Выберите шаблон с полями (например, «Конверт C6») или создайте шаблон "
+                        + "через «Сервис → Мастер шаблонов документов».",
+                };
+            }
+
             var элементы = await _данные
                 .GetItemsAsync(request.MailIds, cancellationToken)
                 .ConfigureAwait(false);
