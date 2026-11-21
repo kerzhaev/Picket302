@@ -29,52 +29,6 @@ $реальныйПрофиль = Join-Path $applicationData 'Picket302'
 $sentinel = Join-Path $реальныйПрофиль 'picket302-review-sentinel.tmp'
 $таймаутШага = 30
 
-$exitCode = 1
-$h = $null
-$журнал = [System.Collections.Generic.List[string]]::new()
-$отпечатокДо = $null
-$sentinelДо = $null
-$сценарийПройден = $false
-$неудачиОчистки = [System.Collections.Generic.List[string]]::new()
-$файлEvidence = 'printconfirm-failure-evidence.md'
-$заголовокEvidence = 'F5/F6 runtime-доказательство (FAIL)'
-
-# Раздельные флаги итога (PRINTFLOW PASS только при истинности всех).
-$успех = $false
-$f5Passed = $false
-$f6Passed = $false
-$harnessPassed = $false
-$cleanupPassed = $false
-$profileSafetyPassed = $false
-$unexpectedFired = $false
-$evidenceOk = $false
-$живF5 = $false
-$живF6 = $false
-$убит = $false
-$кодВыходаHarness = $null
-$harnessNotExited = $false
-$hasSelect = $false
-$hasF5 = $false
-$hasF6 = $false
-$отказовStdout = -1
-$финальнаяДельтаNew = -1
-$финальнаяДельтаChanged = -1
-$финальнаяДельтаRemoved = -1
-$фaultПрименён = $false
-$остановка = $null
-
-function Запись([string]$событие) {
-    $срок = "[$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))][pid=$([uint32]$script:h.Proc.Id)] $событие"
-    $журнал.Add($срок)
-    Write-Host $срок
-}
-
-function ДобавитьФлагОчистки([string]$флаг) {
-    if (-not $неудачиОчистки.Contains($флаг)) {
-        $неудачиОчистки.Add($флаг)
-    }
-}
-
 # Ограниченная задержка до первого WM_PAINT и одна повторная попытка.
 # Без неё ранний BitBlt модального MessageBox/диалога предпросмотра может
 # закончиться GDI+ generic error, хотя окно уже найдено через EnumWindows.
@@ -275,6 +229,19 @@ try {
                 Запись "скриншот диалога печати: $(Split-Path -Leaf $скр)"
 
                 Start-Sleep -Milliseconds 500
+
+                # Выбор принтера: приложение по умолчанию ставит первый принтер
+                # в списке спулера (дефект выбора принтера: восстановление
+                # «последнего принтера» затирается SelectedIndex = 0). Для
+                # контролируемого задания нужен принтер, поддерживающий
+                # PrintToFile (Microsoft Print to PDF, порт PORTPROMPT).
+                if (Выбрать-ПринтерВДиалоге $печать 'Print to PDF') {
+                    Запись "Диалог «Печать»: принтер переключён на «$script:выбранныйПринтер»"
+                }
+                else {
+                    Запись 'Диалог «Печать»: Microsoft Print to PDF не найден в списке — печать идёт на принтер по умолчанию'
+                }
+
                 $диалогСКнопкой = Wait-WindowWithButton $pid_ 'Печать' 'Печать' 8
                 if ($null -ne $диалогСКнопкой) {
                     $печать = $диалогСКнопкой.Window
