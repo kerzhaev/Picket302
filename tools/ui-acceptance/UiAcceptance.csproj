@@ -21,6 +21,13 @@
     <AppDllDir Condition="'$(AppDllDir)' == ''">$(MSBuildThisFileDirectory)..\..\src\Picket302.App\bin\x64\Release\net8.0-windows</AppDllDir>
   </PropertyGroup>
 
+  <!-- Шрифт кодового штампа копируется рядом с драйвером: гард печати ищет
+       его в каталоге программы (AppContext.BaseDirectory), и стенд печати
+       иначе воспроизводит блокировку «Не найден шрифт ZIPcode.». -->
+  <ItemGroup>
+    <None Include="..\..\src\Picket302.App\Fonts\ZIPcode.ttf" Link="Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <Reference Include="Picket302.App">
       <HintPath>$(AppDllDir)\Picket302.App.dll</HintPath>

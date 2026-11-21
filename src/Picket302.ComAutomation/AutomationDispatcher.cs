@@ -1518,6 +1518,12 @@ public sealed class ComAutomationEnvironment : IAutomationEnvironment, IDisposab
             var каталог = Path.GetDirectoryName(Path.GetFullPath(_databasePath)) ?? AppContext.BaseDirectory;
 
             var контрольШрифта = new Picket302.Infrastructure.Fonts.ZipcodeFontGuard();
+
+            // Шрифт кодового штампа регистрируется в текущем сеансе и здесь:
+            // маршрут COM-автоматизации печатает конверты без оболочки, и без
+            // регистрации печать блокировалась бы отсутствием шрифта ZIPcode.
+            контрольШрифта.EnsureZipcodeFontInstalled();
+
             var рендерер = new EnvelopeRenderer(new GdiTextMeasurer());
 
             // История печати конвертов (ТЗ §3.1.7, §8.4, функция 64): снимок

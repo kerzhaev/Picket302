@@ -1705,3 +1705,83 @@ function Test-EvidenceWritten([string]$относительныйПуть, [stri
         return $false
     }
 }
+
+# Win32-доступ к ComboBox диалога печати (выбор принтера для контролируемого
+# задания). Тип объявлен здесь, чтобы им пользовались все сценарии печати.
+if (-not ('P302Combo' -as [type])) {
+    Add-Type @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+
+public static class P302Combo
+{
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetParent(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    public static extern int GetDlgCtrlID(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, StringBuilder lParam);
+
+    public const uint WM_COMMAND = 0x0111;
+    public const int CBN_SELCHANGE = 1;
+    public const uint CB_GETCOUNT = 0x0146;
+    public const uint CB_GETLBTEXT = 0x0148;
+    public const uint CB_SETCURSEL = 0x014E;
+}
+'@
+}
+
+function Выбрать-ПринтерВДиалоге([IntPtr]$диалог, [string]$фрагмент) {
+    if ($диалог -eq [IntPtr]::Zero) { return $false }
+
+    # Флаги объявляются в области скрипта: присваивание внутри делегата
+    # выполняется в собственной области scriptblock, и обычная переменная
+    # наружу не возвращается.
+    $script:выбранныйПринтер = ''
+    $script:принтерВыбран = $false
+
+    [AccWin]::EnumChildWindows($диалог, {
+        param($h, $l)
+
+        $класс = New-Object System.Text.StringBuilder 64
+        [void][AccWin]::GetClassName($h, $класс, 64)
+
+        # WinForms: имя класса элемента — «WindowsForms10.COMBOBOX.app.…»,
+        # поэтому проверяется вхождение «COMBOBOX», а не точное равенство.
+        if ($класс.ToString().ToUpperInvariant() -notlike '*COMBOBOX*') { return $true }
+
+        $количество = [int][P302Combo]::SendMessage($h, [P302Combo]::CB_GETCOUNT, [IntPtr]::Zero, [IntPtr]::Zero)
+
+        for ($i = 0; $i -lt $количество; $i++) {
+            $буфер = New-Object System.Text.StringBuilder 512
+            [void][P302Combo]::SendMessage($h, [P302Combo]::CB_GETLBTEXT, [IntPtr]$i, $буфер)
+
+            if ($буфер.ToString() -like "*$фрагмент*") {
+                [void][P302Combo]::SendMessage($h, [P302Combo]::CB_SETCURSEL, [IntPtr]$i, [IntPtr]::Zero)
+
+                # Уведомление CBN_SELCHANGE обязательно: WinForms держит
+                # SelectedIndex в собственном кэше и обновляет его только по
+                # уведомлению. Без него приложение считает выбранным прежний
+                # принтер и печатает не на тот (дефект выбора принтера).
+                $родитель = [P302Combo]::GetParent($h)
+                $идентификатор = [P302Combo]::GetDlgCtrlID($h)
+                $код = [IntPtr](($идентификатор -band 0xFFFF) -bor ([P302Combo]::CBN_SELCHANGE -shl 16))
+                [void][P302Combo]::SendMessage($родитель, [P302Combo]::WM_COMMAND, $код, $h)
+
+                $script:выбранныйПринтер = $буфер.ToString()
+                $script:принтерВыбран = $true
+                break
+            }
+        }
+
+        return $true
+    }, [IntPtr]::Zero) | Out-Null
+
+    return [bool]$script:принтерВыбран
+}

@@ -476,7 +476,7 @@ static void Выполнить(MainShell окно, string команда, AppSer
                     continue;
                 }
 
-                var контрагент = состав.Контрагенты.GetByIdAsync(идентификатор).GetAwaiter().GetResult();
+                var контрагент = состав.Данные.ПолучитьКонтрагентаAsync(идентификатор).GetAwaiter().GetResult();
 
                 if (контрагент is null || контрагент.GetAddress(контрагент.AddressMainType) is not null)
                 {
@@ -832,7 +832,7 @@ static void Выполнить(MainShell окно, string команда, AppSer
 /// </summary>
 static async Task ЗасеятьПолучателяБезАдреса(AppServices состав)
 {
-    var отправитель = await состав.Контрагенты.AddAsync(new Counterparty
+    var отправитель = await ДобавитьКонтрагента(состав,new Counterparty
     {
         Type = CounterpartyType.LegalEntity,
         Name = "ООО «Отправитель Приёмки»",
@@ -848,7 +848,7 @@ static async Task ЗасеятьПолучателяБезАдреса(AppServic
     // Получатель БЕЗ адреса: PostalAddress не задаётся вовсе, поэтому
     // контрагент.GetAddress(AddressMainType) возвращает null — ровно то
     // состояние, которое обязано обрабатываться сообщением, а не печатью.
-    await состав.Контрагенты.AddAsync(new Counterparty
+    await ДобавитьКонтрагента(состав,new Counterparty
     {
         Type = CounterpartyType.LegalEntity,
         Name = "ООО «Получатель Без Адреса»",
@@ -857,7 +857,7 @@ static async Task ЗасеятьПолучателяБезАдреса(AppServic
         CreatedAt = DateTime.UtcNow,
     }).ConfigureAwait(false);
 
-    состав.ТекущийОтправитель.SetGlobalSender(отправитель);
+    состав.ТекущийОтправитель.SetGlobalSender(отправитель.Id);
     состав.ТекущийОтправитель.Load();
 
     // Шаблон нужен, чтобы сценарий дошёл до печатного конвейера в тех случаях,
@@ -884,7 +884,7 @@ static async Task ЗасеятьПолучателяБезАдреса(AppServic
 /// </summary>
 static async Task ЗасеятьДемонстрационныеДанные(AppServices состав)
 {
-    var отправитель = await состав.Контрагенты.AddAsync(new Counterparty
+    var отправитель = await ДобавитьКонтрагента(состав,new Counterparty
     {
         Type = CounterpartyType.LegalEntity,
         Name = "ООО «Отправитель Приёмки»",
@@ -898,7 +898,7 @@ static async Task ЗасеятьДемонстрационныеДанные(App
             ["ООО «Отправитель Приёмки»", "Управление делами", "ул. Тверская, 12", "корп. 2", "г. Москва", string.Empty]).Value,
     }).ConfigureAwait(false);
 
-    await состав.Контрагенты.AddAsync(new Counterparty
+    await ДобавитьКонтрагента(состав,new Counterparty
     {
         Type = CounterpartyType.LegalEntity,
         Name = "ООО «Получатель Приёмки»",
@@ -913,7 +913,7 @@ static async Task ЗасеятьДемонстрационныеДанные(App
 
     // Очень длинные значения: длинное наименование, длинная строка адреса и
     // длинный индекс — проверка читаемости без обрезания.
-    await состав.Контрагенты.AddAsync(new Counterparty
+    await ДобавитьКонтрагента(состав,new Counterparty
     {
         Type = CounterpartyType.LegalEntity,
         Name = "Общество с ограниченной ответственностью «Промышленно-внедренческая компания «Восток-Запад-Инвест»",
@@ -933,7 +933,7 @@ static async Task ЗасеятьДемонстрационныеДанные(App
             ]).Value,
     }).ConfigureAwait(false);
 
-    состав.ТекущийОтправитель.SetGlobalSender(отправитель);
+    состав.ТекущийОтправитель.SetGlobalSender(отправитель.Id);
     состав.ТекущийОтправитель.Load();
 
     // Шаблон печати НЕ сеется: сценарий «нет шаблона» (S4) обязан видеть
@@ -960,7 +960,7 @@ static void ПоказатьДиалог(MainShell окно, AppServices сос�
             // Карточка открывается для РЕАЛЬНОГО контрагента: иначе снимок
             // показывает пустую форму, а не рабочее состояние.
             "counterparty" => new Picket302.App.UI.Forms.FormCounterpartyEdit(
-                состав.Контрагенты.GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 10))
+                состав.Данные.ПолучитьКонтрагентовAsync(new Picket302.Domain.Common.PageRequest(0, 10))
                     .GetAwaiter().GetResult().Items.FirstOrDefault()),
             "mailedit" => new Picket302.App.UI.Forms.FormMailEdit(),
             "gridappearance" => new Picket302.App.UI.Forms.FormGridAppearance(
@@ -1278,13 +1278,29 @@ static void ПоказатьМенюФильтров(MainShell окно)
 /// </summary>
 static void СчитатьОтправления(AppServices состав)
 {
-    var страница = состав.Письма
-        .GetPagedAsync(new Picket302.Domain.Common.PageRequest(0, 500))
+    var страница = состав.Данные
+        .ПолучитьПисьмаAsync(new Picket302.Domain.Common.PageRequest(0, 500))
         .GetAwaiter()
         .GetResult();
 
     Console.Out.WriteLine($"MAILCOUNT всего={страница.TotalCount}");
     Console.Out.Flush();
+}
+
+/// <summary>
+/// Создание контрагента через штатный шлюз данных (волна 2 убрала прямые
+/// репозитории из AppServices: сидеры работают тем же путём, что и оболочка).
+/// </summary>
+static async Task<Counterparty> ДобавитьКонтрагента(AppServices состав, Counterparty контрагент)
+{
+    var результат = await состав.Данные.СохранитьКонтрагентаAsync(контрагент).ConfigureAwait(false);
+
+    if (результат.IsFailure)
+    {
+        throw new InvalidOperationException("Сбой сидера контрагента: " + результат.Error);
+    }
+
+    return результат.Value;
 }
 
 static int ЧислоСтрок(DataGridView таблица)
@@ -1347,7 +1363,7 @@ static bool Нажать(MainShell окно, string текст)
 
 static async Task ЗасеятьОтправителяИПолучателя(AppServices состав)
 {
-    var отправитель = await состав.Контрагенты.AddAsync(new Counterparty
+    var отправитель = await ДобавитьКонтрагента(состав,new Counterparty
     {
         Type = CounterpartyType.LegalEntity,
         Name = "ООО «Отправитель Приёмки»",
@@ -1360,7 +1376,7 @@ static async Task ЗасеятьОтправителяИПолучателя(App
             ["ООО «Отправитель Приёмки»", "Управление делами", "ул. Тверская, 12", "корп. 2", "г. Москва", string.Empty]).Value,
     }).ConfigureAwait(false);
 
-    await состав.Контрагенты.AddAsync(new Counterparty
+    await ДобавитьКонтрагента(состав,new Counterparty
     {
         Type = CounterpartyType.LegalEntity,
         Name = "ООО «Получатель Приёмки»",
@@ -1374,7 +1390,7 @@ static async Task ЗасеятьОтправителяИПолучателя(App
 
     // Текущий отправитель сохраняется в настройках интерфейса изолированного
     // профиля: печатный поток F5 требует выбранного отправителя.
-    состав.ТекущийОтправитель.SetGlobalSender(отправитель);
+    состав.ТекущийОтправитель.SetGlobalSender(отправитель.Id);
     состав.ТекущийОтправитель.Load();
 
     // Конвертный шаблон: печать требует выбранного шаблона; в пустом

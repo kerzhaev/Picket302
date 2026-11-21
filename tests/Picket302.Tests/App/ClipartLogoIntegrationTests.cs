@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using Picket302.App;
 using Picket302.App.UI.Forms;
 using Picket302.Application.Services;
@@ -281,6 +281,22 @@ public sealed class ClipartLogoIntegrationTests
         public void DrawRectangleMm(float xMm, float yMm, float widthMm, float heightMm)
         {
         }
+
+
+            /// <summary>
+            /// Отрисовка заданным семейством: фикстура записывает обращение так же,
+            /// как и вариант с именем гарнитуры.
+            /// </summary>
+            public void DrawStringMm(
+                string text,
+                FontFamily family,
+                float widthMm,
+                float heightMm,
+                float xMm,
+                float yMm)
+            {
+                DrawStringMm(text, family.Name, widthMm, heightMm, xMm, yMm);
+            }
 
         public void DrawImageMm(Image image, float xMm, float yMm, float widthMm, float heightMm) =>
             Изображения.Add((xMm, yMm, widthMm, heightMm));

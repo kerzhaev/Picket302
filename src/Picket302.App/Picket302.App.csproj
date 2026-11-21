@@ -33,6 +33,14 @@
     <None Update="UI\Editors\emailedit\*.css" CopyToOutputDirectory="PreserveNewest" Link="emailedit\%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- Шрифт кодового штампа ZIPcode поставляется рядом с программой: без него
+       печать конверта блокируется (ТЗ §6.3; §8.6, функция 90). Гард
+       ZipcodeFontGuard ищет файл в каталоге программы и в подкаталоге Fonts
+       и регистрирует шрифт в текущем сеансе при старте. -->
+  <ItemGroup>
+    <None Update="Fonts\ZIPcode.ttf" CopyToOutputDirectory="PreserveNewest" Link="Fonts\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <!-- COM-сервер автоматизации поставляется рядом с оболочкой: при регистрации
        в ветку LocalServer32 записывается путь к исполняемому файлу сервера,
        а не оболочки (ТЗ §8.9, функция 114; §9.1 «ProgID PEPro.Application»).
@@ -86,6 +94,7 @@
       <PublishRequiredFile Include="$(PublishDir)lang\ru.xml" />
       <PublishRequiredFile Include="$(PublishDir)lng\Rub.lng" />
       <PublishRequiredFile Include="$(PublishDir)Resources\Toponyms\regions.txt" />
+      <PublishRequiredFile Include="$(PublishDir)Fonts\ZIPcode.ttf" />
     </ItemGroup>
     <ItemGroup>
       <PublishMissingFile Include="@(PublishRequiredFile)" Condition="!Exists('%(Identity)')" />

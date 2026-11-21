@@ -1,4 +1,4 @@
-using Picket302.Printing.Elements;
+﻿using Picket302.Printing.Elements;
 using Xunit;
 
 namespace Picket302.Tests.Printing;
@@ -34,6 +34,18 @@ public sealed class ServiceStampRendererTests
 
         public void DrawImageMm(System.Drawing.Image image, float xMm, float yMm, float widthMm, float heightMm)
         {
+        }
+
+        /// <summary>Отрисовка заданным семейством — как и вариант по имени.</summary>
+        public void DrawStringMm(
+            string text,
+            System.Drawing.FontFamily family,
+            float widthMm,
+            float heightMm,
+            float xMm,
+            float yMm)
+        {
+            DrawStringMm(text, family.Name, widthMm, heightMm, xMm, yMm);
         }
     }
 

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Reflection;
@@ -1223,8 +1223,13 @@ public sealed class AcceptanceScenarioTests : IDisposable
     /// </summary>
     private sealed class ШрифтДоступен : IZipcodeFontGuard
     {
+        /// <summary>Семейство-заглушка: стенд приёмки не рендерит индекс.</summary>
+        private static readonly System.Drawing.FontFamily Семейство = new("Tahoma");
+
         public bool IsZipcodeFontAvailable => true;
 
         public bool EnsureZipcodeFontInstalled() => true;
+
+        public System.Drawing.FontFamily? PostIndexFontFamily => Семейство;
     }
 }

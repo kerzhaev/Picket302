@@ -60,6 +60,41 @@ public sealed class GdiGraphicsContext : IGraphicsContext
             FontStyle.Regular,
             GraphicsUnit.Point);
 
+        Отрисовать(text, шрифт, widthMm, heightMm, xMm, yMm);
+    }
+
+    /// <inheritdoc />
+    public void DrawStringMm(
+        string text,
+        FontFamily family,
+        float widthMm,
+        float heightMm,
+        float xMm,
+        float yMm)
+    {
+        ArgumentNullException.ThrowIfNull(family);
+
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        using var шрифт = new Font(family, 100f, FontStyle.Regular, GraphicsUnit.Point);
+
+        Отрисовать(text, шрифт, widthMm, heightMm, xMm, yMm);
+    }
+
+    /// <summary>
+    /// Рисует строку готовым шрифтом в заданный габарит (мм).
+    /// </summary>
+    private void Отрисовать(
+        string text,
+        Font шрифт,
+        float widthMm,
+        float heightMm,
+        float xMm,
+        float yMm)
+    {
         var формат = StringFormat.GenericTypographic;
         var естественный = _графика.MeasureString(text, шрифт, int.MaxValue, формат);
 

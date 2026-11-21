@@ -157,6 +157,13 @@ public sealed class AppServices : IAsyncDisposable
             ?? AppContext.BaseDirectory;
 
         var контрольШрифта = new ZipcodeFontGuard();
+
+        // Шрифт кодового штампа поставляется с программой и регистрируется в
+        // текущем сеансе: без этого печать конверта блокируется сообщением
+        // «Не найден шрифт ZIPcode.» (ТЗ §6.3; §8.6, функция 90). Регистрация
+        // идёт один раз за запуск и ничего не меняет, если шрифт уже есть.
+        контрольШрифта.EnsureZipcodeFontInstalled();
+
         var измеритель = new GdiTextMeasurer();
         КлипартБиблиотека = new ClipartLibrary();
         var рендерер = new EnvelopeRenderer(измеритель, id => { КлипартБиблиотека!.TryGet(id, out var png); return png; });
@@ -340,6 +347,13 @@ public sealed class AppServices : IAsyncDisposable
             ?? AppContext.BaseDirectory;
 
         var контрольШрифта = new ZipcodeFontGuard();
+
+        // Шрифт кодового штампа поставляется с программой и регистрируется в
+        // текущем сеансе: без этого печать конверта блокируется сообщением
+        // «Не найден шрифт ZIPcode.» (ТЗ §6.3; §8.6, функция 90). Регистрация
+        // идёт один раз за запуск и ничего не меняет, если шрифт уже есть.
+        контрольШрифта.EnsureZipcodeFontInstalled();
+
         var измеритель = new GdiTextMeasurer();
         КлипартБиблиотека = new ClipartLibrary();
         var рендерер = new EnvelopeRenderer(измеритель, id => { КлипартБиблиотека!.TryGet(id, out var png); return png; });
