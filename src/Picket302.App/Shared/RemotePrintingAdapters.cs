@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Picket302.Domain.Common;
+using Picket302.Domain.Dictionaries;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
 using Picket302.Printing;
@@ -467,7 +468,7 @@ public sealed class RemotePrintDataSource : IPrintDataSource
             .Select(элемент => new PrintableItem
             {
                 Id = элемент.Id,
-                Values = элемент.Values,
+                Values = FieldDictionary.NormalizePrintValues(элемент.Values),
                 LogoBytes = элемент.LogoBytes,
             })
             .ToArray();
