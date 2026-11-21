@@ -1,3 +1,5 @@
+using System.Drawing;
+
 namespace Picket302.Printing.Elements;
 
 /// <summary>
@@ -5,13 +7,26 @@ namespace Picket302.Printing.Elements;
 /// <c>Infrastructure.Fonts.ZipcodeFontGuard</c>).
 /// </summary>
 /// <remarks>
+/// <para>
 /// Шрифт ZIPcode поставляется с программой. Скрытый фолбэк на Arial/Times
 /// запрещён: при отсутствии шрифта печать конверта блокируется.
+/// </para>
+/// <para>
+/// Шрифт берётся ДВАЖДЫ: из файла комплекта поставки (через приватную
+/// коллекцию — файл виден сразу, без установки в системе) и, если он
+/// установлен в системе, из системного списка. Причина: вызов
+/// <c>AddFontResourceW</c> в текущем процессе GDI+ НЕ видит — гарнитура
+/// «ZIPcode» не появляется в перечислении установленных шрифтов, и
+/// <c>Font("ZIPcode")</c> молча подменяется на «Microsoft Sans Serif».
+/// На конверте это даёт пустой или бессмысленный индекс. Поэтому индекс
+/// рисуется семейством, полученным от гарда, а не поиском по имени.
+/// </para>
 /// </remarks>
 public interface IZipcodeFontGuard
 {
     /// <summary>
-    /// Признак доступности шрифта ZIPcode в системе.
+    /// Признак доступности шрифта ZIPcode: он установлен в системе либо
+    /// присутствует в комплекте поставки.
     /// </summary>
     bool IsZipcodeFontAvailable { get; }
 
@@ -21,4 +36,14 @@ public interface IZipcodeFontGuard
     /// </summary>
     /// <returns><see langword="true"/>, если шрифт доступен.</returns>
     bool EnsureZipcodeFontInstalled();
+
+    /// <summary>
+    /// Семейство шрифта для отрисовки кодового штампа.
+    /// </summary>
+    /// <remarks>
+    /// Возвращается системная гарнитура, если шрифт установлен, иначе —
+    /// семейство из файла комплекта поставки. <see langword="null"/> — шрифт
+    /// недоступен, печать кодового штампа должна быть заблокирована.
+    /// </remarks>
+    FontFamily? PostIndexFontFamily { get; }
 }

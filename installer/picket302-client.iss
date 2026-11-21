@@ -89,6 +89,13 @@ Name: "postinstall"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: checke
 ; Всё содержимое опубликованной сборки оболочки. Отладка (PDB) и исходные
 ; файлы интерфейса (IDL) в поставку не входят.
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: "*.pdb,*.idl"
+; Шрифт кодового штампа ставится в каталог шрифтов пользователя и
+; регистрируется в ветке HKCU: без этого гарнитуру «ZIPcode» не видят ни
+; драйвер принтера, ни предпросмотр — на конверте вместо индекса выходит
+; пустота. Сама программа печатает индекс шрифтом из файла комплекта
+; (Fonts\ZIPcode.ttf) и без установки в систему; установка нужна прочим
+; программам и предпросмотру.
+Source: "{#PublishDir}\Fonts\ZIPcode.ttf"; DestDir: "{autofonts}"; FontInstallName: "ZIPcode"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"

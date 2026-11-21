@@ -37,6 +37,28 @@ public interface IGraphicsContext
         float yMm);
 
     /// <summary>
+    /// Рисует строку текста заданным семейством шрифта.
+    /// </summary>
+    /// <remarks>
+    /// Используется для кодового штампа: гарнитура «ZIPcode» может быть не
+    /// видна GDI+ в списке установленных шрифтов, и создание шрифта по имени
+    /// молча подменяется на «Microsoft Sans Serif». Семейство передаётся явно.
+    /// </remarks>
+    /// <param name="text">Текст.</param>
+    /// <param name="family">Семейство шрифта.</param>
+    /// <param name="widthMm">Ширина габарита текста, мм.</param>
+    /// <param name="heightMm">Высота габарита текста, мм.</param>
+    /// <param name="xMm">Положение по горизонтали, мм.</param>
+    /// <param name="yMm">Положение по вертикали, мм.</param>
+    void DrawStringMm(
+        string text,
+        FontFamily family,
+        float widthMm,
+        float heightMm,
+        float xMm,
+        float yMm);
+
+    /// <summary>
     /// Рисует строку текста с явным кеглем и начертанием (ТЗ §8.3: отметки
     /// «Заказное»/«С уведомлением» — 12pt bold).
     /// </summary>

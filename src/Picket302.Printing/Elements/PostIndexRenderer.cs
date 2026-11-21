@@ -158,11 +158,23 @@ public sealed class PostIndexRenderer
         var знаки = ОпределитьЗнаки(zip, spec);
         var масштаб = ВычислитьМасштаб(spec);
 
+        // Семейство берётся у гарда: гарнитура «ZIPcode» может отсутствовать в
+        // перечислении установленных шрифтов (файл комплекта поставки не
+        // регистрируется в системе), и создание шрифта по имени молча дало бы
+        // «Microsoft Sans Serif» — на конверте вместо индекса печаталась бы
+        // бессмыслица.
+        var семейство = _шрифт.PostIndexFontFamily;
+
+        if (семейство is null)
+        {
+            throw new PostIndexBlockedException("Не найден шрифт ZIPcode.");
+        }
+
         for (var индекс = 0; индекс < знаки.Count; индекс++)
         {
             context.DrawStringMm(
                 знаки[индекс],
-                spec.FontName,
+                семейство,
                 (float)(spec.DigitWidthMm * масштаб),
                 (float)(spec.DigitHeightMm * масштаб),
                 spec.OriginXMm + (float)(индекс * spec.AdvanceMm * масштаб),

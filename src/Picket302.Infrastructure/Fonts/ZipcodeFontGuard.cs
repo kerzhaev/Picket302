@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
 using Picket302.Printing.Elements;
@@ -9,11 +10,23 @@ namespace Picket302.Infrastructure.Fonts;
 /// <c>Infrastructure.Fonts.ZipcodeFontGuard</c>).
 /// </summary>
 /// <remarks>
-/// Шрифт ZIPcode поставляется с программой и регистрируется в текущем сеансе
-/// вызовом <c>AddFontResourceW</c> и записью в раздел
-/// <c>HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts</c>. Скрытая
-/// подмена на Arial/Times не допускается: при отсутствии шрифта печать
-/// конверта блокируется.
+/// <para>
+/// Шрифт ZIPcode поставляется с программой и доступен в двух видах:
+/// установлен в системе (тогда он виден в перечислении гарнитур) либо
+/// лежит файлом в комплекте поставки (тогда он загружается приватной
+/// коллекцией). Скрытая подмена на Arial/Times не допускается: при
+/// отсутствии шрифта печать конверта блокируется.
+/// </para>
+/// <para>
+/// Регистрация в сеансе (<c>AddFontResourceW</c> + запись в
+/// <c>HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts</c>) выполняется
+/// для других процессов (COM-сервер, предпросмотр). Собственный процесс
+/// GDI+ шрифт, зарегистрированный таким способом, НЕ видит: гарнитура не
+/// появляется в перечислении установленных шрифтов, и создание
+/// <c>Font("ZIPcode")</c> молча даёт «Microsoft Sans Serif». Поэтому
+/// отрисовка идёт семейством <see cref="PostIndexFontFamily"/>, а не поиском
+/// по имени.
+/// </para>
 /// </remarks>
 public sealed class ZipcodeFontGuard : IZipcodeFontGuard
 {
@@ -26,6 +39,12 @@ public sealed class ZipcodeFontGuard : IZipcodeFontGuard
     private const string RegistryPath = @"Software\Microsoft\Windows NT\CurrentVersion\Fonts";
 
     private readonly string? _каталогШрифтов;
+
+    /// <summary>Приватная коллекция шрифтов комплекта поставки.</summary>
+    private PrivateFontCollection? _приватныеШрифты;
+
+    /// <summary>Семейство, загруженное из файла комплекта поставки.</summary>
+    private FontFamily? _семействоИзФайла;
 
     /// <summary>
     /// Создаёт контроль шрифта.
@@ -44,17 +63,36 @@ public sealed class ZipcodeFontGuard : IZipcodeFontGuard
     {
         get
         {
-            using var коллекция = new InstalledFontCollection();
-
-            foreach (var семейство in коллекция.Families)
+            if (СистемныйШрифтДоступен())
             {
-                if (string.Equals(семейство.Name, FontName, StringComparison.OrdinalIgnoreCase))
+                return true;
+            }
+
+            // Файл комплекта поставки — полноценный источник шрифта: приватная
+            // коллекция видит его сразу, без установки в системе.
+            return ЗагрузитьШрифтИзФайла() is not null;
+        }
+    }
+
+    /// <inheritdoc />
+    public FontFamily? PostIndexFontFamily
+    {
+        get
+        {
+            if (СистемныйШрифтДоступен())
+            {
+                using var коллекция = new InstalledFontCollection();
+
+                foreach (var семейство in коллекция.Families)
                 {
-                    return true;
+                    if (string.Equals(семейство.Name, FontName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return семейство;
+                    }
                 }
             }
 
-            return false;
+            return ЗагрузитьШрифтИзФайла();
         }
     }
 
@@ -73,6 +111,8 @@ public sealed class ZipcodeFontGuard : IZipcodeFontGuard
             return false;
         }
 
+        // Регистрация в сеансе нужна другим процессам; собственный процесс
+        // использует приватную коллекцию (см. PostIndexFontFamily).
         var добавлено = AddFontResourceW(путь);
 
         if (добавлено == 0)
@@ -83,6 +123,69 @@ public sealed class ZipcodeFontGuard : IZipcodeFontGuard
         RegisterInUserRegistry(путь);
 
         return IsZipcodeFontAvailable;
+    }
+
+    /// <summary>
+    /// Проверяет, установлен ли шрифт в системе (перечисление GDI+).
+    /// </summary>
+    /// <returns><see langword="true"/>, если гарнитура есть в системе.</returns>
+    private static bool СистемныйШрифтДоступен()
+    {
+        using var коллекция = new InstalledFontCollection();
+
+        foreach (var семейство in коллекция.Families)
+        {
+            if (string.Equals(семейство.Name, FontName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Загружает шрифт из файла комплекта поставки в приватную коллекцию.
+    /// </summary>
+    /// <returns>Семейство шрифта либо <see langword="null"/>.</returns>
+    private FontFamily? ЗагрузитьШрифтИзФайла()
+    {
+        if (_семействоИзФайла is not null)
+        {
+            return _семействоИзФайла;
+        }
+
+        var путь = ResolveFontPath();
+
+        if (путь is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            // Коллекция живёт вместе с гардом: семейство из неё нельзя
+            // использовать после освобождения коллекции.
+            _приватныеШрифты ??= new PrivateFontCollection();
+            _приватныеШрифты.AddFontFile(путь);
+
+            foreach (var семейство in _приватныеШрифты.Families)
+            {
+                if (string.Equals(семейство.Name, FontName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _семействоИзФайла = семейство;
+                    return _семействоИзФайла;
+                }
+            }
+        }
+#pragma warning disable CA1031 // Ошибка загрузки шрифта означает его недоступность.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            _семействоИзФайла = null;
+        }
+
+        return null;
     }
 
     private string? ResolveFontPath()
@@ -126,7 +229,7 @@ public sealed class ZipcodeFontGuard : IZipcodeFontGuard
 #pragma warning restore CA1031
         {
             // Регистрация в реестре — вспомогательное действие: отсутствие
-            // записи не отменяет регистрацию шрифта в сеансе.
+            // записи не отменяет использование шрифта из комплекта поставки.
         }
     }
 
