@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 
 namespace Picket302.Printing.Elements;
 
@@ -75,6 +75,38 @@ public interface IGraphicsContext
         bool bold,
         float xMm,
         float yMm);
+
+    /// <summary>
+    /// Рисует строку текста заданным кеглем с поворотом в пределах поля.
+    /// </summary>
+    /// <remarks>
+    /// Поворот нужен для конвертов: адрес печатается вертикальной колонкой,
+    /// снизу вверх — по рамкам бланка Почты России.
+    /// </remarks>
+    /// <param name="text">Текст.</param>
+    /// <param name="fontName">Гарнитура шрифта.</param>
+    /// <param name="sizePt">Кегль, пунктов.</param>
+    /// <param name="bold">Полужирное начертание.</param>
+    /// <param name="rotation">Поворот, градусов: 0/90/180/270.</param>
+    /// <param name="xMm">Положение поля по горизонтали, мм.</param>
+    /// <param name="yMm">Положение поля по вертикали, мм.</param>
+    /// <param name="widthMm">Ширина поля, мм.</param>
+    /// <param name="heightMm">Высота поля, мм.</param>
+    void DrawStringMm(
+        string text,
+        string fontName,
+        float sizePt,
+        bool bold,
+        int rotation,
+        float xMm,
+        float yMm,
+        float widthMm,
+        float heightMm)
+    {
+        // Реализация по умолчанию: поворот игнорируется, текст рисуется без
+        // него. Собственный поворот реализует контекст на графике.
+        DrawStringMm(text, fontName, sizePt, bold, xMm, yMm);
+    }
 
     /// <summary>Рисует контур прямоугольника.</summary>
     /// <param name="xMm">Положение по горизонтали, мм.</param>

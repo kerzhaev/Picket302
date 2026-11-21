@@ -252,18 +252,10 @@ public sealed class FormPrintPreview : Form
             событие.Graphics.DrawRectangle(границы, левая, верх, ширина, высота);
         }
 
-        foreach (var поле in _документ.Fields)
-        {
-            using var контур = new Pen(Color.FromArgb(120, 0, 0, 255), 1f);
-
-            var левая = прямоугольник.Left + (поле.Bounds.X * пиксельНаМм * (float)масштаб);
-            var верх = прямоугольник.Top + (поле.Bounds.Y * пиксельНаМм * (float)масштаб);
-            var ширина = поле.Bounds.Width * пиксельНаМм * (float)масштаб;
-            var высота = поле.Bounds.Height * пиксельНаМм * (float)масштаб;
-
-            событие.Graphics.DrawRectangle(контур, левая, верх, ширина, высота);
-        }
-
+        // Контуры полей в предпросмотре не рисуются: оператор должен видеть
+        // лист таким, каким он уйдёт на печать, а не сетку прямоугольников
+        // (21.11.2026). Границы полей остаются в редакторе бланка, где они
+        // нужны для расстановки.
         if (!string.IsNullOrEmpty(_документ.BannerMessage))
         {
             using var шрифт = EnvelopeUiTheme.ШрифтТекста(9f);

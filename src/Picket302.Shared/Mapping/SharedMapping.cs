@@ -1,4 +1,4 @@
-using Picket302.Domain.Common;
+﻿using Picket302.Domain.Common;
 using Picket302.Domain.Contracts;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
@@ -532,6 +532,7 @@ public static class SharedMapping
         поле.YMm,
         поле.LengthMm,
         поле.HeightMm,
+        поле.Rotation,
         поле.FontName,
         поле.FontHeightPt,
         поле.FontHeightMinPt,
@@ -563,6 +564,7 @@ public static class SharedMapping
         YMm = dto.YMm,
         LengthMm = dto.LengthMm,
         HeightMm = dto.HeightMm,
+        Rotation = dto.Rotation,
         FontName = dto.FontName ?? "Tahoma",
         FontHeightPt = dto.FontHeightPt,
         FontHeightMinPt = dto.FontHeightMinPt,

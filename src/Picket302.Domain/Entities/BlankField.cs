@@ -1,4 +1,4 @@
-namespace Picket302.Domain.Entities;
+﻿namespace Picket302.Domain.Entities;
 
 /// <summary>
 /// Координатная сетка полей бланка (ТЗ §3.1.5, таблица <c>blank_fields</c>).
@@ -31,6 +31,15 @@ public sealed class BlankField
 
     /// <summary>Высота поля, мм.</summary>
     public decimal HeightMm { get; set; }
+
+    /// <summary>
+    /// Поворот текста в поле, градусов: 0/90/180/270.
+    /// </summary>
+    /// <remarks>
+    /// На конвертах адрес печатается вертикальной колонкой (снизу вверх) —
+    /// так напечатаны рамки на бланках Почты России.
+    /// </remarks>
+    public int Rotation { get; set; }
 
     /// <summary>Гарнитура шрифта.</summary>
     public string FontName { get; set; } = "Tahoma";
