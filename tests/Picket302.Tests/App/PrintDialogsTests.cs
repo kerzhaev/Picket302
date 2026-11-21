@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 using Picket302.App.UI.Forms;
 using Picket302.Domain.Entities;
@@ -32,6 +32,12 @@ public sealed class PrintDialogsTests
         "PORTPROMPT:",
         PrinterState.Ready,
         IsDefault: true);
+
+    private static readonly PrinterDescriptor ПринтерНеПоУмолчанию = new(
+        "PDF-XChange 5.0 for ABBYY",
+        "PDF-XChange5-ABBYY",
+        PrinterState.Ready,
+        IsDefault: false);
 
     /// <summary>
     /// Обходит форму рекурсивно: после перевода диалога на TableLayoutPanel
@@ -350,4 +356,65 @@ public sealed class PrintDialogsTests
             Сообщение = message;
         }
     }
+
+    /// <summary>
+    /// Регрессия P2-1 (прогон 21.11.2026): последний использованный принтер
+    /// восстанавливается по ИМЕНИ (хранится имя, а не строка «Имя — Состояние»).
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_ПоследнийПринтер_ВосстанавливаетсяПоИмени()
+    {
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6") },
+            new[] { ПринтерНеПоУмолчанию, Принтер },
+            показатьСписокШаблонов: true,
+            последнийПринтер: "PDF-XChange 5.0 for ABBYY");
+
+        Assert.Equal("PDF-XChange 5.0 for ABBYY", форма.ВыбранныйПринтер?.Name);
+    }
+
+    /// <summary>
+    /// Регрессия P2-1: без сохранённого принтера выбирается принтер Windows по
+    /// умолчанию, даже если он не первый в перечислении (раньше всегда первый).
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_БезПоследнего_ВыбираетсяПринтерПоУмолчанию()
+    {
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6") },
+            new[] { ПринтерНеПоУмолчанию, Принтер },
+            показатьСписокШаблонов: true);
+
+        Assert.Equal("Microsoft Print to PDF", форма.ВыбранныйПринтер?.Name);
+    }
+
+    /// <summary>
+    /// Пропавший последний принтер — безопасный откат к принтеру по умолчанию.
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_ПропавшийПоследний_ОткатКПринтеруПоУмолчанию()
+    {
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6") },
+            new[] { ПринтерНеПоУмолчанию, Принтер },
+            показатьСписокШаблонов: true,
+            последнийПринтер: "Принтер Которого Нет");
+
+        Assert.Equal("Microsoft Print to PDF", форма.ВыбранныйПринтер?.Name);
+    }
+
+    /// <summary>
+    /// Нет ни сохранённого, ни принтера по умолчанию — первый в перечислении.
+    /// </summary>
+    [Fact]
+    public void FormEnvelopePrint_БезПоследнегоИБезDefault_ПервыйВСписке()
+    {
+        using var форма = new FormEnvelopePrint(
+            new[] { Шаблон(1, "Конверт C6") },
+            new[] { ПринтерНеПоУмолчанию },
+            показатьСписокШаблонов: true);
+
+        Assert.Equal("PDF-XChange 5.0 for ABBYY", форма.ВыбранныйПринтер?.Name);
+    }
+
 }
