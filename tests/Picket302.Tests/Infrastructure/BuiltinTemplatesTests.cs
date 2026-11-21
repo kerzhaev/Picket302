@@ -99,6 +99,56 @@ public sealed class BuiltinTemplatesTests
         }
     }
 
+    /// <summary>
+    /// ГОСТ Р 51506-99: на стандартных конвертах серии адрес отправителя —
+    /// слева-сверху, получателя — справа-снизу, кодовый штамп — слева-снизу,
+    /// а зона марки (74×40 мм, правый верхний угол) свободна от полей.
+    /// </summary>
+    [Fact]
+    public void КонвертыСерии_ЗоныПоГОСТ_ЗонаМаркиСвободна()
+    {
+        foreach (var (имя, бланк) in _каталог.BuildLibrary())
+        {
+            if (!имя.StartsWith("Конверт ", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var ширина = бланк.Geometry.WidthMm;
+            var высота = бланк.Geometry.HeightMm;
+
+            // Зоны ГОСТ проверяются для ландшафтных конвертов.
+            if (ширина <= высота)
+            {
+                continue;
+            }
+
+            var поля = бланк.AllFields();
+
+            var отправитель = поля.Single(п => п.Name == "строки «От кого»");
+            var получатель = поля.Single(п => п.Name == "строки «Кому»");
+            var штамп = поля.Single(п => п.Kind == BlankFieldKinds.PostIndex);
+
+            Assert.True(отправитель.Bounds.XMm < ширина / 2 && отправитель.Bounds.YMm < высота / 2, $"{имя}: отправитель не слева-сверху");
+            Assert.True(получатель.Bounds.XMm > ширина / 2 && получатель.Bounds.YMm > высота / 2, $"{имя}: получатель не справа-снизу");
+            Assert.True(штамп.Bounds.XMm < ширина / 2 && штамп.Bounds.YMm > высота / 2, $"{имя}: штамп не слева-снизу");
+
+            // зона марки 74×40 справа-сверху не должна пересекаться ни одним полем
+            foreach (var поле in поля)
+            {
+                var пересекаетМарку =
+                    поле.Bounds.XMm < ширина &&
+                    поле.Bounds.XMm + поле.Bounds.WidthMm > ширина - 74m &&
+                    поле.Bounds.YMm < 40m;
+                Assert.False(пересекаетМарку, $"{имя}: поле «{поле.Name}» заходит в зону марки");
+            }
+
+            var отчёт = _валидатор.Validate(бланк);
+            Assert.True(!отчёт.SaveBlocked, $"{имя}: выход за границы");
+            Assert.True(отчёт.Overlaps.Count == 0, $"{имя}: пересечения AABB");
+        }
+    }
+
     [Fact]
     public void ВстроенныеБланки_БезПересеченийAabb()
     {

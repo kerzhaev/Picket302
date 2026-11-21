@@ -203,6 +203,131 @@ internal static class BlankFieldsBuilder
         }
     }
 
+    /// <summary>
+    /// Размещает поля кодового штампа в НИЖНЕЙ ЛЕВОй полосе (ГОСТ Р 51506-99:
+    /// сетка индекса получателя — в левом нижнем углу), слева направо.
+    /// </summary>
+    public static void ШтампыСлеваВПолосу(
+        BlankPage страница,
+        IReadOnlyList<(string Наименование, bool Печатается)> штампы,
+        decimal ширина,
+        decimal высота)
+    {
+        ArgumentNullException.ThrowIfNull(страница);
+        ArgumentNullException.ThrowIfNull(штампы);
+
+        var y = высота - Отступ - ВысотаШтампа;
+
+        foreach (var (наименование, печатается) in штампы)
+        {
+            var номер = страница.Fields.Count(поле => поле.Kind == BlankFieldKinds.PostIndex);
+            var x = Отступ + (номер * (ШиринаШтампа + 2m));
+
+            страница.Fields.Add(new BlankFieldSpec
+            {
+                Name = наименование,
+                Kind = BlankFieldKinds.PostIndex,
+                Bounds = new BlankBounds
+                {
+                    XMm = x,
+                    YMm = y,
+                    WidthMm = ШиринаШтампа,
+                    HeightMm = ВысотаШтампа,
+                },
+                Printable = печатается,
+                PostIndex = new BlankPostIndexSpec(),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Раскладка стандартного конверта по зонам ГОСТ Р 51506-99:
+    /// адрес отправителя — левый верхний угол; адрес получателя — правая
+    /// нижняя часть; кодовый штамп индекса получателя — левый нижний угол;
+    /// зона марки/франкирования (74×40 мм, правый верхний угол) остаётся
+    /// свободной от полей. Вспомогательные реквизиты — левой колонкой ниже
+    /// адреса отправителя, не заходя в зону марки и полосу индекса.
+    /// </summary>
+    /// <param name="страница">Страница бланка.</param>
+    /// <param name="ширина">Ширина конверта, мм.</param>
+    /// <param name="высота">Высота конверта, мм.</param>
+    /// <param name="вспомогательные">Однострочные реквизиты левой колонки.</param>
+    public static void РазложитьКонвертПоГОСТ(
+        BlankPage страница,
+        decimal ширина,
+        decimal высота,
+        IReadOnlyList<string> вспомогательные)
+    {
+        ArgumentNullException.ThrowIfNull(страница);
+        ArgumentNullException.ThrowIfNull(вспомогательные);
+
+        var ширинаКолонки = Math.Min(МаксКолонка, Math.Max(МинКолонка, ширина * 0.42m));
+        var праваяКолонка = Math.Min(МаксКолонка, Math.Max(МинКолонка, ширина * 0.45m));
+
+        // Отправитель — левый верхний угол.
+        var yОтправителя = Отступ;
+        foreach (var наименование in new[] { "строки «От кого»", "строки «Откуда»" })
+        {
+            страница.Fields.Add(new BlankFieldSpec
+            {
+                Name = наименование,
+                Kind = BlankFieldKinds.Text,
+                Bounds = new BlankBounds { XMm = Отступ, YMm = yОтправителя, WidthMm = ширинаКолонки, HeightMm = ВысотаАдреса },
+                WordWrap = true,
+                MaxLines = 5,
+                Printable = true,
+            });
+            yОтправителя += ВысотаАдреса + Зазор;
+        }
+
+        // Получатель — правая нижняя часть.
+        var yПолучателя = высота - Отступ - (2 * (ВысотаАдреса + Зазор));
+        var xПолучателя = ширина - Отступ - праваяКолонка;
+        foreach (var наименование in new[] { "строки «Кому»", "строки «Куда»" })
+        {
+            страница.Fields.Add(new BlankFieldSpec
+            {
+                Name = наименование,
+                Kind = BlankFieldKinds.Text,
+                Bounds = new BlankBounds { XMm = xПолучателя, YMm = yПолучателя, WidthMm = праваяКолонка, HeightMm = ВысотаАдреса },
+                WordWrap = true,
+                MaxLines = 5,
+                Printable = true,
+            });
+            yПолучателя += ВысотаАдреса + Зазор;
+        }
+
+        // Вспомогательные реквизиты — левая колонка ниже отправителя,
+        // не заходя в нижнюю полосу индекса.
+        var верхИндекса = высота - Отступ - ВысотаШтампа - Зазор;
+        var y = yОтправителя + Зазор;
+        foreach (var наименование in вспомогательные)
+        {
+            if (y + ВысотаСтроки > верхИндекса)
+            {
+                break;
+            }
+
+            страница.Fields.Add(new BlankFieldSpec
+            {
+                Name = наименование,
+                Kind = BlankFieldKinds.Text,
+                Bounds = new BlankBounds { XMm = Отступ, YMm = y, WidthMm = ширинаКолонки, HeightMm = ВысотаСтроки },
+                WordWrap = true,
+                MaxLines = 1,
+                Printable = true,
+            });
+            y += ВысотаСтроки + Зазор;
+        }
+
+        // Кодовый штамп индекса получателя — левый нижний угол.
+        ШтампыСлеваВПолосу(
+            страница,
+            new[] { ("Индекс для машинной обработки", true) },
+            ширина,
+            высота);
+    }
+
     /// <summary>Адресные поля — многострочные, печатаются из данных письма.</summary>
     private static bool ЯвляетсяАдресным(string наименование) =>
         наименование.StartsWith("Строки", StringComparison.OrdinalIgnoreCase)
@@ -711,19 +836,23 @@ public sealed class BuiltinTemplatesCatalog
     {
         var бланк = Заготовка("Конверт " + код, ширина, высота, 1);
 
-        // QR-код и кодовый штамп — в правой резервной полосе.
-        бланк.Pages[0].Fields.Add(new BlankFieldSpec
+        // ГОСТ Р 51506-99 (зоны) применим к ландшафтным конвертам; портретные,
+        // квадратные и узкие форматы верстаются потоком с резервом справа.
+        if (ширина > высота)
         {
-            Name = "QR-код",
-            Kind = BlankFieldKinds.Qr,
-            Bounds = new BlankBounds
+            BlankFieldsBuilder.РазложитьКонвертПоГОСТ(бланк.Pages[0], ширина, высота, new[]
             {
-                XMm = ширина - 45m,
-                YMm = BlankFieldsBuilder.Отступ,
-                WidthMm = 35m,
-                HeightMm = 35m,
-            },
-        });
+                "Телефон получателя",
+                "Индекс места назначения",
+                "Телефон отправителя",
+                "Индекс места отправления",
+                "Исходящий номер",
+                "Отметки отправителя",
+                "Особые отметки",
+            });
+
+            return бланк;
+        }
 
         BlankFieldsBuilder.ШтампыВПолосу(
             бланк.Pages[0],
