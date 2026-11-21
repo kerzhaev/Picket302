@@ -342,10 +342,12 @@ public static class FieldDictionary
             }
         }
 
-        // Составные адресные блоки встроенных шаблонов.
-        Добавить("Строки «Кому»", Строка(ColumnToStr1, ColumnToStr2, ColumnToStr3, ColumnToStr4, ColumnToStr5, ColumnToStr6));
+        // Составные адресные блоки встроенных шаблонов (ГОСТ Р 51506-99):
+        // «Кому» — наименование/организация и улица, «Куда» — населённый
+        // пункт и регион. Город не дублируется в обоих блоках.
+        Добавить("Строки «Кому»", Строка(ColumnToStr1, ColumnToStr2, ColumnToStr3, ColumnToStr4));
         Добавить("Строки «Куда»", Строка(ColumnToStr5, ColumnToStr6));
-        Добавить("Строки «От кого»", Строка(ColumnFromStr1, ColumnFromStr2, ColumnFromStr3, ColumnFromStr4, ColumnFromStr5, ColumnFromStr6));
+        Добавить("Строки «От кого»", Строка(ColumnFromStr1, ColumnFromStr2, ColumnFromStr3, ColumnFromStr4));
         Добавить("Строки «Откуда»", Строка(ColumnFromStr5, ColumnFromStr6));
 
         for (var номер = 1; номер <= 6; номер++)
@@ -363,6 +365,7 @@ public static class FieldDictionary
 
         Добавить("Индекс места назначения", индексНазначения);
         Добавить("Индекс назначения для машинной обработки", индексНазначения);
+        Добавить("Индекс для машинной обработки", индексНазначения);
         Добавить("Индекс места отправления", индексОтправления);
         Добавить("Индекс отправителя для машинной обработки", индексОтправления);
 
