@@ -95,7 +95,15 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 ; пустота. Сама программа печатает индекс шрифтом из файла комплекта
 ; (Fonts\ZIPcode.ttf) и без установки в систему; установка нужна прочим
 ; программам и предпросмотру.
-Source: "{#PublishDir}\Fonts\ZIPcode.ttf"; DestDir: "{autofonts}"; FontInstallName: "ZIPcode"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "{#PublishDir}\Fonts\ZIPcode.ttf"; DestDir: "{autofonts}"; Flags: onlyifdoesntexist uninsneveruninstall
+
+[Registry]
+; Регистрация шрифта для текущего пользователя: без неё гарнитуру «ZIPcode»
+; не видят ни драйвер принтера, ни предпросмотр — на конверте вместо
+; индекса выходит пустота. Запись удаляется только вместе с самим шрифтом
+; (uninsdeletevalue), сам файл остаётся: он переиспользуется следующей
+; установкой (onlyifdoesntexist).
+Root: HKCU; Subkey: "Software\Microsoft\Windows NT\CurrentVersion\Fonts"; ValueType: string; ValueName: "ZIPcode (TrueType)"; ValueData: "{autofonts}\ZIPcode.ttf"; Flags: uninsdeletevalue
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
