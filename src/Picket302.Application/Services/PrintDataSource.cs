@@ -70,7 +70,11 @@ public sealed class PrintDataSource : IPrintDataSource
 
         var адресОтправителя = отправитель?.GetAddress(отправитель.AddressMainType);
 
-        var значения = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Значения собираются по колонке БД, затем разворачиваются во все
+        // допустимые имена поля шаблона (тег, псевдонимы оригинала,
+        // человеческие имена встроенных бланков). Рендерер ищет значение по
+        // имени поля; без разворачивания конверт печатался пустым.
+        var поКолонкам = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var поле in FieldDictionary.All)
         {
@@ -78,9 +82,11 @@ public sealed class PrintDataSource : IPrintDataSource
 
             if (значение is not null)
             {
-                значения[поле.TemplateTag] = значение;
+                поКолонкам[поле.ColumnName] = значение;
             }
         }
+
+        var значения = FieldDictionary.ExpandBindings(поКолонкам);
 
         return new PrintableItem
         {

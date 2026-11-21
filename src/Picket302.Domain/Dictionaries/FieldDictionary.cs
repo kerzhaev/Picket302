@@ -246,8 +246,128 @@ public static class FieldDictionary
                 пара => пара.Поле,
                 StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Нормализует значения печати, полученные извне (общий режим: сервер
+    /// может слать только теги), добавляя все имена полей шаблона.
+    /// </summary>
+    /// <remarks>
+    /// Исходные ключи сохраняются как есть (новый сервер уже шлёт полные
+    /// имена); дополнительно теги/псевдонимы разворачиваются в колонки и
+    /// обратно во все имена, чтобы рендерер нашёл значение и со старым
+    /// сервером, который шлёт только теги.
+    /// </remarks>
+    /// <param name="значения">Значения от сервера (ключи — теги/псевдонимы/имена).</param>
+    /// <returns>Словарь со всеми допустимыми именами полей.</returns>
+    public static IReadOnlyDictionary<string, string> NormalizePrintValues(
+        IReadOnlyDictionary<string, string> значения)
+    {
+        var поКолонкам = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var пара in значения)
+        {
+            if (ПоТегу.TryGetValue(пара.Key, out var поТегу))
+            {
+                поКолонкам[поТегу.ColumnName] = пара.Value;
+            }
+            else if (ПоПсевдониму.TryGetValue(пара.Key, out var поПсевдониму))
+            {
+                поКолонкам[поПсевдониму.ColumnName] = пара.Value;
+            }
+        }
+
+        var результат = new Dictionary<string, string>(значения, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var пара in ExpandBindings(поКолонкам))
+        {
+            результат[пара.Key] = пара.Value;
+        }
+
+        return результат;
+    }
+
     /// <summary>Все поля словаря в порядке матрицы ТЗ §3.2.</summary>
     public static IReadOnlyList<FieldDescriptor> All => Описание;
+
+    /// <summary>
+    /// Разворачивает значения, ключованные колонкой БД, в словарь, ключованный
+    /// ВСЕМИ допустимыми именами поля: тег привязки, псевдонимы импорта и
+    /// человеческие имена полей встроенных шаблонов (включая составные
+    /// адресные блоки и индексы).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Рендерер бланка ищет значение по имени поля шаблона
+    /// (<c>item.Values[поле.Name]</c>). Шаблоны бывают трёх видов: с тегами
+    /// (<c>[edt_str_to1]</c>), с псевдонимами оригинала (<c>str_to1</c>,
+    /// <c>ind_to</c>) и встроенные с человеческими именами
+    /// («Строки «Кому»», «Индекс назначения для машинной обработки»).
+    /// Без разворачивания ни один из видов не совпадал с ключами-тегами, и
+    /// конверт печатался пустым (регрессия 21.11.2026: «ни адреса, ни
+    /// отправителя, ни индекса»).
+    /// </para>
+    /// </remarks>
+    /// <param name="поКолонкам">Значения, ключованные колонкой БД.</param>
+    /// <returns>Словарь «имя поля в шаблоне → значение».</returns>
+    public static IReadOnlyDictionary<string, string> ExpandBindings(
+        IReadOnlyDictionary<string, string> поКолонкам)
+    {
+        var результат = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var поле in Описание)
+        {
+            if (!поКолонкам.TryGetValue(поле.ColumnName, out var значение))
+            {
+                continue;
+            }
+
+            результат[поле.TemplateTag] = значение;
+
+            foreach (var псевдоним in поле.ImportAliases)
+            {
+                результат[псевдоним] = значение;
+            }
+        }
+
+        string Строка(params string[] колонки) => string.Join(
+            "\n",
+            колонки
+                .Select(колонка => поКолонкам.TryGetValue(колонка, out var текст) ? текст : null)
+                .Where(текст => !string.IsNullOrWhiteSpace(текст)));
+
+        void Добавить(string имя, string значение)
+        {
+            if (!string.IsNullOrWhiteSpace(значение))
+            {
+                результат[имя] = значение;
+            }
+        }
+
+        // Составные адресные блоки встроенных шаблонов.
+        Добавить("Строки «Кому»", Строка(ColumnToStr1, ColumnToStr2, ColumnToStr3, ColumnToStr4, ColumnToStr5, ColumnToStr6));
+        Добавить("Строки «Куда»", Строка(ColumnToStr5, ColumnToStr6));
+        Добавить("Строки «От кого»", Строка(ColumnFromStr1, ColumnFromStr2, ColumnFromStr3, ColumnFromStr4, ColumnFromStr5, ColumnFromStr6));
+        Добавить("Строки «Откуда»", Строка(ColumnFromStr5, ColumnFromStr6));
+
+        for (var номер = 1; номер <= 6; номер++)
+        {
+            Добавить($"Строки «Кому» {номер}", Строка($"to_str{номер}"));
+            Добавить($"Строки «Куда» {номер}", Строка($"to_str{номер}"));
+            Добавить($"Строки «От кого» {номер}", Строка($"from_str{номер}"));
+            Добавить($"Строки «Откуда» {номер}", Строка($"from_str{номер}"));
+        }
+
+        // Индексы: текстовые поля и машиночитаемый штамп берут индекс получателя
+        // (назначения) либо отправителя (отправления).
+        var индексНазначения = поКолонкам.TryGetValue(ColumnToZip, out var индексTo) ? индексTo : string.Empty;
+        var индексОтправления = поКолонкам.TryGetValue(ColumnFromZip, out var индексFrom) ? индексFrom : string.Empty;
+
+        Добавить("Индекс места назначения", индексНазначения);
+        Добавить("Индекс назначения для машинной обработки", индексНазначения);
+        Добавить("Индекс места отправления", индексОтправления);
+        Добавить("Индекс отправителя для машинной обработки", индексОтправления);
+
+        return результат;
+    }
 
     /// <summary>Поля, доступные мапперу импорта.</summary>
     public static IReadOnlyList<FieldDescriptor> Importable =>
