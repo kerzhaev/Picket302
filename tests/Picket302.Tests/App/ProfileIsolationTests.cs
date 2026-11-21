@@ -127,7 +127,12 @@ public sealed class ProfileIsolationTests
             return null;
         }
 
-        using var поток = File.OpenRead(путь);
+        // Чтение отпечатка терпимо к совместному доступу: параллельный тест
+        // может держать БД профиля открытой (SQLite). File.OpenRead берёт
+        // блокировку чтения и падал с «file used by another process», хотя
+        // содержимое читать можно. Мы только читаем байты — FileShare.ReadWrite
+        // не мешает ни нам, ни держателю и не скрывает реальных изменений.
+        using var поток = new FileStream(путь, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
         // Время изменения в отпечатке ловит перезапись тем же содержимым.
         return Convert.ToHexString(SHA256.HashData(поток))
