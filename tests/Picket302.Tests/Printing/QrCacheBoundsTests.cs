@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using Picket302.Domain.Entities;
 using Picket302.Domain.Repositories;
 using Picket302.Printing.Elements;
@@ -129,5 +129,21 @@ public sealed class QrCacheBoundsTests
         public void DrawRectangleMm(float xMm, float yMm, float widthMm, float heightMm)
         {
         }
+
+
+            /// <summary>
+            /// Отрисовка заданным семейством: фикстура записывает обращение так же,
+            /// как и вариант с именем гарнитуры.
+            /// </summary>
+            public void DrawStringMm(
+                string text,
+                FontFamily family,
+                float widthMm,
+                float heightMm,
+                float xMm,
+                float yMm)
+            {
+                DrawStringMm(text, family.Name, widthMm, heightMm, xMm, yMm);
+            }
     }
 }

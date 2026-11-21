@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using Picket302.Printing.Elements;
 using Xunit;
 
@@ -43,13 +43,39 @@ public sealed class PostIndexRendererTests
         public void DrawRectangleMm(float xMm, float yMm, float widthMm, float heightMm)
         {
         }
+
+
+            /// <summary>
+            /// Отрисовка заданным семейством: фикстура записывает обращение так же,
+            /// как и вариант с именем гарнитуры.
+            /// </summary>
+            public void DrawStringMm(
+                string text,
+                FontFamily family,
+                float widthMm,
+                float heightMm,
+                float xMm,
+                float yMm)
+            {
+                DrawStringMm(text, family.Name, widthMm, heightMm, xMm, yMm);
+            }
     }
 
     private sealed class ШрифтЕсть : IZipcodeFontGuard
     {
+        /// <summary>
+        /// Семейство-заглушка с ОТЛИЧНЫМ именем: так проверка доказывает, что
+        /// индекс рисуется семейством, полученным от гарда, а не поиском
+        /// гарнитуры по имени «ZIPcode» (поиск молча даёт «Microsoft Sans
+        /// Serif», если шрифт не виден GDI+).
+        /// </summary>
+        private static readonly FontFamily Семейство = new("Tahoma");
+
         public bool EnsureZipcodeFontInstalled() => true;
 
         public bool IsZipcodeFontAvailable => true;
+
+        public FontFamily? PostIndexFontFamily => Семейство;
     }
 
     private sealed class ШрифтаНет : IZipcodeFontGuard
@@ -57,6 +83,8 @@ public sealed class PostIndexRendererTests
         public bool EnsureZipcodeFontInstalled() => false;
 
         public bool IsZipcodeFontAvailable => false;
+
+        public FontFamily? PostIndexFontFamily => null;
     }
 
     [Fact]
@@ -112,7 +140,9 @@ public sealed class PostIndexRendererTests
         Assert.Equal(6, контекст.Вызовы.Count);
         Assert.All(контекст.Вызовы, вызов =>
         {
-            Assert.Equal("ZIPcode", вызов.Шрифт);
+            // Отрисовка идёт семейством от гарда (в настоящей поставке это
+            // «ZIPcode» из файла комплекта).
+            Assert.Equal("Tahoma", вызов.Шрифт);
             Assert.Equal(3.7f, вызов.Ширина, 3);
             Assert.Equal(5.5f, вызов.Высота, 3);
         });
